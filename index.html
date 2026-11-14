@@ -279,6 +279,34 @@ input[type=file]{font-size:12px!important;color:#94a3b8;max-width:100%}
 input[type=file]::file-selector-button{background:#334155;color:#e2e8f0;border:0;border-radius:.375rem;padding:.6rem .9rem;margin-right:.75rem;font-weight:600;font-size:13px}
 #modal>div{max-height:92vh;max-height:92dvh;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
 .bdg{border-width:1px;padding:1px 8px;border-radius:4px;font-size:11px;font-weight:700;border:1px solid}
+
+/* ===== Vista laptop (≥1024 px): no afecta celulares ni tablets ===== */
+.lap-only{display:none}.dsplit{display:grid;gap:1rem}
+@media(min-width:1024px){
+.max-w-6xl{max-width:96rem}main.max-w-6xl{padding-left:1.5rem;padding-right:1.5rem}header .max-w-6xl{padding-left:1.5rem;padding-right:1.5rem}
+header .min-w-0:first-child{min-width:10.5rem;max-width:13rem}main.max-w-6xl{padding-bottom:6rem}
+#nav{flex:1;justify-content:center;flex-wrap:wrap;gap:.15rem}.navb{min-height:40px;padding:.35rem .7rem}
+.lap-only{display:block}.mob-only{display:none!important}
+#list-back,#list-pm,#list-fleet{display:none!important}
+.sm\:w-44.inp{width:13rem;flex:none}.sm\:flex-1.inp{flex:1 1 0%;min-width:14rem}
+.dsplit{grid-template-columns:minmax(0,3fr) minmax(0,2fr);align-items:start}
+.ltw{background:#1e293b;border:1px solid #334155;border-radius:.75rem}
+.ltbl{width:100%;border-collapse:separate;border-spacing:0;font-size:.875rem}
+.ltbl th{position:sticky;top:var(--hh,64px);z-index:2;background:#0f172a;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#94a3b8;padding:.65rem .75rem;font-weight:600;white-space:nowrap;border-bottom:1px solid #334155}
+.ltbl th:first-child{border-top-left-radius:.75rem}.ltbl th:last-child{border-top-right-radius:.75rem;text-align:right}
+.ltbl td{padding:.6rem .75rem;border-top:1px solid #334155;vertical-align:middle}
+.ltbl tbody tr:first-child td{border-top:0}.ltbl td:first-child,.ltbl td:nth-child(2) b{white-space:nowrap}
+.ltbl tbody tr:nth-child(even){background:rgba(15,23,42,.35)}.ltbl tbody tr:hover{background:#273549}
+.lsub{display:block;font-size:12px;color:#94a3b8;font-weight:400}
+.nw{white-space:nowrap}.num{text-align:right;font-variant-numeric:tabular-nums}
+.lact{display:flex;gap:.25rem;justify-content:flex-end}
+.lact .btn{min-height:32px;padding:.25rem .55rem;font-size:.8rem;white-space:nowrap}
+.lnk{text-align:left;padding:0;color:inherit}.lnk:hover{color:#fbbf24;text-decoration:underline}
+#fab{bottom:24px!important;right:24px!important}
+}
+@media(min-width:1024px) and (max-width:1439px){#nav{gap:0}.navb{padding:.35rem .45rem;gap:.3rem}.navb .lbl{font-size:.8125rem}.navb .ic{font-size:16px}}
+@media(min-width:1024px) and (max-width:1279px){.ltw{overflow-x:auto}.ltbl th{position:static}.ltbl td{padding:.55rem .6rem}}
+@media(min-width:1024px) and (max-width:1199px){.navb .lbl{font-size:.8125rem}.navb{padding:.3rem .45rem}.navb:not(#t-sup) .ic{display:none}}
 </style>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen font-sans">
@@ -328,6 +356,7 @@ window.FIREBASE_CONFIG = {
       <button onclick="openBack()" class="btn bg-amber-500 text-slate-950">+ Nuevo</button>
     </div>
     <div id="list-back" class="grid gap-3 md:grid-cols-2"></div>
+    <div id="tbl-back" class="lap-only"></div>
   </section>
   <section id="v-gr" class="hidden space-y-3">
     <div class="bg-slate-800 border border-slate-700 rounded-xl p-3 flex flex-col sm:flex-row gap-2">
@@ -353,6 +382,7 @@ window.FIREBASE_CONFIG = {
       <button id="bt-fleet" onclick="openFleet()" class="btn bg-amber-500 text-slate-950 whitespace-nowrap">+ Equipo</button>
     </div>
     <div id="list-fleet" class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"></div>
+    <div id="tbl-fleet" class="lap-only"></div>
   </section>
   <section id="v-pm" class="hidden space-y-3">
     <div class="bg-slate-800 border border-slate-700 rounded-xl p-3 flex flex-col sm:flex-row gap-2">
@@ -362,6 +392,7 @@ window.FIREBASE_CONFIG = {
       <button id="bt-imp" onclick="openImport()" class="btn bg-slate-700">📥 Importar</button>
     </div>
     <div id="list-pm" class="grid gap-3 md:grid-cols-2"></div>
+    <div id="tbl-pm" class="lap-only"></div>
   </section>
   <section id="v-sup" class="hidden space-y-3"></section>
   <section id="v-adm" class="hidden space-y-4"></section>
@@ -473,13 +504,29 @@ function renderDashAdm(){
   const sc={PENDIENTE:0,EN_PROCESO:0,PENDIENTE_VALIDACION:0,COMPLETADO:0},pv=backlogs.filter(b=>b.status==='PENDIENTE_VALIDACION').length+pms.filter(p=>p.status==='PENDIENTE_VALIDACION').length,pmProg=pms.filter(p=>p.status==='PROGRAMADO'&&!pmOver(p)).length,pmVenc=pms.filter(pmOver).length,cc={ALTA:0,MEDIA:0,BAJA:0};
   backlogs.forEach(b=>{sc[b.status]=(sc[b.status]||0)+1;cc[b.criticality]=(cc[b.criticality]||0)+1});
   const k=(l,v,c)=>`<div class="bg-slate-800 border border-slate-700 rounded-xl p-4"><p class="text-[11px] uppercase text-slate-400 font-semibold">${l}</p><p class="text-2xl font-extrabold mt-1 ${c}">${v}</p></div>`;
-  $('v-dash').innerHTML=dashHello()+dashQuick()+dashKpis()+dashPend()+`<h3 class="font-semibold text-slate-300" style="margin-top:.5rem">📊 Resumen general</h3><div style="display:grid;gap:.75rem;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
+  $('v-dash').innerHTML=dashHello()+dashQuick()+dashKpis()+`<div class="dsplit">`+dashPend()+`<div class="lap-only">${pmUpcomingHtml()}</div></div>`+`<h3 class="font-semibold text-slate-300" style="margin-top:.5rem">📊 Resumen general</h3><div style="display:grid;gap:.75rem;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
     ${k('Total backlogs',backlogs.length,'text-white')}${k('Atraso promedio (abiertos)',avg+' d','text-amber-400')}
     ${k('Preventivos programados',pmProg,'text-blue-400')}${k('Preventivos vencidos',pmVenc,'text-red-400')}${k('Por validar (supervisor)',pv,'text-amber-400')}${k('Criticidad alta (abiertos)',crit,'text-red-400')}${k('Costo pendiente','$'+cost.toLocaleString(),'text-emerald-400')}${k('Engrase vencido',grCount('VENCIDO'),'text-red-400')}${k('Neumáticos a cambiar',trCount('CAMBIO'),'text-red-400')}${k('Neumáticos en alerta',trCount('ALERTA'),'text-amber-400')}</div>
     <div class="grid lg:grid-cols-2 gap-4">
     <div class="bg-slate-800 border border-slate-700 rounded-xl p-4 space-y-3"><h3 class="font-semibold">Estado de intervenciones</h3>${bars(sc,{PENDIENTE:'bg-amber-500',EN_PROCESO:'bg-blue-500',PENDIENTE_VALIDACION:'bg-violet',COMPLETADO:'bg-emerald-500'},backlogs.length)}</div>
-    <div class="bg-slate-800 border border-slate-700 rounded-xl p-4 space-y-3"><h3 class="font-semibold">Distribución por criticidad</h3>${bars(cc,{ALTA:'bg-red-500',MEDIA:'bg-amber-500',BAJA:'bg-blue-500'},backlogs.length)}</div></div>${pmUpcomingHtml()}`;
+    <div class="bg-slate-800 border border-slate-700 rounded-xl p-4 space-y-3"><h3 class="font-semibold">Distribución por criticidad</h3>${bars(cc,{ALTA:'bg-red-500',MEDIA:'bg-amber-500',BAJA:'bg-blue-500'},backlogs.length)}</div></div><div class="mob-only">${pmUpcomingHtml()}</div>`;
 }
+
+function backActs(b){return `${(b.status==='PENDIENTE'||b.status==='EN_PROCESO')?`<button onclick="openClose('${b.id}')" class="btn bg-emerald-500/20 text-emerald-400 !py-1">✅ Cerrar</button>`:''}
+      <button onclick="makePdf('${b.id}')" title="Orden de trabajo PDF" class="btn bg-slate-700 !py-1">📄 OT</button><button onclick="openDetail('${b.id}')" class="btn bg-slate-700 !py-1">👁️</button><button onclick="openBack('${b.id}')" class="btn bg-slate-700 !py-1">✏️</button>${(isAdmin()&&(b.status==='COMPLETADO'||b.status==='PENDIENTE_VALIDACION'))?`<button onclick="reopen('backlogs','${b.id}')" title="Reabrir" class="btn bg-slate-700 !py-1">↩️</button>`:''}${adm(`<button onclick="delBack('${b.id}')" class="btn bg-red-500/20 !py-1">🗑️</button>`)}`}
+function pmActs(p){return `${p.status==='PROGRAMADO'?`<button onclick="openClosePm('${p.id}')" class="btn bg-emerald-500/20 text-emerald-400 !py-1">✅ Cerrar OT</button>`:''}
+      <button onclick="makePdfPm('${p.id}')" title="Orden de trabajo PDF" class="btn bg-slate-700 !py-1">📄 OT</button><button onclick="openDetailPm('${p.id}')" class="btn bg-slate-700 !py-1">👁️</button>${sup(`<button onclick="openPm('${p.id}')" class="btn bg-slate-700 !py-1">✏️</button>`)}${(isAdmin()&&(p.status==='COMPLETADO'||p.status==='PENDIENTE_VALIDACION'))?`<button onclick="reopen('preventive','${p.id}')" title="Reabrir" class="btn bg-slate-700 !py-1">↩️</button>`:''}${adm(`<button onclick="delPm('${p.id}')" class="btn bg-red-500/20 !py-1">🗑️</button>`)}`}
+function fleetActs(e){return `<button onclick="openEquip('${e.id}')" class="btn bg-amber-500/20 text-amber-400 !py-1">📋 Ficha</button>${adm(`<button onclick="openFleet('${e.id}')" class="btn bg-slate-700 !py-1">✏️</button><button onclick="delFleet('${e.id}')" class="btn bg-red-500/20 !py-1">🗑️</button>`)}`}
+
+/* ---------- Vista de tabla (solo laptop, ≥1024 px) ---------- */
+function lapTbl(head,rows,empty){return rows.length?`<div class="ltw"><table class="ltbl"><thead><tr>${head.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div>`:`<p class="text-slate-500 text-sm">${empty}</p>`}
+function tblBack(l){$('tbl-back').innerHTML=lapTbl(['Código','Equipo','Componente','Criticidad','Estado','Observado','Programado','Atraso','Acciones'],l.map(b=>{const e=eqOf(b.fleetId),d=delay(b);
+  return `<tr><td><b class="text-amber-400">${esc(b.id)}</b></td><td><b>${esc(e.code)}</b><span class="lsub">${esc(e.brand)} ${esc(e.model)}</span></td><td><span class="font-semibold">${esc(b.component)}</span><span class="lsub">${esc(b.system)}</span>${(b.rejectNote&&b.status==='EN_PROCESO')?`<span class="lsub text-red-400">⚠️ Devuelto: ${esc(b.rejectNote)}</span>`:''}</td><td>${badge(CRIT,b.criticality)}</td><td>${badge(STAT,b.status)}</td><td class="nw">${fmtD(b.observationDate)}</td><td class="nw">${fmtD(b.scheduledDate)}</td><td class="nw font-semibold ${d?'text-red-400':'text-slate-400'}">${d?'+'+d+' d':'A tiempo'}</td><td><div class="lact">${backActs(b)}</div></td></tr>`}),'Sin backlogs.')}
+function tblPm(l){$('tbl-pm').innerHTML=lapTbl(['Código','Equipo','Plan','Programado','Situación','Responsable','Actividades','Estado','Acciones'],l.map(p=>{const e=eqOf(p.fleetId),k=pmKey(p),a=actStats(p.acts);
+  return `<tr><td><b class="text-amber-400">${esc(p.id)}</b></td><td><b>${esc(e.code)}</b><span class="lsub">${esc(e.brand)} ${esc(e.model)}</span></td><td class="font-semibold">${esc(p.plan)}${(p.rejectNote&&p.status==='PROGRAMADO')?`<span class="lsub text-red-400">⚠️ Devuelto: ${esc(p.rejectNote)}</span>`:''}</td><td class="nw">${fmtD(p.scheduledDate)}${p.scheduledHours!==''&&p.scheduledHours!=null?`<span class="lsub">a las ${fmtH(p.scheduledHours)}</span>`:''}</td><td class="${k==='VENCIDO'?'text-red-400 font-semibold':'text-slate-400'}">${p.status==='PROGRAMADO'?pmWhen(p):'—'}</td><td>${esc(p.responsible||'—')}</td><td class="nw text-slate-400">${p.acts?`${RES_ICO.OK} ${a.OK} · ${RES_ICO.OBS} ${a.OBS} · ${RES_ICO.NA} ${a.NA}`:`${(p.plannedActs||[]).length} programadas`}</td><td>${pmBadge(k)}</td><td><div class="lact">${pmActs(p)}</div></td></tr>`}),'Sin preventivos.')}
+function tblFleet(l){const sc={OPERATIVO:'text-emerald-400',INOPERATIVO:'text-red-400',EN_MANTENIMIENTO:'text-amber-400'};
+  $('tbl-fleet').innerHTML=lapTbl(['Código','Equipo','Categoría','Nº de serie','Horómetro','Ubicación','Estado','Backlogs','Preventivos','Acciones'],l.map(e=>{const n=backlogs.filter(b=>b.fleetId===e.id&&b.status!=='COMPLETADO').length,pn=pms.filter(p=>p.fleetId===e.id&&p.status!=='COMPLETADO').length;
+  return `<tr><td><b class="text-amber-400">${esc(e.code)}</b></td><td><button type="button" onclick="openEquip('${e.id}')" class="font-semibold lnk">${esc(e.brand)} ${esc(e.model)}</button></td><td>${esc(e.category)}</td><td class="text-slate-400">${esc(e.serialNumber)}</td><td class="nw num">${esc(e.hours)} h</td><td>${esc(e.location||'-')}</td><td class="nw font-semibold ${sc[e.status]||''}">${esc(String(e.status||'').replace('_',' '))}</td><td class="num"><b class="${n?'text-amber-400':'text-slate-500'}">${n}</b></td><td class="num"><b class="${pn?'text-blue-400':'text-slate-500'}">${pn}</b></td><td><div class="lact">${fleetActs(e)}</div></td></tr>`}),'Sin equipos registrados.')}
 
 /* ---------- Flota ---------- */
 function renderFleet(){
@@ -494,7 +541,8 @@ function renderFleet(){
       <p class="text-xs text-slate-400">${esc(e.category)} · S/N: ${esc(e.serialNumber)}</p>
       <div class="grid grid-cols-2 gap-2 mt-3 text-xs bg-slate-900/60 p-2 rounded-lg"><div><span class="text-slate-500 block">Horómetro</span>${esc(e.hours)} h</div><div><span class="text-slate-500 block">Ubicación</span>${esc(e.location||'-')}</div></div>
       <div class="mt-3 pt-3 border-t border-slate-700 flex justify-between items-center text-xs"><span class="text-slate-400">Backlogs: <b class="text-amber-400">${n}</b> · Preventivos: <b class="text-blue-400">${pn}</b></span>
-      <span class="flex gap-1"><button onclick="openEquip('${e.id}')" class="btn bg-amber-500/20 text-amber-400 !py-1">📋 Ficha</button>${adm(`<button onclick="openFleet('${e.id}')" class="btn bg-slate-700 !py-1">✏️</button><button onclick="delFleet('${e.id}')" class="btn bg-red-500/20 !py-1">🗑️</button>`)}</span></div></div>`}).join('')||'<p class="text-slate-500 text-sm">Sin equipos registrados.</p>';
+      <span class="flex gap-1">${fleetActs(e)}</span></div></div>`}).join('')||'<p class="text-slate-500 text-sm">Sin equipos registrados.</p>';
+  tblFleet(l);
 }
 function openFleet(id){if(!isAdmin())return;
   const e=fleet.find(x=>x.id===id)||{};
@@ -528,8 +576,8 @@ function renderBack(){
       <p class="text-xs mt-2 text-slate-400">Observado: <b class="text-slate-200">${fmtD(b.observationDate)}</b> · Programado: <b class="text-slate-200">${fmtD(b.scheduledDate)}</b></p>
       <p class="text-xs mt-1 font-semibold ${d?'text-red-400':'text-slate-400'}">${d?'+'+d+' días de atraso':'A tiempo'}</p>
       ${(b.rejectNote&&b.status==='EN_PROCESO')?`<p class="text-xs mt-2 text-red-400">⚠️ Devuelto por supervisor: ${esc(b.rejectNote)}</p>`:''}
-      <div class="flex gap-1 justify-end mt-3">${(b.status==='PENDIENTE'||b.status==='EN_PROCESO')?`<button onclick="openClose('${b.id}')" class="btn bg-emerald-500/20 text-emerald-400 !py-1">✅ Cerrar</button>`:''}
-      <button onclick="makePdf('${b.id}')" title="Orden de trabajo PDF" class="btn bg-slate-700 !py-1">📄 OT</button><button onclick="openDetail('${b.id}')" class="btn bg-slate-700 !py-1">👁️</button><button onclick="openBack('${b.id}')" class="btn bg-slate-700 !py-1">✏️</button>${(isAdmin()&&(b.status==='COMPLETADO'||b.status==='PENDIENTE_VALIDACION'))?`<button onclick="reopen('backlogs','${b.id}')" title="Reabrir" class="btn bg-slate-700 !py-1">↩️</button>`:''}${adm(`<button onclick="delBack('${b.id}')" class="btn bg-red-500/20 !py-1">🗑️</button>`)}</div></div>`}).join('')||'<p class="text-slate-500 text-sm">Sin backlogs.</p>';
+      <div class="flex gap-1 justify-end mt-3">${backActs(b)}</div></div>`}).join('')||'<p class="text-slate-500 text-sm">Sin backlogs.</p>';
+  tblBack(l);
 }
 let tmp={before:[],after:[]};
 function photoBox(key,label){
@@ -789,8 +837,8 @@ function renderPm(){
       ${p.responsible?`<p class="text-xs text-slate-400">Responsable: ${esc(p.responsible)}</p>`:''}
       ${p.acts?`<p class="text-xs mt-1 text-slate-400">${RES_ICO.OK} ${a.OK} · ${RES_ICO.OBS} ${a.OBS} · ${RES_ICO.NA} ${a.NA} · ${(p.acts||[]).length} actividades</p>`:`<p class="text-xs mt-1 text-slate-500">${(p.plannedActs||[]).length} actividades programadas</p>`}
       ${(p.rejectNote&&p.status==='PROGRAMADO')?`<p class="text-xs mt-2 text-red-400">⚠️ Devuelto por supervisor: ${esc(p.rejectNote)}</p>`:''}
-      <div class="flex gap-1 justify-end mt-3 flex-wrap">${p.status==='PROGRAMADO'?`<button onclick="openClosePm('${p.id}')" class="btn bg-emerald-500/20 text-emerald-400 !py-1">✅ Cerrar OT</button>`:''}
-      <button onclick="makePdfPm('${p.id}')" title="Orden de trabajo PDF" class="btn bg-slate-700 !py-1">📄 OT</button><button onclick="openDetailPm('${p.id}')" class="btn bg-slate-700 !py-1">👁️</button>${sup(`<button onclick="openPm('${p.id}')" class="btn bg-slate-700 !py-1">✏️</button>`)}${(isAdmin()&&(p.status==='COMPLETADO'||p.status==='PENDIENTE_VALIDACION'))?`<button onclick="reopen('preventive','${p.id}')" title="Reabrir" class="btn bg-slate-700 !py-1">↩️</button>`:''}${adm(`<button onclick="delPm('${p.id}')" class="btn bg-red-500/20 !py-1">🗑️</button>`)}</div></div>`}).join('')||'<p class="text-slate-500 text-sm">Sin mantenimientos preventivos. Usa "+ Programar" o "📥 Importar".</p>';
+      <div class="flex gap-1 justify-end mt-3 flex-wrap">${pmActs(p)}</div></div>`}).join('')||'<p class="text-slate-500 text-sm">Sin mantenimientos preventivos. Usa "+ Programar" o "📥 Importar".</p>';
+  tblPm(l);
 }
 function pmUpcomingHtml(){
   const l=pms.filter(p=>p.status==='PROGRAMADO').sort((a,b)=>(a.scheduledDate||'').localeCompare(b.scheduledDate||'')).slice(0,6);
@@ -1693,7 +1741,7 @@ function renderDashTec(){
 }
 function renderDashSup(){
   const open=backlogs.filter(b=>b.status!=='COMPLETADO');
-  $('v-dash').innerHTML=dashHello()+dashQuick()+dashKpis()+dashPend()+pmUpcomingHtml();
+  $('v-dash').innerHTML=dashHello()+dashQuick()+dashKpis()+`<div class="dsplit">`+dashPend()+pmUpcomingHtml()+`</div>`;
 }
 
 /* ---------- Registro rápido (+) ---------- */
@@ -2242,5 +2290,6 @@ function resendPw(id){const u=usersList.find(x=>x.uid===id);if(!u)return;
 if(db&&auth)initAuth();else{me={uid:'local',name:'Modo local',role:'admin'};startApp()}
 </script>
 <script>if('serviceWorker' in navigator&&location.protocol.startsWith('http'))addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));</script>
+<script>(()=>{const h=document.querySelector('header'),f=()=>document.documentElement.style.setProperty('--hh',h.offsetHeight+'px');addEventListener('resize',f);addEventListener('load',f);new ResizeObserver(f).observe(h)})();</script>
 </body>
 </html>
