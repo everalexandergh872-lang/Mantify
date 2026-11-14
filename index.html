@@ -3,7 +3,17 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Control de Mantenimiento COANSA</title>
+<title>Mantify · Control de Mantenimiento</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700&display=swap">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="theme-color" content="#0F2A44">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Mantify">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
@@ -290,7 +300,7 @@ window.FIREBASE_CONFIG = {
 <header class="bg-slate-800 border-b border-slate-700 sticky top-0 z-30">
   <div class="max-w-6xl mx-auto px-3 py-2 flex items-center justify-between gap-2">
     <div class="min-w-0">
-      <h1 class="font-bold text-white leading-tight truncate">🏗️ Control de Mantenimiento</h1>
+      <h1 class="font-bold text-white leading-tight truncate" style="display:flex;align-items:center;gap:.45rem"><svg width="24" height="24" viewBox="0 0 64 64" role="img" aria-label="Mantify"><circle cx="32" cy="32" r="23" fill="none" stroke="#2DD4BF" stroke-width="8" stroke-dasharray="9.03 9.03"/><circle cx="32" cy="32" r="21" fill="#2DD4BF"/><path d="M22.5 32.5 L29 39 L42 25.5" fill="none" stroke="#0F2A44" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/></svg><span style="font-family:'Space Grotesk',Inter,system-ui,sans-serif;font-size:1.15rem;letter-spacing:-.03em">mantify</span></h1>
       <p id="sync" class="text-[11px] text-slate-400">Conectando…</p>
     </div>
     <nav id="nav" class="text-sm">
@@ -463,12 +473,12 @@ function renderDashAdm(){
   const sc={PENDIENTE:0,EN_PROCESO:0,PENDIENTE_VALIDACION:0,COMPLETADO:0},pv=backlogs.filter(b=>b.status==='PENDIENTE_VALIDACION').length+pms.filter(p=>p.status==='PENDIENTE_VALIDACION').length,pmProg=pms.filter(p=>p.status==='PROGRAMADO'&&!pmOver(p)).length,pmVenc=pms.filter(pmOver).length,cc={ALTA:0,MEDIA:0,BAJA:0};
   backlogs.forEach(b=>{sc[b.status]=(sc[b.status]||0)+1;cc[b.criticality]=(cc[b.criticality]||0)+1});
   const k=(l,v,c)=>`<div class="bg-slate-800 border border-slate-700 rounded-xl p-4"><p class="text-[11px] uppercase text-slate-400 font-semibold">${l}</p><p class="text-2xl font-extrabold mt-1 ${c}">${v}</p></div>`;
-  $('v-dash').innerHTML=dashHello()+dashQuick()+dashValidar()+dashRep()+`<div style="display:grid;gap:.75rem;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
+  $('v-dash').innerHTML=dashHello()+dashQuick()+dashKpis()+dashPend()+`<h3 class="font-semibold text-slate-300" style="margin-top:.5rem">📊 Resumen general</h3><div style="display:grid;gap:.75rem;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
     ${k('Total backlogs',backlogs.length,'text-white')}${k('Atraso promedio (abiertos)',avg+' d','text-amber-400')}
     ${k('Preventivos programados',pmProg,'text-blue-400')}${k('Preventivos vencidos',pmVenc,'text-red-400')}${k('Por validar (supervisor)',pv,'text-amber-400')}${k('Criticidad alta (abiertos)',crit,'text-red-400')}${k('Costo pendiente','$'+cost.toLocaleString(),'text-emerald-400')}${k('Engrase vencido',grCount('VENCIDO'),'text-red-400')}${k('Neumáticos a cambiar',trCount('CAMBIO'),'text-red-400')}${k('Neumáticos en alerta',trCount('ALERTA'),'text-amber-400')}</div>
     <div class="grid lg:grid-cols-2 gap-4">
     <div class="bg-slate-800 border border-slate-700 rounded-xl p-4 space-y-3"><h3 class="font-semibold">Estado de intervenciones</h3>${bars(sc,{PENDIENTE:'bg-amber-500',EN_PROCESO:'bg-blue-500',PENDIENTE_VALIDACION:'bg-violet',COMPLETADO:'bg-emerald-500'},backlogs.length)}</div>
-    <div class="bg-slate-800 border border-slate-700 rounded-xl p-4 space-y-3"><h3 class="font-semibold">Distribución por criticidad</h3>${bars(cc,{ALTA:'bg-red-500',MEDIA:'bg-amber-500',BAJA:'bg-blue-500'},backlogs.length)}</div></div>${pmUpcomingHtml()}${grDueHtml()}${trDueHtml()}`;
+    <div class="bg-slate-800 border border-slate-700 rounded-xl p-4 space-y-3"><h3 class="font-semibold">Distribución por criticidad</h3>${bars(cc,{ALTA:'bg-red-500',MEDIA:'bg-amber-500',BAJA:'bg-blue-500'},backlogs.length)}</div></div>${pmUpcomingHtml()}`;
 }
 
 /* ---------- Flota ---------- */
@@ -1622,10 +1632,51 @@ const ROLE_N={admin:'Planner',supervisor:'Supervisor',tecnico:'Técnico'},CR_O={
 const dCard=(t,body,more)=>`<div class="bg-slate-800 border border-slate-700 rounded-xl p-4 space-y-2"><div class="flex justify-between items-center gap-2"><h3 class="font-semibold">${t}</h3>${more||''}</div>${body}</div>`;
 const dRow=(l,r)=>`<div class="flex justify-between items-center gap-2 text-sm border-t border-slate-700" style="padding-top:.5rem"><div class="min-w-0">${l}</div><div class="flex gap-1 items-center" style="flex-shrink:0">${r}</div></div>`;
 const dEmpty=t=>`<p class="text-sm text-slate-500">${t}</p>`;
-function dashHello(){const d=new Date(),dn=['domingo','lunes','martes','miércoles','jueves','viernes','sábado'][d.getDay()];
-  return `<div><h2 class="text-lg font-bold">Hola, ${esc(String(me.name).split(' ')[0])} 👋</h2><p class="text-xs text-slate-400">${dn} ${fmtD(today())} · ${ROLE_N[me.role]||''}</p></div>`}
-function dashQuick(){const b=(ic,l,f)=>`<button onclick="${f}" class="btn bg-slate-800 border border-slate-700" style="padding:.6rem .3rem;text-align:center"><span style="display:block;font-size:22px;line-height:1.3">${ic}</span><span style="display:block;font-size:11px">${l}</span></button>`;
-  return `<div style="display:grid;gap:.5rem;grid-template-columns:repeat(auto-fit,minmax(140px,1fr))">${b('🔧','Nuevo backlog',"qaBack()")}${b('🛢️','Registrar engrase',"qaPick('gr')")}${b('📏','Medir neumáticos',"qaPick('tr')")}${b('⏱️','Actualizar horómetro',"qaPick('hrs')")}${b('🛑','Iniciar parada',"openStop('','start')")}${b('📝','Registrar intervención',"openStop('','full')")}</div>`}
+
+const SYM=(s)=>`<svg width="${s}" height="${s}" viewBox="0 0 64 64" aria-hidden="true" style="flex-shrink:0"><circle cx="32" cy="32" r="23" fill="none" stroke="#2DD4BF" stroke-width="8" stroke-dasharray="9.03 9.03"/><circle cx="32" cy="32" r="21" fill="#2DD4BF"/><path d="M22.5 32.5 L29 39 L42 25.5" fill="none" stroke="#0F2A44" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+let pendF='all',pendLim=8;
+function pendSet(k){pendF=k;pendLim=8;renderDash();const e=$('pend');if(e&&e.scrollIntoView)e.scrollIntoView({behavior:'smooth',block:'start'})}
+function pendMore(){pendLim+=10;renderDash()}
+const PT={par:['PARADA','#f87171','rgba(239,68,68,.15)'],bk:['BACKLOG','#fbbf24','rgba(245,158,11,.15)'],pm:['PREVENTIVO','#60a5fa','rgba(59,130,246,.15)'],gr:['ENGRASE','#2dd4bf','rgba(45,212,191,.15)'],tr:['NEUMÁTICO','#fb923c','rgba(249,115,22,.15)'],val:['VALIDAR','#c4b5fd','rgba(139,92,246,.18)']};
+const pTag=k=>`<span style="font-size:10px;font-weight:700;letter-spacing:.04em;color:${PT[k][1]};background:${PT[k][2]};border-radius:6px;padding:1px 6px;margin-right:.35rem">${PT[k][0]}</span>`;
+const pRow=(k,sev,l,r)=>({k,sev,html:`<div class="flex justify-between items-center gap-2 text-sm border-t border-slate-700" style="padding-top:.6rem;padding-bottom:.1rem"><div class="min-w-0" style="word-break:break-word">${l}</div><div class="flex gap-1 items-center" style="flex-shrink:0">${r}</div></div>`});
+function pendItems(){
+  const L=[];
+  stOpen().forEach(s=>L.push(pRow('par',0,`${pTag('par')}<b class="text-amber-400">${esc(s.cod)}</b> <span class="text-slate-300">${esc(s.motivo||'')}</span><p class="text-xs text-slate-400">${esc(s.flota)} · desde ${fmtDT(s.fp)} · ${esc(s.resp)}</p>`,stCan(s)?`<button onclick="openStop('${s.id}','close')" class="btn bg-emerald-500/20 text-emerald-400 !py-1">✅ Cerrar</button>`:`<button onclick="openStopView('${s.id}')" class="btn bg-slate-700 !py-1">👁️</button>`)));
+  if(isSup()){
+    backlogs.filter(b=>b.status==='PENDIENTE_VALIDACION').forEach(b=>{const e=eqOf(b.fleetId);L.push(pRow('val',1,`${pTag('val')}<b class="text-amber-400">${esc(e.code)}</b> <span class="text-slate-300">${esc(b.component)}</span><p class="text-xs text-slate-400">Backlog ${esc(b.id)} esperando validación</p>`,`<button onclick="openValidate('${b.id}')" class="btn bg-violet-500/20 text-violet-300 !py-1">Revisar</button>`))});
+    pms.filter(p=>p.status==='PENDIENTE_VALIDACION').forEach(p=>{const e=eqOf(p.fleetId);L.push(pRow('val',1,`${pTag('val')}<b class="text-amber-400">${esc(e.code)}</b> <span class="text-slate-300">${esc(p.plan)}</span><p class="text-xs text-slate-400">Preventivo esperando validación</p>`,`<button onclick="openValidatePm('${p.id}')" class="btn bg-violet-500/20 text-violet-300 !py-1">Revisar</button>`))});
+  }
+  bkOpenSorted().forEach(b=>{const e=eqOf(b.fleetId),d=delay(b),ret=b.rejectNote&&b.status==='EN_PROCESO',sev=ret?0:b.criticality==='ALTA'?1:d?2:3;
+    L.push(pRow('bk',sev,`${pTag('bk')}<b class="text-amber-400">${esc(e.code)}</b> <span class="text-slate-300">${esc(b.component)}</span><p class="text-xs ${ret||d?'text-red-400':'text-slate-400'}">${ret?'⚠️ Devuelto: '+esc(b.rejectNote):(d?'+'+d+' d de atraso · ':'')+esc(b.criticality)+' · '+(STL[b.status]||b.status)}</p>`,`<button onclick="openClose('${b.id}')" class="btn bg-emerald-500/20 text-emerald-400 !py-1">✅ Cerrar</button>`))});
+  pms.filter(p=>p.status==='PROGRAMADO'&&p.scheduledDate&&(pmOver(p)||daysTo(p.scheduledDate)<=7)).sort((a,b)=>a.scheduledDate.localeCompare(b.scheduledDate)).forEach(p=>{const e=eqOf(p.fleetId),o=pmOver(p);
+    L.push(pRow('pm',o?0:3,`${pTag('pm')}<b class="text-amber-400">${esc(e.code)}</b> <span class="text-slate-300">${esc(p.plan)}</span><p class="text-xs ${o?'text-red-400':'text-slate-400'}">${fmtD(p.scheduledDate)} · ${pmWhen(p)}</p>`,`<button onclick="openClosePm('${p.id}')" class="btn bg-emerald-500/20 text-emerald-400 !py-1">✅ Cerrar OT</button>`))});
+  fleet.map(e=>({e,g:grStatus(e)})).filter(x=>x.g.k==='VENCIDO'||x.g.k==='PROXIMO').forEach(({e,g})=>L.push(pRow('gr',g.k==='VENCIDO'?1:3,`${pTag('gr')}<b class="text-amber-400">${esc(e.code)}</b> <span class="text-slate-300">${esc(e.brand)} ${esc(e.model)}</span>`,grBadge(g.k)+`<button onclick="openGrease('${e.id}')" class="btn bg-slate-700 !py-1">🛢️</button>`)));
+  const ord={CAMBIO:1,ALERTA:2};trList().filter(x=>ord[x.h.k]!=null).forEach(({t,h:q})=>L.push(pRow('tr',ord[q.k],`${pTag('tr')}<b class="text-amber-400">${esc(q.e.code||'-')}</b> <span class="text-slate-300">${esc(t.pos)} · ${esc(t.code)}</span>${q.c!=null?` <span class="text-slate-400">${q.c} mm</span>`:''}`,trBadge(q.k))));
+  return L.map((x,i)=>({...x,i})).sort((a,b)=>a.sev-b.sev||a.i-b.i);
+}
+function dashPend(){
+  const all=pendItems(),cnt={all:all.length};all.forEach(x=>cnt[x.k]=(cnt[x.k]||0)+1);
+  const chips=[['all','Todo'],['par','Paradas'],['val','Validar'],['bk','Backlogs'],['pm','Preventivos'],['gr','Engrase'],['tr','Neumáticos']].filter(c=>c[0]==='all'||cnt[c[0]]);
+  if(!chips.some(c=>c[0]===pendF))pendF='all';
+  const L=pendF==='all'?all:all.filter(x=>x.k===pendF);
+  const chip=c=>`<button onclick="pendSet('${c[0]}')" style="flex-shrink:0;font-size:12px;font-weight:600;border-radius:999px;padding:.3rem .7rem;border:1px solid ${pendF===c[0]?'#2dd4bf':'#334155'};background:${pendF===c[0]?'rgba(45,212,191,.15)':'transparent'};color:${pendF===c[0]?'#5eead4':'#cbd5e1'}">${c[1]} <span style="opacity:.75">${cnt[c[0]]||0}</span></button>`;
+  return `<div id="pend" class="bg-slate-800 border border-slate-700 rounded-xl p-4 space-y-2" style="scroll-margin-top:4.5rem"><div class="flex justify-between items-center gap-2"><h3 class="font-semibold">📌 Pendientes</h3><span class="text-xs text-slate-400">por urgencia</span></div>
+  <div style="display:flex;gap:.4rem;overflow-x:auto;padding-bottom:.25rem">${chips.map(chip).join('')}</div>
+  ${L.length?L.slice(0,pendLim).map(x=>x.html).join('')+(L.length>pendLim?`<button onclick="pendMore()" class="btn bg-slate-700 w-full">Ver ${Math.min(10,L.length-pendLim)} más (${L.length-pendLim} restantes)</button>`:''):dEmpty('✅ Todo al día. No hay pendientes aquí.')}</div>`;
+}
+function dashKpis(){
+  const o=stOpen().length,alta=backlogs.filter(b=>b.status!=='COMPLETADO'&&b.criticality==='ALTA').length,venc=pms.filter(pmOver).length,pv=isSup()?backlogs.filter(b=>b.status==='PENDIENTE_VALIDACION').length+pms.filter(p=>p.status==='PENDIENTE_VALIDACION').length:0,gv=grCount('VENCIDO'),tc=trCount('CAMBIO');
+  const k=(n,l,c,f)=>`<button onclick="${f}" style="text-align:left;background:#1e293b;border:1px solid ${n?c+'66':'#334155'};border-radius:.75rem;padding:.4rem .6rem;flex:0 0 auto;min-width:96px"><span style="display:block;font-size:20px;font-weight:800;line-height:1.1;color:${n?c:'#64748b'}">${n}</span><span style="display:block;font-size:11px;color:#94a3b8">${l}</span></button>`;
+  return `<div style="display:flex;gap:.5rem;overflow-x:auto;padding-bottom:.2rem">${k(o,'Paradas abiertas','#f87171',"pendSet('par')")}${isSup()?k(pv,'Por validar','#c4b5fd',"pendSet('val')"):''}${k(alta,'Backlogs críticos','#f87171',"pendSet('bk')")}${k(venc,'Preventivos vencidos','#f87171',"pendSet('pm')")}${k(gv,'Engrase vencido','#fbbf24',"pendSet('gr')")}${k(tc,'Neumát. a cambiar','#fb923c',"pendSet('tr')")}</div>`;
+}
+function dashHello(){const d=new Date(),dn=['domingo','lunes','martes','miércoles','jueves','viernes','sábado'][d.getDay()],u=pendItems().filter(x=>x.sev<=1).length;
+  return `<div style="background:linear-gradient(135deg,#0F2A44,#13395c);border:1px solid #1e4a73;border-radius:1rem;padding:1rem;display:flex;align-items:center;gap:.8rem">${SYM(44)}<div class="min-w-0"><h2 class="text-lg font-bold" style="color:#f8fafc">Hola, ${esc(String(me.name).split(' ')[0])}</h2><p class="text-xs" style="color:#a9bacb">${dn} ${fmtD(today())} · ${ROLE_N[me.role]||''}</p><p class="text-xs" style="margin-top:.25rem;color:${u?'#fbbf24':'#5eead4'};font-weight:600">${u?u+(u===1?' asunto requiere':' asuntos requieren')+' tu atención':'✅ Todo bajo control'}</p></div></div>`}
+function dashQuick(){
+  const big=(ic,l,f,c,bg)=>`<button onclick="${f}" style="display:flex;align-items:center;gap:.6rem;text-align:left;background:${bg};border:1px solid ${c}66;border-radius:.9rem;padding:.8rem .9rem;color:#f8fafc;min-height:56px"><span style="font-size:24px">${ic}</span><span style="font-size:14px;font-weight:700;line-height:1.2">${l}</span></button>`;
+  const sm=(ic,l,f)=>`<button onclick="${f}" style="background:#1e293b;border:1px solid #334155;border-radius:.8rem;padding:.55rem .2rem;text-align:center;color:#e2e8f0;min-height:62px"><span style="display:block;font-size:20px;line-height:1.3">${ic}</span><span style="display:block;font-size:11px;line-height:1.2">${l}</span></button>`;
+  return `<div class="space-y-2"><div style="display:grid;gap:.5rem;grid-template-columns:1fr 1fr">${big('🛑','Iniciar parada',"openStop('','start')",'#ef4444','rgba(239,68,68,.14)')}${big('📝','Registrar intervención',"openStop('','full')",'#2dd4bf','rgba(45,212,191,.12)')}</div>
+  <div style="display:grid;gap:.5rem;grid-template-columns:repeat(4,1fr)">${sm('🔧','Backlog',"qaBack()")}${sm('🛢️','Engrase',"qaPick('gr')")}${sm('📏','Neumáticos',"qaPick('tr')")}${sm('⏱️','Horómetro',"qaPick('hrs')")}</div></div>`}
 function dashValidar(){
   if(!isSup())return '';
   const l=[...backlogs.filter(b=>b.status==='PENDIENTE_VALIDACION').map(b=>({t:'Backlog '+b.id,e:eqOf(b.fleetId),x:b.component,f:`openValidate('${b.id}')`})),...pms.filter(p=>p.status==='PENDIENTE_VALIDACION').map(p=>({t:'Preventivo',e:eqOf(p.fleetId),x:p.plan,f:`openValidatePm('${p.id}')`}))];
@@ -1637,17 +1688,12 @@ const pmRow=p=>{const e=eqOf(p.fleetId),o=pmOver(p);
 const bkOpenSorted=()=>backlogs.filter(b=>b.status==='PENDIENTE'||b.status==='EN_PROCESO').sort((a,b)=>(!!(b.rejectNote&&b.status==='EN_PROCESO'))-(!!(a.rejectNote&&a.status==='EN_PROCESO'))||(CR_O[a.criticality]??3)-(CR_O[b.criticality]??3)||delay(b)-delay(a));
 const pmSoon=()=>pms.filter(p=>p.status==='PROGRAMADO'&&p.scheduledDate&&daysTo(p.scheduledDate)<=7).sort((a,b)=>a.scheduledDate.localeCompare(b.scheduledDate));
 function renderDashTec(){
-  const bk=bkOpenSorted(),ps=pmSoon(),wait=backlogs.filter(b=>b.status==='PENDIENTE_VALIDACION'&&b.closeUid===me.uid).length+pms.filter(p=>p.status==='PENDIENTE_VALIDACION'&&p.closeUid===me.uid).length;
-  $('v-dash').innerHTML=dashHello()+dashQuick()+dashRep()+(wait?`<div class="bg-violet-500/10 border border-violet-500/30 rounded-xl p-3 text-sm text-violet-300">⏳ Tienes ${wait} cierre(s) esperando validación del supervisor.</div>`:'')
-   +dCard('🔧 Trabajos abiertos ('+bk.length+')',bk.length?bk.slice(0,8).map(bkRow).join(''):dEmpty('✅ No hay backlogs abiertos.'),bk.length>8?`<button onclick="tab('back')" class="btn bg-slate-700 !py-1">Ver todos</button>`:'')
-   +dCard('🗓️ Preventivos de la semana ('+ps.length+')',ps.length?ps.slice(0,6).map(pmRow).join(''):dEmpty('Sin preventivos para los próximos 7 días.'),`<button onclick="tab('pm')" class="btn bg-slate-700 !py-1">Ver todos</button>`)+grDueHtml()+trDueHtml();
+  const wait=backlogs.filter(b=>b.status==='PENDIENTE_VALIDACION'&&b.closeUid===me.uid).length+pms.filter(p=>p.status==='PENDIENTE_VALIDACION'&&p.closeUid===me.uid).length;
+  $('v-dash').innerHTML=dashHello()+dashQuick()+dashKpis()+(wait?`<div class="bg-violet-500/10 border border-violet-500/30 rounded-xl p-3 text-sm text-violet-300">⏳ Tienes ${wait} cierre(s) esperando validación del supervisor.</div>`:'')+dashPend();
 }
 function renderDashSup(){
-  const open=backlogs.filter(b=>b.status!=='COMPLETADO'),k=(l,v,c)=>`<div class="bg-slate-800 border border-slate-700 rounded-xl p-4"><p class="text-[11px] uppercase text-slate-400 font-semibold">${l}</p><p class="text-2xl font-extrabold mt-1 ${c}">${v}</p></div>`;
-  const bk=bkOpenSorted().filter(b=>b.criticality==='ALTA');
-  $('v-dash').innerHTML=dashHello()+dashQuick()+rdBanner()+dashValidar()+dashRep()
-   +`<div style="display:grid;gap:.75rem;grid-template-columns:repeat(auto-fit,minmax(140px,1fr))">${k('Backlogs abiertos',open.length,'text-white')}${k('Criticidad alta',open.filter(b=>b.criticality==='ALTA').length,'text-red-400')}${k('Preventivos vencidos',pms.filter(pmOver).length,'text-red-400')}${k('Engrase vencido',grCount('VENCIDO'),'text-red-400')}${k('Neumáticos a cambiar',trCount('CAMBIO'),'text-red-400')}</div>`
-   +dCard('🚨 Backlogs de criticidad alta ('+bk.length+')',bk.length?bk.slice(0,6).map(bkRow).join(''):dEmpty('Sin backlogs de criticidad alta.'),`<button onclick="tab('back')" class="btn bg-slate-700 !py-1">Ver todos</button>`)+pmUpcomingHtml()+grDueHtml()+trDueHtml();
+  const open=backlogs.filter(b=>b.status!=='COMPLETADO');
+  $('v-dash').innerHTML=dashHello()+dashQuick()+dashKpis()+dashPend()+pmUpcomingHtml();
 }
 
 /* ---------- Registro rápido (+) ---------- */
@@ -1754,24 +1800,43 @@ function dashRep(){
 /* ---------- Pestaña Reporte ---------- */
 function repGo(d){if(d)repDate=d;renderRep()}
 function repShift(n){const x=new Date((repDate||today())+'T12:00:00');x.setDate(x.getDate()+n);const d=fmtISO(x);if(d>today())return;repDate=d;renderRep()}
-function stCard(s){
-  const e=eqOf(s.fleetId),w=stWarn(s),ab=s.status==='ABIERTA';
-  return `<div class="bg-slate-800 border ${ab?'border-red-500/50':'border-slate-700'} rounded-xl p-4 space-y-1"><div class="flex justify-between items-start gap-2"><div class="min-w-0"><b class="text-amber-400">${esc(s.cod)}</b> <span class="text-xs text-slate-400">${esc(s.flota)}</span> ${stBadge(s.motivo)}${ab?' <span class="bdg" style="color:#f87171;background:rgba(239,68,68,.12);border-color:#f8717155">PARADA ABIERTA</span>':''}
-    <p class="text-xs text-slate-400 mt-1">${s.fp.slice(11,16)}${ab?' → en curso':' → '+(s.fs||'').slice(11,16)+' · <b class="text-slate-200">'+s.t+' h</b>'} · ${esc(s.tipo==='PLANIFICADA'?'Planificada':'No planificada')} · ${esc(s.sistema||'')}</p></div>
+let repView='day',repQ='',repMot='',repTbl=false,repLim=40;
+function repSet(k,v){if(k==='view')repView=v;else if(k==='q')repQ=v;else if(k==='mot')repMot=v;else if(k==='tbl')repTbl=!repTbl;repLim=40;renderRep()}
+function repMore(){repLim+=40;renderRep()}
+function stCard(s,showDate){
+  const ab=s.status==='ABIERTA',w=stWarn(s),ln=(l,v)=>v!==''&&v!=null?`<span style="color:#64748b">${l}</span> ${esc(v)}`:'';
+  const meta=[ln('Resp.',s.resp),ln('Frente',s.frente),ln('Lugar',s.lugar),ln('Horóm.',fmtH(s.hp)+(ab?'':' → '+fmtH(s.hs))),ln('Demora',s.rdem),ln('Parada',s.rpar)].filter(Boolean).join(' · ');
+  return `<div class="bg-slate-800 border ${ab?'border-red-500/50':'border-slate-700'} rounded-xl p-4 space-y-2" style="word-break:break-word"><div class="flex justify-between items-start gap-2"><div class="min-w-0"><b class="text-amber-400">${esc(s.cod)}</b> <span class="text-xs text-slate-400">${esc(s.flota)}</span> ${stBadge(s.motivo)}${ab?' <span class="bdg" style="color:#f87171;background:rgba(239,68,68,.12);border-color:#f8717155">PARADA ABIERTA</span>':''}
+    <p class="text-xs text-slate-400 mt-1">${showDate?fmtD(s.fp.slice(0,10))+' · ':''}${s.fp.slice(11,16)}${ab?' → en curso':' → '+(s.fs||'').slice(11,16)+' · <b class="text-slate-200">'+s.t+' h</b>'} · ${esc(s.tipo==='PLANIFICADA'?'Planificada':'No planificada')} · ${esc(s.sistema||'')}</p></div>
     <div class="flex gap-1" style="flex-shrink:0"><button onclick="openStopView('${s.id}')" class="btn bg-slate-700 !py-1">👁️</button>${ab&&stCan(s)?`<button onclick="openStop('${s.id}','close')" class="btn bg-emerald-500/20 text-emerald-400 !py-1">✅</button>`:''}${!ab&&stCan(s)?`<button onclick="openStop('${s.id}','edit')" class="btn bg-slate-700 !py-1">✏️</button>`:''}${adm(`<button onclick="delStop('${s.id}')" class="btn bg-red-500/20 !py-1">🗑️</button>`)}</div></div>
-    <p class="text-sm text-slate-200" style="white-space:pre-line">${esc((s.desc||'').slice(0,160))}${(s.desc||'').length>160?'…':''}</p>
-    <p class="text-xs text-slate-400">${esc(s.resp)} · ${esc(s.frente||'')} · ${esc(s.lugar||'')}${s.obs?' · 📌 obs.':''}${s.backlogId?' · 🔧 backlog':''}</p>${w?`<p class="text-xs text-amber-400">⚠️ ${esc(w)}</p>`:''}</div>`;
+    <p class="text-sm text-slate-200" style="white-space:pre-line">${esc((s.desc||'').trim()||'–')}</p>${s.obs&&s.obs.trim()?`<p class="text-xs" style="color:#fcd34d;white-space:pre-line">📌 ${esc(s.obs.trim())}</p>`:''}
+    <p class="text-xs text-slate-400" style="line-height:1.6">${meta}${s.backlogId?' · 🔧 con backlog':''}${(s.photos||[]).length?' · 📷 '+s.photos.length:''}</p>${w?`<p class="text-xs text-amber-400">⚠️ ${esc(w)}</p>`:''}</div>`;
+}
+function stTable(L){
+  const th='padding:8px 10px;text-align:left;border-bottom:1px solid #334155;white-space:nowrap;color:#94a3b8;font-weight:600;position:sticky;top:0;background:#1e293b',td='padding:8px 10px;border-bottom:1px solid #1e293b;vertical-align:top',stk='position:sticky;left:0;background:#1e293b;z-index:1;border-right:1px solid #334155';
+  const C=[['EQUIPO',s=>`<b class="text-amber-400">${esc(s.cod)}</b><div style="font-size:10px;color:#94a3b8">${esc(s.flota)}</div>`,'min-width:110px;'+stk],['PARADA',s=>fmtDT(s.fp),'white-space:nowrap'],['SALIDA',s=>s.status==='ABIERTA'?'en curso':fmtDT(s.fs),'white-space:nowrap'],['H',s=>s.t,'text-align:right'],['TIPO',s=>s.tipo==='PLANIFICADA'?'PLAN.':'NO PLAN.','white-space:nowrap'],['MOTIVO',s=>esc(s.motivo),''],['SISTEMA',s=>esc(s.sistema),''],['DESCRIPCIÓN',s=>esc(s.desc),'min-width:260px;white-space:pre-line'],['RESPONSABLE',s=>esc(s.resp),'min-width:150px'],['FRENTE',s=>esc(s.frente),'white-space:nowrap'],['LUGAR',s=>esc(s.lugar),'white-space:nowrap'],['HORÓM. PARADA',s=>fmtH(s.hp),'text-align:right'],['HORÓM. SALIDA',s=>s.status==='ABIERTA'?'':fmtH(s.hs),'text-align:right'],['DEMORA',s=>esc(s.rdem),''],['PARADA POR',s=>esc(s.rpar),''],['OBSERVACIONES',s=>esc(s.obs),'min-width:240px;white-space:pre-line']];
+  return `<div style="overflow:auto;max-height:70vh;border:1px solid #334155;border-radius:.75rem"><table style="border-collapse:collapse;font-size:12px;color:#e2e8f0"><thead><tr>${C.map((c,i)=>`<th style="${th}${i===0?';left:0;z-index:3;border-right:1px solid #334155':''}">${c[0]}</th>`).join('')}</tr></thead><tbody>${L.map(s=>`<tr onclick="openStopView('${s.id}')" style="cursor:pointer">${C.map(c=>`<td style="${td};${c[2]}">${c[1](s)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
 }
 function renderRep(){
-  if(!repDate)repDate=today();const d=repDate,L=stDay(d),ym=d.slice(0,7),M=sps.filter(s=>(s.fp||'').slice(0,7)===ym&&s.status!=='ABIERTA'),op=stOpen();
+  if(!repDate){repDate=today();if(!stDay(today()).length&&sps.length)repDate=sps.map(s=>(s.fp||'').slice(0,10)).sort().pop()||today()}
+  const d=repDate,ym=d.slice(0,7),op=stOpen(),inM=s=>(s.fp||'').slice(0,7)===ym&&s.status!=='ABIERTA',M=sps.filter(inM);
+  let L=(repView==='day'?stDay(d):sps.filter(s=>repView==='all'||(s.fp||'').slice(0,7)===ym).sort((a,b)=>(b.fp||'').localeCompare(a.fp||''))).filter(s=>s.status!=='ABIERTA');
+  if(repMot)L=L.filter(s=>s.motivo===repMot);
+  const q=stNorm(repQ);if(q)L=L.filter(s=>stNorm([s.cod,s.flota,s.desc,s.obs,s.resp,s.sistema,s.frente,s.motivo].join(' ')).includes(q));
   const sum=a=>Math.round(a.reduce((t,s)=>t+(Number(s.t)||0),0)*10)/10,H=sum(M),pl=M.filter(s=>s.tipo==='PLANIFICADA'),by={};M.forEach(s=>by[s.motivo]=(by[s.motivo]||0)+(Number(s.t)||0));
-  const week=Array.from({length:7},(_,i)=>{const x=new Date(today()+'T12:00:00');x.setDate(x.getDate()-i);return fmtISO(x)});
-  $('v-rep').innerHTML=`<div class="bg-slate-800 border border-slate-700 rounded-xl p-3 space-y-3"><div class="flex gap-2 items-center"><button onclick="repShift(-1)" class="btn bg-slate-700">◀</button><input type="date" class="inp" value="${d}" max="${today()}" onchange="repGo(this.value)" style="flex:1"><button onclick="repShift(1)" class="btn bg-slate-700">▶</button></div>
-    <div class="flex gap-2 flex-wrap"><button onclick="openStop('','start')" class="btn bg-red-500 text-white">🛑 Iniciar parada</button><button onclick="openStop('','full')" class="btn bg-amber-500 text-slate-950">➕ Registrar intervención</button><button onclick="makePdfRep('${d}')" class="btn bg-slate-700">📄 PDF del día</button><button onclick="exportStopsOpen()" class="btn bg-slate-700">📊 Excel</button>${adm(`<button onclick="importStopsPick()" class="btn bg-slate-700">📥 Importar Excel</button>`)}${d!==today()?`<button onclick="repGo('${today()}')" class="btn bg-slate-700">Hoy</button>`:''}</div>
-    <div style="display:flex;gap:.3rem;overflow-x:auto">${week.map(x=>{const n=stDay(x).length;return `<button onclick="repGo('${x}')" class="btn ${x===d?'bg-amber-500 text-slate-950':'bg-slate-700'} !py-1" style="flex:0 0 auto;min-height:40px;padding:.2rem .6rem"><span style="font-size:11px">${x.slice(8)}/${x.slice(5,7)}</span> <b style="font-size:11px">${n?'· '+n:''}</b></button>`}).join('')}</div></div>
-   ${op.length?`<h3 class="text-xs text-red-400 uppercase font-semibold">🔴 Paradas abiertas (${op.length})</h3>${op.map(stCard).join('')}`:''}
-   <h3 class="text-xs text-slate-400 uppercase font-semibold">Intervenciones del ${fmtD(d)} (${L.length})</h3>
-   ${L.filter(s=>s.status!=='ABIERTA').map(stCard).join('')||'<p class="text-slate-500 text-sm">No hay intervenciones cerradas en esta fecha.</p>'}
+  const week=Array.from({length:7},(_,i)=>{const x=new Date(today()+'T12:00:00');x.setDate(x.getDate()-i);return fmtISO(x)}),seg=(k,l)=>`<button onclick="repSet('view','${k}')" class="btn ${repView===k?'bg-amber-500 text-slate-950':'bg-slate-700'}" style="flex:1;padding:.45rem .2rem;font-size:12px">${l}</button>`;
+  const title=repView==='day'?'Intervenciones del '+fmtD(d):repView==='month'?ST_MES[+ym.slice(5,7)-1]+' '+ym.slice(0,4):'Todas las intervenciones';
+  $('v-rep').innerHTML=`<div class="bg-slate-800 border border-slate-700 rounded-xl p-3 space-y-3">
+    <div class="flex gap-2">${seg('day','Día')}${seg('month','Mes')}${seg('all','Todas')}<button onclick="repSet('tbl')" class="btn ${repTbl?'bg-amber-500 text-slate-950':'bg-slate-700'}" style="padding:.45rem .5rem;font-size:12px">🧾 Tabla</button></div>
+    ${repView==='day'?`<div class="flex gap-2 items-center"><button onclick="repShift(-1)" class="btn bg-slate-700">◀</button><input type="date" class="inp" value="${d}" max="${today()}" onchange="repGo(this.value)" style="flex:1"><button onclick="repShift(1)" class="btn bg-slate-700">▶</button></div>`:repView==='month'?`<input type="month" class="inp" value="${ym}" max="${today().slice(0,7)}" onchange="if(this.value)repGo(this.value+'-01')">`:''}
+    <div class="flex gap-2"><input class="inp" placeholder="Buscar equipo, texto, responsable…" value="${esc(repQ)}" onchange="repSet('q',this.value)" style="flex:1"><select class="inp" onchange="repSet('mot',this.value)" style="width:auto;max-width:9rem"><option value="">Todos</option>${ST_MOT.map(([k])=>`<option value="${k}" ${k===repMot?'selected':''}>${k}</option>`).join('')}</select></div>
+    <div class="flex gap-2"><button onclick="openStop('','start')" class="btn bg-red-500 text-white" style="flex:1;padding:.5rem .4rem;font-size:13px">🛑 Iniciar parada</button><button onclick="openStop('','full')" class="btn bg-amber-500 text-slate-950" style="flex:1;padding:.5rem .4rem;font-size:13px">➕ Intervención</button></div>
+    <div class="flex gap-2"><button onclick="makePdfRep('${d}')" class="btn bg-slate-700" style="flex:1;padding:.4rem .3rem;font-size:12px">📄 PDF día</button><button onclick="exportStopsOpen()" class="btn bg-slate-700" style="flex:1;padding:.4rem .3rem;font-size:12px">📊 Excel</button>${adm(`<button onclick="importStopsPick()" class="btn bg-slate-700" style="flex:1;padding:.4rem .3rem;font-size:12px">📥 Importar</button>`)}</div>
+    ${repView==='day'?`<div style="display:flex;gap:.3rem;overflow-x:auto">${week.map(x=>{const n=stDay(x).length;return `<button onclick="repGo('${x}')" class="btn ${x===d?'bg-amber-500 text-slate-950':'bg-slate-700'} !py-1" style="flex:0 0 auto;min-height:40px;padding:.2rem .6rem"><span style="font-size:11px">${x.slice(8)}/${x.slice(5,7)}</span> <b style="font-size:11px">${n?'· '+n:''}</b></button>`}).join('')}</div>`:''}</div>
+   ${op.length?`<h3 class="text-xs text-red-400 uppercase font-semibold">🔴 Paradas abiertas (${op.length})</h3>${op.map(s=>stCard(s,true)).join('')}`:''}
+   <h3 class="text-xs text-slate-400 uppercase font-semibold">${title} · ${L.length} · ${sum(L)} h${repQ||repMot?' (filtrado)':''}</h3>
+   ${!L.length?'<p class="text-slate-500 text-sm">No hay intervenciones con esos criterios. Usa 🗓️ Mes o 📋 Todas para ver más.</p>':repTbl?stTable(L.slice(0,repLim)):`<div class="space-y-3">${L.slice(0,repLim).map(s=>stCard(s,repView!=='day')).join('')}</div>`}
+   ${L.length>repLim?`<button onclick="repMore()" class="btn bg-slate-700 w-full">Mostrar más (${L.length-repLim} restantes)</button>`:''}
    <div class="bg-slate-800 border border-slate-700 rounded-xl p-4 space-y-1"><h3 class="font-semibold">📈 ${ST_MES[+ym.slice(5,7)-1]} ${ym.slice(0,4)}</h3>${M.length?`<p class="text-sm text-slate-300"><b>${M.length}</b> intervenciones · <b>${H}</b> h · <b>${Math.round(pl.length/M.length*100)}%</b> planificadas</p><p class="text-xs text-slate-400">${Object.keys(by).sort((a,b)=>by[b]-by[a]).map(k=>esc(k)+': '+Math.round(by[k]*10)/10+' h').join(' · ')}</p>`:'<p class="text-sm text-slate-500">Sin intervenciones cerradas este mes.</p>'}</div>`;
 }
 /* ---------- Formulario ---------- */
@@ -1971,7 +2036,7 @@ function authMsg(e){
 }
 
 /* ---------- Pantalla de acceso ---------- */
-function showLogin(html){const l=$('login');l.innerHTML=`<div class="bg-slate-800 border border-slate-700 rounded-xl p-5 space-y-3" style="width:100%;max-width:24rem"><div style="text-align:center"><div style="font-size:38px;line-height:1.2">🏗️</div><p style="font-size:11px;letter-spacing:.25em" class="text-amber-400 font-bold">COANSA</p><h1 class="font-bold text-lg">Control de Mantenimiento</h1></div>${html}</div>`;l.style.display='flex';document.body.classList.add('noauth')}
+function showLogin(html){const l=$('login');l.innerHTML=`<div class="bg-slate-800 border border-slate-700 rounded-xl p-5 space-y-3" style="width:100%;max-width:24rem"><div style="text-align:center"><div style="display:flex;align-items:center;justify-content:center;gap:.6rem"><svg width="56" height="56" viewBox="0 0 64 64" role="img" aria-label="Mantify"><circle cx="32" cy="32" r="23" fill="none" stroke="#2DD4BF" stroke-width="8" stroke-dasharray="9.03 9.03"/><circle cx="32" cy="32" r="21" fill="#2DD4BF"/><path d="M22.5 32.5 L29 39 L42 25.5" fill="none" stroke="#0F2A44" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/></svg><span style="font-family:'Space Grotesk',Inter,system-ui,sans-serif;font-weight:700;font-size:40px;line-height:1;letter-spacing:-.045em;color:#F8FAFC">mantify</span></div><p style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#A9BACB;margin-top:.6rem">Control de mantenimiento de equipos</p></div>${html}</div>`;l.style.display='flex';document.body.classList.add('noauth')}
 function hideLogin(){$('login').style.display='none';document.body.classList.remove('noauth')}
 const lastUser=()=>{try{return localStorage.getItem('lastUser')||''}catch(_){return ''}};
 function toast(t){const d=document.createElement('div');d.textContent=t;d.style.cssText='position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:80;background:#10b981;color:#052e1b;font-weight:600;padding:.6rem 1rem;border-radius:.75rem;box-shadow:0 6px 20px #0008;max-width:90%;text-align:center';document.body.appendChild(d);setTimeout(()=>d.remove(),2600)}
@@ -2171,5 +2236,6 @@ function resendPw(id){const u=usersList.find(x=>x.uid===id);if(!u)return;
 /* ---------- Inicio ---------- */
 if(db&&auth)initAuth();else{me={uid:'local',name:'Modo local',role:'admin'};startApp()}
 </script>
+<script>if('serviceWorker' in navigator&&location.protocol.startsWith('http'))addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));</script>
 </body>
 </html>
