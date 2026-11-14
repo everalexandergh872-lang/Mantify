@@ -1,6 +1,6 @@
 /* Service worker: permite abrir la app sin señal y la mantiene actualizada.
    Cambia VERSION cada vez que publiques una nueva versión del index.html. */
-const VERSION='mantify-v10';
+const VERSION='mantify-v11';
 const SHELL=['./','./index.html','./manifest.webmanifest','./icon-192.png','./icon-512.png','./apple-touch-icon.png','./favicon.svg'];
 const LIBS=['https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
  'https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js','https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js','https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js'];
