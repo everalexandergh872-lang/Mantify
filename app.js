@@ -202,6 +202,26 @@ function delFleet(id){if(!isAdmin())return;
   ask(n?`Este equipo tiene ${n} registro(s) asociados (backlogs o preventivos). ¿Eliminar de todos modos?`:'¿Eliminar este equipo?',()=>del('fleet',id));
 }
 
+/* ---------- Borrar todos los equipos (solo planner) ---------- */
+function openFleetDelAll(){if(!isAdmin())return;
+  if(!fleet.length){note('No hay equipos registrados.');return}
+  const ids=new Set(fleet.map(e=>e.id)),n=backlogs.filter(b=>ids.has(b.fleetId)).length+pms.filter(p=>ids.has(p.fleetId)).length;
+  show(`<h3 class="font-bold mb-2 text-red-400">🗑️ Borrar todos los equipos</h3>
+  <p class="text-sm text-slate-300">Se eliminarán los <b>${fleet.length}</b> equipo(s) de la flota. Esta acción no se puede deshacer.</p>
+  ${n?`<p class="text-xs text-amber-400 mt-2">⚠️ Hay ${n} registro(s) asociados (backlogs o preventivos). No se borran, pero quedarán sin equipo.</p>`:''}
+  <p class="text-xs text-slate-400 mt-2">Te recomendamos descargar antes un <button type="button" onclick="exportJson()" class="lnk text-amber-400">💾 respaldo completo</button>.</p>
+  <label class="block text-xs text-slate-400 mt-3">Escribe <b class="text-red-400">BORRAR</b> para confirmar</label>
+  <input id="fdel-txt" class="inp mt-1" autocomplete="off" oninput="const b=$('fdel-go'),ok=this.value.trim().toUpperCase()==='BORRAR';b.disabled=!ok;b.style.opacity=ok?'1':'.5'">
+  <div class="flex justify-end gap-2 pt-3 border-t border-slate-700 mt-3"><button type="button" onclick="hide()" class="btn bg-slate-700">Cancelar</button><button id="fdel-go" type="button" onclick="doFleetDelAll()" class="btn bg-red-500 text-white" disabled style="opacity:.5">Borrar ${fleet.length} equipo(s)</button></div>`);
+}
+function doFleetDelAll(){if(!isAdmin())return;
+  if(($('fdel-txt')||{}).value?.trim().toUpperCase()!=='BORRAR')return;
+  const ids=fleet.map(e=>e.id),n=ids.length;hide();
+  if(db){const jobs=[];for(let i=0;i<ids.length;i+=400){const b=db.batch();ids.slice(i,i+400).forEach(id=>b.delete(db.collection('fleet').doc(id)));jobs.push(b.commit())}
+    return Promise.all(jobs).then(()=>note(`Se eliminaron ${n} equipo(s).`)).catch(e=>note('No se pudo eliminar: '+e.message))}
+  setStore('fleet',[]);lsSet('fleet',[]);render();note(`Se eliminaron ${n} equipo(s).`);
+}
+
 /* ---------- Importar equipos a la flota (CSV o Excel) ---------- */
 let fImp=[];
 const FST={OPERATIVO:'OPERATIVO',INOPERATIVO:'INOPERATIVO',ENMANTENIMIENTO:'EN_MANTENIMIENTO',MANTENIMIENTO:'EN_MANTENIMIENTO',ENREPARACION:'EN_MANTENIMIENTO',DISPONIBLE:'OPERATIVO',ACTIVO:'OPERATIVO',INACTIVO:'INOPERATIVO',DETENIDO:'INOPERATIVO',PARADO:'INOPERATIVO'};
@@ -1925,6 +1945,7 @@ function applyRole(){
   $('t-adm').style.display=isAdmin()?'':'none';
   $('bt-fleet').style.display=isAdmin()?'':'none';
   if($('bt-fimp'))$('bt-fimp').style.display=isAdmin()?'':'none';
+  if($('bt-fdelall'))$('bt-fdelall').style.display=isAdmin()?'':'none';
   $('bt-pm').style.display=supOk?'':'none';
   $('bt-imp').style.display=supOk?'':'none';
   ['bk','gr','pm'].forEach(k=>{const b=$('bt-mod-'+k);if(b)b.style.display=isAdmin()?'':'none'});
