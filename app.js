@@ -141,6 +141,7 @@ function tblFleet(l){const sc={OPERATIVO:'text-emerald-400',INOPERATIVO:'text-re
   return `<tr><td><b class="text-amber-400">${esc(e.code)}</b></td><td><button type="button" onclick="openEquip('${e.id}')" class="font-semibold lnk">${esc(e.brand)} ${esc(e.model)}</button></td><td>${esc(e.category)}</td><td class="text-slate-400">${esc(e.serialNumber)}</td><td class="nw num">${esc(e.hours)} h</td><td>${esc(e.location||'-')}</td><td class="nw font-semibold ${sc[e.status]||''}">${esc(String(e.status||'').replace('_',' '))}</td><td class="num"><b class="${n?'text-amber-400':'text-slate-500'}">${n}</b></td><td class="num"><b class="${pn?'text-blue-400':'text-slate-500'}">${pn}</b></td><td><div class="lact">${fleetActs(e)}</div></td></tr>`}),'Sin equipos registrados.')}
 
 /* ---------- Flota ---------- */
+const FLEET_CATS=['Excavadora','Cargador Frontal','Tractor de Oruga','Camión Minero','Motoniveladora','Perforadora','Volquete','Cisterna de Agua','Minibús','Camioneta','Grupo Electrógeno','Luminaria','Zaranda Móvil','Compresora','Chancadora'];
 function renderFleet(){
   const s=$('qf').value.toLowerCase();
   const l=fleet.filter(e=>[e.code,e.brand,e.model,e.serialNumber].some(v=>String(v||'').toLowerCase().includes(s)));
@@ -162,7 +163,7 @@ function openFleet(id){if(!isAdmin())return;
   <form onsubmit="saveFleet(event,'${id||''}')" class="space-y-3">
     <div class="grid grid-cols-2 gap-3">${field('code','Código *',e.code,'required placeholder="EX-01"')}${field('brand','Marca *',e.brand,'required')}
     ${field('model','Modelo *',e.model,'required')}${field('serialNumber','Nº de serie *',e.serialNumber,'required')}
-    ${sel('category','Categoría',['Excavadora','Cargador Frontal','Tractor de Oruga','Camión Minero','Motoniveladora','Perforadora','Volquete','Cisterna de Agua','Minibús','Camioneta','Grupo Electrógeno','Luminaria','Zaranda Móvil','Compresora','Chancadora'],e.category)}
+    ${sel('category','Categoría',FLEET_CATS.includes(e.category)||!e.category?FLEET_CATS:FLEET_CATS.concat([e.category]),e.category)}
     ${field('hours','Horómetro / Odómetro',e.hours??0,'min="0"','number')}${field('location','Ubicación / Frente',e.location)}
     ${sel('status','Estado operativo',[['OPERATIVO','Operativo'],['INOPERATIVO','Inoperativo'],['EN_MANTENIMIENTO','En mantenimiento']],e.status)}</div>${btns()}</form>`);
 }
@@ -173,6 +174,78 @@ function saveFleet(ev,id){
 function delFleet(id){if(!isAdmin())return;
   const n=backlogs.filter(b=>b.fleetId===id).length+pms.filter(p=>p.fleetId===id).length;
   ask(n?`Este equipo tiene ${n} registro(s) asociados (backlogs o preventivos). ¿Eliminar de todos modos?`:'¿Eliminar este equipo?',()=>del('fleet',id));
+}
+
+/* ---------- Importar equipos a la flota (CSV o Excel) ---------- */
+let fImp=[];
+const FST={OPERATIVO:'OPERATIVO',INOPERATIVO:'INOPERATIVO',ENMANTENIMIENTO:'EN_MANTENIMIENTO',MANTENIMIENTO:'EN_MANTENIMIENTO',ENREPARACION:'EN_MANTENIMIENTO',DISPONIBLE:'OPERATIVO',ACTIVO:'OPERATIVO',INACTIVO:'INOPERATIVO',DETENIDO:'INOPERATIVO',PARADO:'INOPERATIVO'};
+function openFleetImport(){if(!isAdmin())return;
+  const tpl='﻿codigo;marca;modelo;serie;categoria;horometro;ubicacion;estado\nEX-01;Caterpillar;336D2;CAT0336DXYZ123;Excavadora;12500;Tajo Norte;Operativo\nVQ-05;Volvo;FMX 460;YV2XTW0A9KB123456;Volquete;84320;Cantera;En mantenimiento\n';
+  const url=URL.createObjectURL(new Blob([tpl],{type:'text/csv;charset=utf-8'}));fImp=[];
+  show(`<h3 class="font-bold mb-1">📥 Importar equipos a la flota</h3>
+  <p class="text-xs text-slate-400 mb-3">Sube un Excel (<b>.xlsx</b>) o un <b>CSV</b> con una fila por equipo. La primera fila debe tener los encabezados.</p>
+  <div class="bg-slate-900 p-3 rounded-lg text-xs text-slate-300 space-y-1"><p><b class="text-amber-400">codigo</b> * — ej. EX-01 (se guarda en mayúsculas)</p><p><b class="text-amber-400">marca</b> *, <b class="text-amber-400">modelo</b> *</p>
+  <p><b>serie</b>, <b>categoria</b>, <b>horometro</b>, <b>ubicacion</b>, <b>estado</b> — opcionales</p>
+  <p class="text-slate-400">Categorías: ${FLEET_CATS.map(esc).join(', ')}. Estado: Operativo, Inoperativo o En mantenimiento.</p></div>
+  <label class="flex items-center gap-2 text-xs text-slate-300 mt-3"><input type="checkbox" id="fimp-upd" onchange="fImpFile&&readFleetImport()"> Actualizar los equipos que ya existen (mismo código). Si no, se omiten.</label>
+  <div class="grid gap-2 mt-3"><a href="${url}" download="plantilla_equipos.csv" class="btn bg-slate-700 text-center" style="text-decoration:none;color:inherit">⬇️ Descargar plantilla (CSV)</a>
+  <input type="file" accept=".csv,.txt,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onchange="fImpFile=this.files[0]||null;readFleetImport()"></div>
+  <div id="fimp-out" class="mt-3"></div>
+  <div class="flex justify-end gap-2 pt-3 border-t border-slate-700 mt-3"><button type="button" onclick="hide();fImp=[];fImpFile=null" class="btn bg-slate-700">Cerrar</button><button id="fimp-go" type="button" onclick="doFleetImport()" class="btn bg-amber-500 text-slate-950" disabled style="opacity:.5">Importar</button></div>`,'34rem');
+}
+let fImpFile=null;
+async function fleetImportRows(f){
+  if(/\.xlsx$/i.test(f.name)){
+    if(f.size>10e6)throw new Error('El Excel pesa más de 10 MB.');
+    const xb=await f.arrayBuffer(),sg=new Uint8Array(xb,0,4);if(sg[0]!==0x50||sg[1]!==0x4B)throw new Error('El archivo no es un Excel válido.');
+    await loadXL();const wb=new ExcelJS.Workbook();await wb.xlsx.load(xb);const ws=wb.worksheets[0];if(!ws)throw new Error('El archivo no tiene hojas.');
+    const cv=v=>{if(v==null)return '';if(v instanceof Date)return v.toISOString().slice(0,10);if(typeof v==='object'){if(v.result!==undefined)return cv(v.result);if(v.richText)return v.richText.map(x=>x.text).join('');if(v.text!=null)return String(v.text);return ''}return String(v)};
+    const rows=[];ws.eachRow({includeEmpty:false},row=>{const r=[];row.eachCell({includeEmpty:true},(c,i)=>{r[i-1]=cv(c.value)});for(let i=0;i<r.length;i++)if(r[i]==null)r[i]='';if(r.some(x=>String(x).trim()!==''))rows.push(r)});return rows;
+  }
+  if(!/\.(csv|txt)$/i.test(f.name)||f.size>5e6)throw new Error('Solo archivos .xlsx, .csv o .txt (CSV hasta 5 MB).');
+  const buf=await f.arrayBuffer();let txt;try{txt=new TextDecoder('utf-8',{fatal:true}).decode(buf)}catch(_){txt=new TextDecoder('windows-1252').decode(buf)}
+  return parseCsv(txt);
+}
+async function readFleetImport(){
+  const f=fImpFile,out=$('fimp-out'),go=$('fimp-go');if(!f||!out)return;go.disabled=true;go.style.opacity='.5';go.textContent='Importar';fImp=[];
+  out.innerHTML='<p class="text-xs text-slate-400">Leyendo archivo…</p>';
+  let rows;try{rows=await fleetImportRows(f)}catch(e){out.innerHTML=`<p class="text-xs text-red-400">${esc(e.message||String(e))}</p>`;return}
+  if(rows.length<2){out.innerHTML='<p class="text-xs text-red-400">El archivo no tiene datos: necesita una fila de encabezados y al menos un equipo.</p>';return}
+  const hd=rows[0].map(nk),col=n=>hd.findIndex(h=>n.includes(h));
+  const ix={code:col(['codigo','code','codigoequipo','equipo','codequipo','cod','placa','unidad']),brand:col(['marca','brand','fabricante']),model:col(['modelo','model']),
+    serial:col(['serie','nserie','nroserie','numerodeserie','numeroserie','sn','serial','serialnumber','vin','chasis']),cat:col(['categoria','category','tipo','tipoequipo','tipodeequipo','flota','clase']),
+    hours:col(['horometro','horometroodometro','odometro','horas','hours','kilometraje','km']),loc:col(['ubicacion','ubicacionfrente','frente','location','lugar','proyecto']),st:col(['estado','status','estadooperativo','condicion'])};
+  if(ix.code<0||ix.brand<0||ix.model<0){out.innerHTML='<p class="text-xs text-red-400">Faltan columnas obligatorias. Usa los encabezados: codigo, marca, modelo (descarga la plantilla).</p>';return}
+  const upd=!!($('fimp-upd')&&$('fimp-upd').checked),byCode={};fleet.forEach(e=>byCode[String(e.code).trim().toUpperCase()]=e);
+  const catOf=v=>{const k=nk(v);if(!k)return '';return FLEET_CATS.find(c=>nk(c)===k)||FLEET_CATS.find(c=>nk(c).startsWith(k)||k.startsWith(nk(c)))||String(v).trim()};
+  const ok=[],bad=[],seen={},warn=[];let nNew=0,nUpd=0,skip=0;
+  rows.slice(1).forEach((r,n)=>{const line=n+2,g=i=>i<0?'':String(r[i]??'').trim();
+    const code=g(ix.code).toUpperCase().replace(/\s+/g,' ');
+    if(!code){bad.push(`Fila ${line}: falta el código`);return}
+    if(code.length>40){bad.push(`Fila ${line}: código demasiado largo`);return}
+    if(seen[code]){bad.push(`Fila ${line}: el código ${code} está repetido en el archivo (fila ${seen[code]})`);return}seen[code]=line;
+    const old=byCode[code];if(old&&!upd){skip++;return}
+    const brand=g(ix.brand),model=g(ix.model);
+    if(!brand||!model){bad.push(`Fila ${line} (${code}): falta ${!brand?'la marca':'el modelo'}`);return}
+    const hs=g(ix.hours).replace(/\s/g,'').replace(/\.(?=\d{3}(\D|$))/g,'').replace(',','.');let hours=hs===''?null:Number(hs);
+    if(hours!==null&&(isNaN(hours)||hours<0)){warn.push(`Fila ${line} (${code}): horómetro "${g(ix.hours)}" no válido, se deja ${old?'el actual':'en 0'}`);hours=null}
+    const stRaw=g(ix.st);let status=stRaw?FST[nk(stRaw).toUpperCase()]:null;
+    if(stRaw&&!status)warn.push(`Fila ${line} (${code}): estado "${stRaw}" no reconocido, se usa ${old?'el actual':'Operativo'}`);
+    const cat=catOf(g(ix.cat));if(cat&&!FLEET_CATS.includes(cat))warn.push(`Fila ${line} (${code}): categoría "${cat}" no está en la lista estándar (se guarda igual)`);
+    const base=old||{id:uid('F'),hours:0,status:'OPERATIVO',category:FLEET_CATS[0],serialNumber:'S/D',location:''};
+    ok.push({...base,code,brand,model,serialNumber:g(ix.serial)||base.serialNumber||'S/D',category:cat||base.category,hours:hours!==null?hours:(Number(base.hours)||0),location:g(ix.loc)||base.location||'',status:status||base.status||'OPERATIVO'});
+    old?nUpd++:nNew++;
+  });
+  fImp=ok;
+  const L=(a,c)=>a.slice(0,8).map(x=>`<p class="${c}">${esc(x)}</p>`).join('')+(a.length>8?`<p class="text-slate-400">… y ${a.length-8} más</p>`:'');
+  out.innerHTML=`<div class="bg-slate-900 p-3 rounded-lg text-xs space-y-1"><p class="text-emerald-400 font-semibold">✔ ${ok.length} listo(s): ${nNew} nuevo(s)${upd?`, ${nUpd} a actualizar`:''}</p>${skip?`<p class="text-slate-400">${skip} ya existe(n) en la flota y se omite(n) (marca la casilla para actualizarlos)</p>`:''}
+  ${bad.length?`<p class="text-red-400 font-semibold">✖ ${bad.length} con error (no se importan):</p>${L(bad,'text-red-400')}`:''}${warn.length?`<p class="text-amber-400 font-semibold">⚠️ ${warn.length} aviso(s):</p>${L(warn,'text-amber-400')}`:''}
+  ${ok.slice(0,5).map(o=>`<p class="text-slate-300">• <b class="text-amber-400">${esc(o.code)}</b> · ${esc(o.brand)} ${esc(o.model)} · ${esc(o.category)}${byCode[o.code]?' <span class="text-blue-400">(actualiza)</span>':''}</p>`).join('')}${ok.length>5?`<p class="text-slate-500">… y ${ok.length-5} más</p>`:''}</div>`;
+  if(ok.length){go.disabled=false;go.style.opacity='1';go.textContent='Importar '+ok.length}
+}
+function doFleetImport(){
+  if(!isAdmin()||!fImp.length)return;const list=fImp,n=list.length;fImp=[];fImpFile=null;hide();
+  putMany('fleet',list).then(()=>note(`Se importaron ${n} equipo(s) a la flota.`));
 }
 
 /* ---------- Backlogs ---------- */
@@ -644,7 +717,7 @@ function openImport(){if(!isSup())return;
   <a href="${url}" target="_blank" rel="noopener" class="btn bg-slate-800 border border-slate-600 text-center" style="text-decoration:none">🔍 Abrir plantilla en pestaña nueva</a>
   <input type="file" accept=".csv,.txt,text/csv" onchange="readImport(this)"></div>
   <div id="imp-out" class="mt-3"></div>
-  <div class="flex justify-end gap-2 pt-3 border-t border-slate-700 mt-3"><button type="button" onclick="hide()" class="btn bg-slate-700">Cerrar</button><button id="imp-go" type="button" onclick="doImport()" class="btn bg-amber-500 text-slate-950" disabled style="opacity:.5">Importar</button></div>`);
+  <div class="flex justify-end gap-2 pt-3 border-t border-slate-700 mt-3"><button type="button" onclick="hide()" class="btn bg-slate-700">Cerrar</button><button id="imp-go" type="button" onclick="doImportPm()" class="btn bg-amber-500 text-slate-950" disabled style="opacity:.5">Importar</button></div>`);
 }
 async function readImport(inp){
   const f=inp.files[0];if(!f)return;if(!/\.(csv|txt)$/i.test(f.name)||f.size>5e6){inp.value='';return note('Solo archivos .csv o .txt de hasta 5 MB.')}const out=$('imp-out'),go=$('imp-go');go.disabled=true;go.style.opacity='.5';impRows=[];
@@ -671,7 +744,7 @@ async function readImport(inp){
   ${ok.slice(0,4).map(o=>`<p class="text-slate-300">• ${esc(eqOf(o.fleetId).code)} · ${esc(o.plan)} · ${fmtD(o.scheduledDate)}</p>`).join('')}${ok.length>4?`<p class="text-slate-500">… y ${ok.length-4} más</p>`:''}</div>`;
   if(ok.length){go.disabled=false;go.style.opacity='1';go.textContent='Importar '+ok.length}
 }
-function doImport(){
+function doImportPm(){
   if(!impRows.length)return;const n=impRows.length,list=impRows;impRows=[];
   putMany('preventive',list).then(()=>note(`Se importaron ${n} mantenimiento(s) preventivo(s).`));
 }
@@ -1786,6 +1859,7 @@ function applyRole(){
   $('t-sup').style.display=supOk?'':'none';$('t-sup').style.order=supOk?'1':'';
   $('t-adm').style.display=isAdmin()?'':'none';
   $('bt-fleet').style.display=isAdmin()?'':'none';
+  if($('bt-fimp'))$('bt-fimp').style.display=isAdmin()?'':'none';
   $('bt-pm').style.display=supOk?'':'none';
   $('bt-imp').style.display=supOk?'':'none';
   $('userbox').innerHTML=`<span style="text-align:right;line-height:1.2;max-width:7.5rem;overflow:hidden"><b class="text-slate-200" style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(me.name)}</b><span class="text-slate-400" style="font-size:10px">${esc(ROLE_S[me.role]||me.role)}</span></span>${auth?'<button onclick="logout()" class="btn bg-slate-700 !py-1">Salir</button>':''}`;
