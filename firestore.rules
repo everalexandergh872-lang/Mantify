@@ -1,0 +1,97 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ====== CAMBIA ESTE CORREO POR EL TUYO (el del planner) ======
+    function planner() {
+      return request.auth != null && request.auth.token.email == 'everalexandergh872@gmail.com';
+    }
+
+    function signedIn()   { return request.auth != null; }
+    function hasProfile() { return exists(/databases/$(database)/documents/users/$(request.auth.uid)); }
+    function profile()    { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
+
+    function role() {
+      return planner() ? 'admin'
+           : (signedIn() && hasProfile() && profile().active == true) ? profile().role
+           : 'none';
+    }
+    function isAdmin() { return role() == 'admin'; }
+    function isSup()   { return role() == 'supervisor' || role() == 'admin'; }
+    function isStaff() { return role() != 'none'; }
+
+    // Quién cerró el trabajo: solo puede quedar igual o ser uno mismo (nadie firma por otro)
+    function closeUidOk() {
+      return request.resource.data.get('closeUid', '') == resource.data.get('closeUid', '')
+          || request.resource.data.get('closeUid', '') == request.auth.uid;
+    }
+    // Un supervisor no puede validar (COMPLETADO) un trabajo que cerró él mismo; el planner sí
+    function validOk() {
+      return request.resource.data.status != 'COMPLETADO'
+          || (isSup() && resource.data.get('closeUid', '') != request.auth.uid);
+    }
+
+    // Perfiles de usuario: cada uno lee el suyo; solo el planner gestiona.
+    match /users/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow create: if signedIn() && (isAdmin() || (planner() && request.auth.uid == uid));
+      allow update, delete: if isAdmin();
+    }
+
+    // Flota: solo el planner crea/edita/borra; técnicos y supervisores solo actualizan el horómetro al cerrar.
+    match /fleet/{id} {
+      allow read: if isStaff();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || (isStaff() &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['hours', 'updatedAt', 'updatedBy']));
+    }
+
+    // Backlogs: todos crean y cierran; solo supervisor/planner pueden dejarlos COMPLETADO; solo el planner borra.
+    match /backlogs/{id} {
+      allow read: if isStaff();
+      allow create: if isStaff() && request.resource.data.status in ['PENDIENTE', 'EN_PROCESO'];
+      allow update: if isAdmin() || (isStaff() && resource.data.status != 'COMPLETADO' && closeUidOk() && validOk());
+      allow delete: if isAdmin();
+    }
+
+    // Preventivos: programa/importa supervisor o planner; todos pueden cerrar la OT; valida supervisor/planner; borra el planner.
+    match /preventive/{id} {
+      allow read: if isStaff();
+      allow create: if isSup() && request.resource.data.status == 'PROGRAMADO';
+      allow update: if isAdmin() || (isStaff() && resource.data.status != 'COMPLETADO' && closeUidOk() && validOk());
+      allow delete: if isAdmin();
+    }
+
+    // Engrase: el plan lo configura supervisor/planner; todos registran engrases; solo el planner corrige o borra registros.
+    match /greasePlans/{id} {
+      allow read: if isStaff();
+      allow create, update: if isSup();
+      allow delete: if isAdmin();
+    }
+    match /grease/{id} {
+      allow read: if isStaff();
+      allow create: if isStaff();
+      allow update, delete: if isAdmin();
+    }
+
+    // Neumáticos: todos miden/montan/desmontan; solo supervisor/planner configuran parámetros; solo el planner borra.
+    match /tires/{id} {
+      allow read: if isStaff();
+      allow create, update: if isStaff();
+      allow delete: if isAdmin();
+    }
+    match /tireParams/{id} {
+      allow read: if isStaff();
+      allow create, update: if isSup();
+      allow delete: if isAdmin();
+    }
+
+    // Intervenciones (reporte de mantenimiento): todos registran y cierran paradas; supervisor/planner editan cualquiera; solo el planner borra.
+    match /stops/{id} {
+      allow read: if isStaff();
+      allow create: if isStaff();
+      allow update: if isSup() || (isStaff() && (resource.data.status == 'ABIERTA' || resource.data.respUid == request.auth.uid));
+      allow delete: if isAdmin();
+    }
+  }
+}
