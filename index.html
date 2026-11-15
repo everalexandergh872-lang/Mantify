@@ -56,6 +56,7 @@
       <select id="fs" class="inp sm:w-44" onchange="renderBack()"><option value="">Todos los estados</option><option value="PENDIENTE">Pendiente</option><option value="EN_PROCESO">En proceso</option><option value="PENDIENTE_VALIDACION">Por validar (supervisor)</option><option value="COMPLETADO">Completado</option></select>
       <select id="fc" class="inp sm:w-44" onchange="renderBack()"><option value="">Toda criticidad</option><option>ALTA</option><option>MEDIA</option><option>BAJA</option></select>
       <button onclick="openBack()" class="btn bg-amber-500 text-slate-950">+ Nuevo</button>
+      <button id="bt-mod-bk" onclick="openModEq('bk')" class="btn bg-slate-700 whitespace-nowrap" style="display:none">🧩 Equipos</button>
     </div>
     <div id="list-back" class="grid gap-3 md:grid-cols-2"></div>
     <div id="tbl-back" class="lap-only"></div>
@@ -65,6 +66,7 @@
       <input id="qgr" class="inp sm:flex-1" placeholder="Buscar equipo, marca o categoría…" oninput="renderGr()">
       <select id="fgr" class="inp sm:w-44" onchange="renderGr()"><option value="">Todos los estados</option><option value="VENCIDO">Vencidos</option><option value="PROXIMO">Por vencer</option><option value="AL_DIA">Al día</option><option value="SINREG">Sin registro</option><option value="SINPLAN">Sin plan</option></select>
       <button onclick="openGrease()" class="btn bg-amber-500 text-slate-950">🛢️ Registrar engrase</button>
+      <button id="bt-mod-gr" onclick="openModEq('gr')" class="btn bg-slate-700 whitespace-nowrap" style="display:none">🧩 Equipos</button>
     </div>
     <div id="list-gr" class="grid gap-3 md:grid-cols-2 lg:grid-cols-3"></div>
   </section>
@@ -93,6 +95,7 @@
       <select id="fpm" class="inp sm:w-44" onchange="renderPm()"><option value="">Todos</option><option value="PROGRAMADO">Programados</option><option value="VENCIDO">Vencidos</option><option value="PENDIENTE_VALIDACION">Por validar</option><option value="COMPLETADO">Completados</option></select>
       <button id="bt-pm" onclick="openPm()" class="btn bg-amber-500 text-slate-950">+ Programar</button>
       <button id="bt-imp" onclick="openImport()" class="btn bg-slate-700">📥 Importar</button>
+      <button id="bt-mod-pm" onclick="openModEq('pm')" class="btn bg-slate-700 whitespace-nowrap" style="display:none">🧩 Equipos</button>
     </div>
     <div id="list-pm" class="grid gap-3 md:grid-cols-2"></div>
     <div id="tbl-pm" class="lap-only"></div>
