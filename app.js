@@ -2001,8 +2001,8 @@ function renderAdm(){
         <p class="text-xs text-slate-300">${esc(u.position||'Sin cargo asignado')}</p><p class="text-xs text-slate-400" style="overflow-wrap:anywhere">${u.username?'Usuario: <b class="text-slate-200">'+esc(u.username)+'</b>':esc(u.email)}</p>
         <p class="text-[11px] ${u.signature?'text-emerald-400':'text-amber-400'}">${u.signature?'✍️ Firma registrada':'⚠️ Sin firma: usa ✏️ para registrarla'}</p></div>
       ${u.signature?`<img src="${esc(u.signature)}" alt="firma" style="height:2.6rem;max-width:7rem;object-fit:contain;background:#fff;border-radius:.35rem;padding:2px">`:''}
-      <div class="flex gap-1 flex-wrap justify-end">${Btn('✏️',`openUser('${u.uid}')`)}${Btn('🔑',`openReset('${u.uid}')`)}${u.uid!==me.uid?Btn('🔄',`renewUser('${u.uid}')`)+Btn(u.active===false?'Activar':'Desactivar',`toggleUser('${u.uid}')`):''}</div></div></div>`).join('')}
-    <p class="text-[11px] text-slate-500">✏️ edita nombre, cargo, perfil y firma. 🔑 asigna una contraseña nueva (necesita la Cloud Function). 🔄 renueva el acceso: crea usuario y contraseña nuevos conservando nombre, cargo, perfil y firma; el acceso anterior deja de funcionar. Las contraseñas se guardan cifradas y solo se ven al crearlas. Desactivar bloquea el acceso sin borrar su historial. La firma registrada se precarga sola en cierres y validaciones.</p></div>
+      <div class="flex gap-1 flex-wrap justify-end">${Btn('✏️',`openUser('${u.uid}')`)}${Btn('🔑',`openReset('${u.uid}')`)}${u.uid!==me.uid?Btn('🔄',`renewUser('${u.uid}')`)+Btn(u.active===false?'Activar':'Desactivar',`toggleUser('${u.uid}')`)+Btn('🗑️',`delUser('${u.uid}')`,'bg-red-500/20 text-red-400'):''}</div></div></div>`).join('')}
+    <p class="text-[11px] text-slate-500">✏️ edita nombre, cargo, perfil y firma. 🔑 asigna una contraseña nueva (necesita la Cloud Function). 🔄 renueva el acceso: crea usuario y contraseña nuevos conservando nombre, cargo, perfil y firma; el acceso anterior deja de funcionar. Las contraseñas se guardan cifradas y solo se ven al crearlas. Desactivar bloquea el acceso sin borrar su historial; 🗑️ elimina a la persona (sus trabajos registrados se conservan). La firma registrada se precarga sola en cierres y validaciones.</p></div>
   <div class="bg-slate-800 border border-slate-700 rounded-xl p-4 space-y-2"><h3 class="font-bold">💾 Respaldo y exportación</h3>
     <div class="grid gap-2 sm:grid-cols-4">${Btn('📊 Backlogs (Excel)',"exportCsv('back')")}${Btn('📊 Preventivos (Excel)',"exportCsv('pm')")}${Btn('📊 Engrase (Excel)',"exportCsv('gr')")}${Btn('📊 Neumáticos (Excel)',"exportCsv('tr')")}${Btn('📊 Mediciones de cocada',"exportCsv('trm')")}${Btn('📊 Flota (Excel)',"exportCsv('fleet')")}${Btn('📊 Reporte de mantenimiento (Excel)',"exportStopsOpen()")}${Btn('📥 Importar reporte (Excel)',"importStopsPick()")}${Btn('💾 Respaldo completo',"exportJson()",'bg-amber-500 text-slate-950')}</div>
     <p class="text-[11px] text-slate-500">${backlogs.length} backlogs · ${pms.length} preventivos · ${grs.length} engrases · ${trs.length} neumáticos · ${fleet.length} equipos. Descarga un respaldo completo de vez en cuando.</p></div>
@@ -2203,6 +2203,27 @@ async function saveMe(){
   const s=sigData();if(s===me.signature){hide();return}
   try{await db.collection('users').doc(me.uid).update({signature:s,signatureAt:Date.now()});me.signature=s;applyRole();hide();toast('✔ Firma guardada')}
   catch(e){err(e&&e.code==='permission-denied'?'Firebase no permite que guardes tu propia firma todavía. Pídele al planner que la registre (Admin → ✏️) o que actualice las reglas.':'No se pudo guardar: '+authMsg(e))}
+}
+/* ---------- Eliminar personal ----------
+   Con la Cloud Function "deleteUser" se borra también su cuenta de Firebase Auth. Sin ella (plan Spark) se borra su perfil:
+   la cuenta queda sin perfil y la app ya no la deja entrar. Los trabajos, firmas e historial que registró se conservan. */
+function delUser(id){
+  const u=usersList.find(x=>x.uid===id);if(!u||!isAdmin()||id===me.uid)return;
+  if(u.role==='admin'&&usersList.filter(x=>x.role==='admin'&&x.active!==false&&!x.pending).length<=1&&u.active!==false){note('No puedes eliminar al único planner activo.');return}
+  show(`<h3 class="font-bold text-red-400">🗑️ Eliminar a ${esc(u.name)}</h3><p class="text-xs text-slate-400 mb-3">${esc(u.position||ROLE_S[u.role]||'')} · Usuario: <b class="text-slate-200">${esc(u.username||u.email)}</b></p>
+  <div class="bg-slate-900/50 border border-slate-700 rounded-lg p-3 text-sm space-y-1"><p>• Ya no podrá ingresar a la app (si tiene la sesión abierta, se cierra).</p><p>• Se borran su perfil, su usuario y su firma registrada.</p><p>• <b>Se conservan</b> los backlogs, cierres, firmas en las OT e historial que registró.</p></div>
+  <p class="text-xs text-slate-400 mt-3">Si solo quieres bloquearlo por un tiempo, usa <b>Desactivar</b>.</p>
+  <label class="block text-xs text-slate-400 font-semibold mt-3">Para confirmar escribe <b class="text-red-400">ELIMINAR</b><input id="du-ok" class="inp mt-1 font-normal" autocomplete="off" autocapitalize="characters" oninput="$('du-go').disabled=this.value.trim().toUpperCase()!=='ELIMINAR';$('du-go').style.opacity=$('du-go').disabled?'.5':'1'"></label>
+  <p id="du-msg" class="text-xs text-red-400 hidden mt-2"></p>
+  <div class="flex justify-end gap-2 pt-3 border-t border-slate-700 mt-3"><button type="button" onclick="hide()" class="btn bg-slate-700">Cancelar</button><button id="du-go" type="button" disabled style="opacity:.5" onclick="doDelUser('${id}')" class="btn bg-red-500 text-white">Eliminar definitivamente</button></div>`,'30rem');
+}
+async function doDelUser(id){
+  const u=usersList.find(x=>x.uid===id);if(!u||!isAdmin()||id===me.uid)return;const go=$('du-go'),m=$('du-msg');go.disabled=true;go.textContent='Eliminando…';
+  let full=false;
+  try{if(firebase.functions){await firebase.functions().httpsCallable('deleteUser')({uid:id});full=true}}
+  catch(e){if(e&&e.code==='functions/permission-denied'){m.textContent='Solo un planner activo puede eliminar personal.';m.classList.remove('hidden');go.textContent='Eliminar definitivamente';return}}
+  try{if(!full)await db.collection('users').doc(id).delete();hide();toast('🗑️ '+u.name+' fue eliminado'+(full?'':' (ya no puede ingresar)'))}
+  catch(e){m.textContent='No se pudo eliminar: '+authMsg(e);m.classList.remove('hidden');go.disabled=false;go.textContent='Eliminar definitivamente'}
 }
 function toggleUser(id){const u=usersList.find(x=>x.uid===id);if(!u||id===me.uid)return;
   db.collection('users').doc(id).update({active:u.active===false}).catch(e=>note('No se pudo guardar: '+authMsg(e)))}
