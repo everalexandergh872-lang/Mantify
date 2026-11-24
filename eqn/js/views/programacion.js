@@ -37,7 +37,7 @@
       </div>
       ${st.modo !== 'dia' ? `<div class="card mb"><div class="cal">${DOW.map(d => `<div class="dh">${d}</div>`).join('')}${calCells(st, ini, fin, byDay)}</div></div>` : ''}
       <div class="card"><h3>Detalle de actividades</h3><div id="pList"></div></div>
-      <div class="small muted mt">Los engrases salen del programa mensual EG/EP (F-MT-18-TM) de cada equipo: guardado/importado, o generado con su plan. Las inspecciones de neumáticos según el intervalo configurado. Solo se muestran fechas desde hoy.</div>`;
+      <div class="small muted mt">Los engrases salen del programa mensual EG/EP de cada equipo: guardado/importado, o generado con su plan. Las inspecciones de neumáticos según el intervalo configurado. Solo se muestran fechas desde hoy.</div>`;
     const set = (k, v) => { st[k] = v; EQ.App.refresh(); };
     root.querySelectorAll('[data-m]').forEach(b => b.onclick = () => set('modo', b.dataset.m));
     root.querySelector('#pF').onchange = e => e.target.value && set('fecha', e.target.value);

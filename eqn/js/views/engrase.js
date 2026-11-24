@@ -3,11 +3,11 @@
   const U = EQ.U, S = EQ.S, C = EQ.C;
   EQ.Views = EQ.Views || {};
   const V = {};
-  const TABS = [['programa', 'Programa mensual (F-MT-18-TM)'], ['control', 'Control diario'], ['consumo', 'Estatus: puntos, kg y costos'], ['cumplimiento', 'Cumplimiento'], ['prioridad', 'Prioridad / días sin engrase'], ['plan', 'Equipos del plan'], ['ficha', 'Ficha, plan y puntos'], ['registros', 'Detalle por punto'], ['flota', 'Estado de puntos']];
+  const TABS = [['programa', 'Programa mensual'], ['control', 'Control diario'], ['consumo', 'Estatus: puntos, kg y costos'], ['cumplimiento', 'Cumplimiento'], ['prioridad', 'Prioridad / días sin engrase'], ['plan', 'Equipos del plan'], ['ficha', 'Ficha, plan y puntos'], ['registros', 'Detalle por punto'], ['flota', 'Estado de puntos']];
 
   V.render = root => {
     const App = EQ.App;
-    if (!C.equiposActivos().length) { root.innerHTML = `<div class="card">${U.emptyState('⛽', 'No hay equipos cargados', 'Importe primero el maestro de equipos de su aplicación Backlog.', '<a class="btn btn-orange" href="#/equipos">Ir al Maestro de Equipos</a> <button class="btn" id="engImpXl">⭱ Importar Excel F-MT-18-TM (maestro + programa + control diario)</button>')}</div>`; root.querySelector('#engImpXl').onclick = () => EQ.XL.importarDialog(); return; }
+    if (!C.equiposActivos().length) { root.innerHTML = `<div class="card">${U.emptyState('⛽', 'No hay equipos cargados', 'Importe primero el maestro de equipos de su aplicación Backlog.', '<a class="btn btn-orange" href="#/equipos">Ir al Maestro de Equipos</a> <button class="btn" id="engImpXl">⭱ Importar Excel del programa (maestro + programa + control diario)</button>')}</div>`; root.querySelector('#engImpXl').onclick = () => EQ.XL.importarDialog(); return; }
     let tab = App.tab('engrase', 'programa');
     if (tab === 'registro') tab = 'control';
     root.innerHTML = App.tabsHtml('engrase', TABS, tab) + '<div id="engBody"></div>';

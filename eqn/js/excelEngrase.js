@@ -1,5 +1,5 @@
-/* IMPORTACIÓN / EXPORTACIÓN DEL EXCEL "F-MT-18-TM PROGRAMA DE ENGRASE"
-   Hojas reconocidas: MAESTRO · F-MT-18-TM (programa mensual EG/EP) · CONTROL DIARIO · (CUMPLIMIENTO y PRIORID-ENGR se recalculan)
+/* IMPORTACIÓN / EXPORTACIÓN DEL EXCEL "PROGRAMA DE ENGRASE"
+   Hojas reconocidas: MAESTRO · hoja del programa mensual EG/EP · CONTROL DIARIO · (CUMPLIMIENTO y PRIORID-ENGR se recalculan)
    La exportación genera el mismo libro con los datos de la aplicación. */
 (function () {
   const U = EQ.U, S = EQ.S, C = EQ.C;
@@ -23,7 +23,7 @@
       const map = EQ.Backlog.autoMap(m.r.keys);
       if (map.codigo) out.maestro = { hoja: m.n, map, filas: EQ.Backlog.mapRows(m.r.rows, map) };
     }
-    // PROGRAMA F-MT-18-TM
+    // PROGRAMA MENSUAL EG/EP
     for (const n of wb.SheetNames) {
       const aoa = aoaOf(wb.Sheets[n]);
       const hi = aoa.findIndex(r => r.some(c => norm(c) === 'cod') && r.some(c => norm(c).startsWith('totaleg')));
@@ -90,7 +90,7 @@
     if (!f) return;
     let d;
     try { d = await X.parse(f); } catch (e) { U.toast('No se pudo leer el Excel: ' + e.message, 'bad'); return; }
-    if (!d.maestro && !d.programa && !d.control) { U.toast('El archivo no tiene hojas MAESTRO, F-MT-18-TM ni CONTROL DIARIO reconocibles.', 'bad'); return; }
+    if (!d.maestro && !d.programa && !d.control) { U.toast('El archivo no tiene hojas MAESTRO, PROGRAMA ni CONTROL DIARIO reconocibles.', 'bad'); return; }
     const pm = d.maestro ? EQ.Backlog.previewMerge(d.maestro.filas) : null;
     const codeOk = cod => C.eqByCode(cod) || (d.maestro && d.maestro.filas.some(o => o.codigo.toUpperCase() === String(cod).toUpperCase()));
     const progF = d.programa ? d.programa.filas : [];
@@ -120,7 +120,7 @@
             let ch = eq.ordenPrograma !== item; eq.ordenPrograma = item;
             if (!C.enPrograma(eq)) { eq.enPrograma = true; ch = true; }
             if (m.querySelector('#iPl').checked) { const pl = X.inferirPlan(fila.dias); if (pl) { eq.planEngrase = pl; ch = true; np++; } }
-            if (ch) await EQ.DB.put('equipos', eq, { motivo: 'Importación programa F-MT-18-TM' });
+            if (ch) await EQ.DB.put('equipos', eq, { motivo: 'Importación programa de engrase' });
           }
           if (recs.length) await EQ.DB.bulkPut('programas', recs, { motivo: 'Importación programa ' + d.programa.mes });
           EQ.App.state.prog2 = Object.assign(EQ.App.state.prog2 || {}, { mes: d.programa.mes });
@@ -139,7 +139,7 @@
           res.push(`Control diario: ${ok} registrados, ${dup} ya existían, ${err} con error`);
           if (errs.length) setTimeout(() => U.modal({ title: 'Observaciones de la importación', body: `<ul class="small">${errs.slice(0, 100).map(e => `<li>${U.esc(e)}</li>`).join('')}</ul>`, buttons: [{ label: 'Cerrar', cls: 'btn-outline' }] }), 300);
         }
-        await EQ.DB.audit('sistema', '*', 'Importación Excel F-MT-18-TM', res.join(' | '));
+        await EQ.DB.audit('sistema', '*', 'Importación Excel programa de engrase', res.join(' | '));
         U.toast(res.join(' · '), 'ok');
         EQ.App.state.tab.engrase = 'programa'; EQ.App.go('engrase');
       } }] });
@@ -155,9 +155,9 @@
     const c0 = 6; // columna G
     const last = c0 + nD + 3;
     const wb = XLSX.utils.book_new();
-    // --- F-MT-18-TM ---
+    // --- PROGRAMA ---
     const A = [];
-    A[0] = [fmt.empresa || 'SISTEMA INTEGRADO DE GESTIÓN']; A[0][last - 1] = 'CODIGO: ' + (fmt.codigo || 'F-MT-18-TM');
+    A[0] = [fmt.empresa || 'SISTEMA INTEGRADO DE GESTIÓN']; if (fmt.codigo) A[0][last - 1] = 'CODIGO: ' + fmt.codigo;
     A[1] = ['PROGRAMA DE ENGRASE']; A[1][last - 1] = 'VERSION: ' + (fmt.version || '01');
     A[2] = []; A[2][last - 1] = 'PAGINA:  1 DE 1';
     A[3] = [];
@@ -176,7 +176,7 @@
     const ws = XLSX.utils.aoa_to_sheet(A, { cellDates: true });
     ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: last - 2 } }, { s: { r: 1, c: 0 }, e: { r: 1, c: last - 2 } }, { s: { r: 4, c: 0 }, e: { r: 4, c: last } }];
     ws['!cols'] = [{ wch: 5 }, { wch: 12 }, { wch: 14 }, { wch: 26 }, { wch: 8 }, { wch: 6 }].concat(dias.map(() => ({ wch: 4 }))).concat([{ wch: 10 }, { wch: 10 }, { wch: 15 }, { wch: 20 }]);
-    XLSX.utils.book_append_sheet(wb, ws, (fmt.codigo || 'F-MT-18-TM').slice(0, 31));
+    XLSX.utils.book_append_sheet(wb, ws, (fmt.codigo || 'PROGRAMA').slice(0, 31));
     // --- CONTROL DIARIO ---
     const ctrl = C.diarios().map((d, i) => { const eq = C.eq(d.equipoId) || {}; return [(eq.codigo || '') + U.fdate(d.fecha), i + 1, eq.codigo || '', cell(dt(d.fecha)), d.horometro === null ? '' : d.horometro, C.tipoEng(d.tipo).nombre, Math.max(0, U.daysBetween(d.fecha, U.today()) - 1), d.tecnico || '', d.observaciones || ''].concat((() => { const c = C.costoDiario(d); return [c.puntos, +c.kg.toFixed(3), c.grasa, c.precioPunto, c.precioKg, +c.costoPuntos.toFixed(2), +c.costoKg.toFixed(2), +c.tc.toFixed(3), +c.costoPuntosUSD.toFixed(2), +c.costoKgUSD.toFixed(2)]; })()); });
     const wc = XLSX.utils.aoa_to_sheet([[], ['CONTROL DIARIO DE ENGRASE'], [], ['KEY', 'ID', 'COD', 'FECHA REAL.', 'HORO.', 'TIPO DE ENGRASE', 'DIAS SIN ENGRASE', 'TECNICO', 'OBSERVACIONES', 'PUNTOS ENGRASADOS', 'GRASA (KG)', 'TIPO DE GRASA', 'PRECIO/PUNTO', 'PRECIO/KG', 'COSTO POR PUNTOS', 'COSTO POR KG', 'TIPO DE CAMBIO', 'COSTO POR PUNTOS US$', 'COSTO POR KG US$']].concat(ctrl), { cellDates: true });
@@ -199,7 +199,7 @@
     const ma = S.equipos.slice().sort((a, b) => String(a.codigo).localeCompare(String(b.codigo), 'es', { numeric: true })).map(e => [progIds.get(e.id) || 0, e.codigo, e.placa || '', e.codAlterno || '', e.descripcion || '', e.marca || '', e.modelo || '', e.serie || '', e.serieMotor || '', e.anio || '', e.capacidad || '', e.clase || '', e.propietario || '', e.tipoContrato || '', e.estadoMov || 'MOVILIZADO', e.fechaInicio ? cell(dt(e.fechaInicio)) : '', e.horometro === null || e.horometro === undefined ? '' : e.horometro, e.fechaDesmov ? cell(dt(e.fechaDesmov)) : '', e.familia || '']);
     const wm = XLSX.utils.aoa_to_sheet([[], ['ID', 'CODIGO INTERNO', 'PLACA/SERIE', 'COD. ALTERNO', 'EQUIPO', 'MARCA', 'MODELO', 'SERIE DEL EQUIPO', 'SERIE DEL MOTOR', 'AÑO', 'CAP.', 'CLASE', 'PROPIETARIO', 'TIPO', 'ESTADO', 'FECHA DE INICIO', 'HR / KM ACTUAL', 'FECHA DESMOV.', 'FAMILIA (APP)']].concat(ma), { cellDates: true });
     XLSX.utils.book_append_sheet(wb, wm, 'MAESTRO');
-    XLSX.writeFile(wb, `${fmt.codigo || 'F-MT-18-TM'}_Programa_de_Engrase_${mes}.xlsx`, { cellDates: true });
+    XLSX.writeFile(wb, `${fmt.codigo ? fmt.codigo + '_' : ''}Programa_de_Engrase_${mes}.xlsx`, { cellDates: true });
     EQ.DB.audit('sistema', '*', 'Exportación Excel', `Programa de engrase ${mes}`);
   };
 

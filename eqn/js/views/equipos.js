@@ -17,7 +17,7 @@
         <h3>Maestro de equipos <span class="muted small" style="font-weight:normal">— fuente: aplicación Backlog (sincronización por código de equipo)</span></h3>
         <div class="flex">
           <button class="btn btn-orange" id="bImpFile">⭱ Importar maestro del Backlog (JSON / Excel / CSV)</button>
-          <button class="btn" id="bXl">⭱ Importar Excel F-MT-18-TM</button>
+          <button class="btn" id="bXl">⭱ Importar Excel del programa</button>
           <button class="btn" id="bScan">🔍 Buscar Backlog en este navegador</button>
           <button class="btn btn-outline" id="bNew">+ Equipo manual</button>
           <button class="btn btn-outline" id="bTplAll" title="Aplica la plantilla de engrase de su familia a cada equipo que aún no tiene puntos">⧉ Plantillas a equipos sin configuración</button>
@@ -201,7 +201,7 @@
       ${U.field('clase', 'Clase', { type: 'datalist', options: ['EQUIPO MOV. TIERRA', 'VEHICULO TRANSP. PESADO', 'VEHICULO LIVIANO', 'EQUIPO MENOR'], value: eq.clase })}
       ${U.field('tipoContrato', 'Tipo (directo / indirecto)', { type: 'datalist', options: ['DIRECTO', 'INDIRECTO'], value: eq.tipoContrato })}
       ${U.field('fechaInicio', 'Fecha de inicio / movilización', { type: 'date', value: eq.fechaInicio })}
-      ${U.field('ordenPrograma', 'N° de ítem en el programa', { type: 'number', value: eq.ordenPrograma, attrs: 'min="1"', hint: 'Orden de la fila en el F-MT-18-TM' })}
+      ${U.field('ordenPrograma', 'N° de ítem en el programa', { type: 'number', value: eq.ordenPrograma, attrs: 'min="1"', hint: 'Orden de la fila en el programa de engrase' })}
       ${U.field('enPrograma', 'Programa de engrase EG/EP', { type: 'select', options: [{ v: '', t: 'Automático (movilizado y familia no excluida)' }, { v: 'si', t: 'Sí, siempre' }, { v: 'no', t: 'No incluir' }], value: eq.enPrograma === true ? 'si' : eq.enPrograma === false ? 'no' : '', empty: undefined })}
       ${U.field('ubicacion', 'Ubicación', { type: 'datalist', options: cfg.ubicaciones, value: eq.ubicacion })}
       ${U.field('unidad', 'Unidad de control', { type: 'select', options: [{ v: 'h', t: 'Horómetro (horas)' }, { v: 'km', t: 'Kilometraje (km)' }], value: eq.unidad || 'h', empty: undefined })}

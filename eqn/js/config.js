@@ -16,14 +16,14 @@ EQ.DEFAULT_CONFIG = {
   tipoCambio: 3.75,            // S/ por 1 US$ (editable en Configuración → General)
   monedaNeum: 'S/',            // moneda en la que se muestran los costos de neumáticos
   metodoCostoEngrase: 'kg',    // costo oficial de engrase: 'kg' (grasa usada) o 'puntos' (puntos engrasados)
-  formato: { empresa: 'SISTEMA INTEGRADO DE GESTIÓN', codigo: 'F-MT-18-TM', version: '01' },
+  formato: { empresa: 'SISTEMA INTEGRADO DE GESTIÓN', codigo: '', version: '01' },
   familias: ['Excavadora', 'Tractor de orugas', 'Retroexcavadora', 'Volquete', 'Cargador frontal', 'Motoniveladora', 'Rodillo', 'Cisterna', 'Tracto camión', 'Zaranda', 'Grúa', 'Camioneta 4x4', 'Minibús', 'Grupo electrógeno', 'Motosoldadora', 'Otros'],
-  // ---- Programa de engrase (formato F-MT-18-TM) ----
+  // ---- Programa de engrase mensual EG/EP ----
   tiposEngrase: [
     { codigo: 'EG', nombre: 'ENGRASE GENERAL', horas: 0.5 },
     { codigo: 'EP', nombre: 'ENGRASE PARCIAL', horas: 0.25 }
   ],
-  // Plan por familia: secuencia de tipos que se repite cada "intervalo" días (tomado del F-MT-18-TM)
+  // Plan por familia: secuencia de tipos que se repite cada "intervalo" días (programa mensual)
   planesEngrase: {
     'Excavadora': { secuencia: ['EG', 'EP'], intervalo: 3 },
     'Tractor de orugas': { secuencia: ['EG', 'EP'], intervalo: 3 },

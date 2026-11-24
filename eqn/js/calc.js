@@ -188,7 +188,7 @@
     return pts / rs.length * 100;
   };
 
-  // ======================= PROGRAMA DE ENGRASE (F-MT-18-TM) =======================
+  // ======================= PROGRAMA DE ENGRASE MENSUAL =======================
   C.tiposEng = () => C.cfg().tiposEngrase || [];
   C.tipoEng = cod => C.tiposEng().find(t => t.codigo === cod) || { codigo: cod, nombre: cod, horas: 0 };
   C.movilizado = eq => !eq.estadoMov || !/DESMOV|PROCESO|BAJA|INOPERATIV|VENDID/i.test(eq.estadoMov);
@@ -571,7 +571,7 @@
     const prog = new Map(C.programaMes(mesHoy).map(f => [f.eq.id, f.dias]));
     C.equiposActivos().filter(C.movilizado).forEach(eq => {
       const pts = C.puntosEq(eq.id, true);
-      // --- Programa de engrase EG/EP (lógica F-MT-18-TM / PRIORID-ENGR) ---
+      // --- Programa de engrase EG/EP (programa mensual / PRIORID-ENGR) ---
       const aplE = C.engraseAplica(eq), aplN = C.neumAplica(eq);
       if (C.enPrograma(eq)) {
         const ds = C.diasSinEngrase(eq), u = C.ultimoEngrase(eq), lim = th.diasSinEngrase;
