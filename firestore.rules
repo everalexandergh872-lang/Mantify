@@ -100,6 +100,13 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // Contadores de numeración correlativa (BL, OT, RP): cualquiera del personal toma el siguiente número; nunca retrocede ni se borra.
+    match /counters/{id} {
+      allow read: if isStaff();
+      allow create: if isStaff() && id in ['bk', 'ot', 'rp'] && request.resource.data.n is int && request.resource.data.n > 0;
+      allow update: if isStaff() && request.resource.data.n is int && request.resource.data.n > resource.data.n;
+    }
+
     // Intervenciones (reporte de mantenimiento): todos registran y cierran paradas; supervisor/planner editan cualquiera; solo el planner borra.
     match /stops/{id} {
       allow read: if isStaff();

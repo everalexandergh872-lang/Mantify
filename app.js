@@ -43,7 +43,7 @@ window.addEventListener('online',()=>{if(db)setSync(true,'Reconectado, sincroniz
 const SAFE_ID=/^[\w.\-|]*$/,safeDoc=o=>!!o&&['id','fleetId','backlogId','grLogId'].every(k=>o[k]==null||SAFE_ID.test(String(o[k])));
 function listen(col,assign){
   if(db){
-    unsubs.push(db.collection(col).onSnapshot(s=>{assign(s.docs.map(d=>d.data()).filter(safeDoc));setSync(true,'Sincronizado en la nube');render()},
+    unsubs.push(db.collection(col).onSnapshot(s=>{assign(s.docs.map(d=>d.data()).filter(safeDoc));setSync(true,'Sincronizado en la nube');render();loadedCols.add(col);if(col==='backlogs'||col==='preventive'||col==='stops')numSweepSoon()},
       e=>{console.error(e);const m={'permission-denied':'reglas de Firestore sin publicar o incorrectas','not-found':'la base de datos Firestore no está creada','failed-precondition':'la base de datos no está lista o falta crearla','unavailable':'sin conexión o bloqueada por la red','unauthenticated':'las reglas piden inicio de sesión'};setSync(false,'Error ('+(e.code||'desconocido')+'): '+(m[e.code]||'revisa Firebase'))}));
   }else{assign(lsGet(col).filter(safeDoc));setSync(false,'Modo local (sin sincronizar). Configura Firebase')}
 }
@@ -73,6 +73,43 @@ function putMany(col,list){
   if(db){const jobs=[];for(let i=0;i<list.length;i+=400){const b=db.batch();list.slice(i,i+400).forEach(o=>b.set(db.collection(col).doc(o.id),o));jobs.push(b.commit())}
     return Promise.all(jobs).catch(e=>note('No se pudo guardar: '+e.message))}
   const a=getStore(col);list.forEach(o=>{const i=a.findIndex(x=>x.id===o.id);i>=0?a[i]=o:a.push(o)});lsSet(col,a);render();return Promise.resolve();
+}
+/* ---------- Numeración correlativa automática (BL- backlogs · OT- órdenes de trabajo · RP- reporte de paradas) ---------- */
+const NUM={bk:'BL-',ot:'OT-',rp:'RP-'},loadedCols=new Set();
+const numOf=(k,s)=>{const m=new RegExp('^'+NUM[k]+'(\\d+)$').exec(String(s||''));return m?+m[1]:0};
+const fmtNum=(k,n)=>NUM[k]+String(n).padStart(4,'0');
+const bkNo=b=>b?(b.num||b.id):'',pmOt=p=>p?(p.otNum||'OT-P'+String(p.id).replace(/^PM-/,'')):'',spNo=s=>s?(s.num||''):'';
+function numMax(k){let n=0;const f=v=>{n=Math.max(n,numOf(k,v))};
+  if(k==='bk')backlogs.forEach(b=>f(b.num));else if(k==='rp')sps.forEach(s=>f(s.num));else{backlogs.forEach(b=>f(b.ot&&b.ot.num));pms.forEach(p=>f(p.otNum))}
+  return n}
+// Reserva `cant` números seguidos. Un contador en Firestore (counters/{tipo}) evita que dos equipos tomen el mismo número;
+// sin conexión o sin la regla publicada, continúa desde el mayor número ya registrado.
+async function takeNums(k,cant=1){
+  let base=numMax(k);
+  if(db&&me&&me.uid!=='local'){
+    const tx=db.runTransaction(async t=>{const ref=db.collection('counters').doc(k),d=await t.get(ref),n=Math.max(d.exists?Number(d.data().n)||0:0,numMax(k));t.set(ref,{n:n+cant,at:Date.now()});return n});
+    try{base=await Promise.race([tx,new Promise((_,r)=>setTimeout(()=>r(new Error('tiempo agotado')),6000))])}catch(e){console.warn('Numeración sin contador:',(e&&e.code)||e)}
+  }
+  return Array.from({length:cant},(_,i)=>fmtNum(k,base+1+i));
+}
+// El planner numera lo que aún no tiene número (registros anteriores, importaciones o creados sin conexión), en orden de fecha.
+let numBusy=false,numT=null;
+function numSweepSoon(){clearTimeout(numT);numT=setTimeout(numSweep,2500)}
+async function numSweep(){
+  if(numBusy||!isAdmin()||!db||!['backlogs','preventive','stops'].every(c=>loadedCols.has(c)))return;
+  const by=f=>(a,b)=>f(a).localeCompare(f(b)),ts=v=>String(Number(v)||0).padStart(15,'0');
+  const nb=backlogs.filter(b=>!numOf('bk',b.num)).sort(by(b=>(b.observationDate||'')+'|'+ts(b.log&&b.log[0]&&b.log[0].ts)+'|'+b.id));
+  const ns=sps.filter(s=>!numOf('rp',s.num)).sort(by(s=>(s.fp||'')+'|'+ts(s.ts)+'|'+s.id));
+  const no=[...backlogs.filter(b=>b.ot&&b.ot.num&&!numOf('ot',b.ot.num)).map(b=>({d:b.ot.date||b.observationDate||'',b})),...pms.filter(p=>!numOf('ot',p.otNum)).map(p=>({d:p.scheduledDate||'',p}))].sort(by(x=>x.d+'|'+(x.b||x.p).id));
+  if(!nb.length&&!ns.length&&!no.length)return;
+  numBusy=true;
+  try{
+    const upB={},upP=[];let upS=[];
+    if(nb.length){const n=await takeNums('bk',nb.length);nb.forEach((b,i)=>{upB[b.id]={...b,num:n[i]}})}
+    if(no.length){const n=await takeNums('ot',no.length);no.forEach((x,i)=>{if(x.b){const o=upB[x.b.id]||x.b;upB[x.b.id]={...o,ot:{...o.ot,num:n[i],numAnt:o.ot.num}}}else upP.push({...x.p,otNum:n[i]})})}
+    if(ns.length){const n=await takeNums('rp',ns.length);upS=ns.map((s,i)=>({...s,num:n[i]}))}
+    await Promise.all([putMany('backlogs',Object.values(upB)),putMany('preventive',upP),putMany('stops',upS)]);
+  }catch(e){console.error('Numeración',e)}finally{numBusy=false}
 }
 function del(col,id){
   if(db)return db.collection(col).doc(id).delete().catch(e=>note('No se pudo eliminar: '+e.message));
@@ -115,7 +152,7 @@ function fleetActs(e){return `<button onclick="openEquip('${e.id}')" class="btn 
 /* ---------- Vista de tabla (solo laptop, ≥1024 px) ---------- */
 function lapTbl(head,rows,empty){return rows.length?`<div class="ltw"><table class="ltbl"><thead><tr>${head.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div>`:`<p class="text-slate-500 text-sm">${empty}</p>`}
 function tblPm(l){$('tbl-pm').innerHTML=lapTbl(['Código','Equipo','Plan','Programado','Situación','Responsable','Actividades','Estado','Acciones'],l.map(p=>{const e=eqOf(p.fleetId),k=pmKey(p),a=actStats(p.acts);
-  return `<tr><td><b class="text-amber-400">${esc(p.id)}</b></td><td><b>${esc(e.code)}</b><span class="lsub">${esc(e.brand)} ${esc(e.model)}</span></td><td class="font-semibold">${esc(p.plan)}${(p.rejectNote&&p.status==='PROGRAMADO')?`<span class="lsub text-red-400">⚠️ Devuelto: ${esc(p.rejectNote)}</span>`:''}</td><td class="nw">${fmtD(p.scheduledDate)}${p.scheduledHours!==''&&p.scheduledHours!=null?`<span class="lsub">a las ${fmtH(p.scheduledHours)}</span>`:''}</td><td class="${k==='VENCIDO'?'text-red-400 font-semibold':'text-slate-400'}">${p.status==='PROGRAMADO'?pmWhen(p):'—'}</td><td>${esc(p.responsible||'—')}</td><td class="nw text-slate-400">${p.acts?`${RES_ICO.OK} ${a.OK} · ${RES_ICO.OBS} ${a.OBS} · ${RES_ICO.NA} ${a.NA}`:`${(p.plannedActs||[]).length} programadas`}</td><td>${pmBadge(k)}</td><td><div class="lact">${pmActs(p)}</div></td></tr>`}),'Sin preventivos.')}
+  return `<tr><td><b class="text-amber-400">${esc(pmOt(p))}</b></td><td><b>${esc(e.code)}</b><span class="lsub">${esc(e.brand)} ${esc(e.model)}</span></td><td class="font-semibold">${esc(p.plan)}${(p.rejectNote&&p.status==='PROGRAMADO')?`<span class="lsub text-red-400">⚠️ Devuelto: ${esc(p.rejectNote)}</span>`:''}</td><td class="nw">${fmtD(p.scheduledDate)}${p.scheduledHours!==''&&p.scheduledHours!=null?`<span class="lsub">a las ${fmtH(p.scheduledHours)}</span>`:''}</td><td class="${k==='VENCIDO'?'text-red-400 font-semibold':'text-slate-400'}">${p.status==='PROGRAMADO'?pmWhen(p):'—'}</td><td>${esc(p.responsible||'—')}</td><td class="nw text-slate-400">${p.acts?`${RES_ICO.OK} ${a.OK} · ${RES_ICO.OBS} ${a.OBS} · ${RES_ICO.NA} ${a.NA}`:`${(p.plannedActs||[]).length} programadas`}</td><td>${pmBadge(k)}</td><td><div class="lact">${pmActs(p)}</div></td></tr>`}),'Sin preventivos.')}
 function tblFleet(l){const sc={OPERATIVO:'text-emerald-400',INOPERATIVO:'text-red-400',EN_MANTENIMIENTO:'text-amber-400'};
   $('tbl-fleet').innerHTML=lapTbl(['Código','Equipo','Categoría','Nº de serie','Horómetro','Ubicación','Estado','Backlogs','Preventivos','Acciones'],l.map(e=>{const n=backlogs.filter(b=>b.fleetId===e.id&&bkOpen(b)).length,pn=pms.filter(p=>p.fleetId===e.id&&p.status!=='COMPLETADO').length;
   return `<tr><td><b class="text-amber-400">${esc(e.code)}</b></td><td><button type="button" onclick="openEquip('${e.id}')" class="font-semibold lnk">${esc(e.brand)} ${esc(e.model)}</button></td><td>${esc(e.category)}</td><td class="text-slate-400">${esc(e.serialNumber)}</td><td class="nw num">${esc(e.hours)} h</td><td>${esc(e.location||'-')}</td><td class="nw font-semibold ${sc[e.status]||''}">${esc(String(e.status||'').replace('_',' '))}</td><td class="num"><b class="${n?'text-amber-400':'text-slate-500'}">${n}</b></td><td class="num"><b class="${pn?'text-blue-400':'text-slate-500'}">${pn}</b></td><td><div class="lact">${fleetActs(e)}</div></td></tr>`}),'Sin equipos registrados.')}
@@ -294,7 +331,7 @@ async function addPhotos(inp,key){
 }
 function openClose(id){
   const b=backlogs.find(x=>x.id===id);if(!b)return;if(!bkOpen(b)){note('Este backlog ya está cerrado o anulado.');return}tmp={before:[],after:[...(b.photosAfter||[])]};
-  show(`<h3 class="font-bold text-emerald-400">✅ Cerrar con reporte de mantenimiento</h3><p class="text-xs text-slate-400">${esc(b.id)} - ${esc(b.component)}</p><p class="text-xs text-amber-400 mb-3">Al confirmar, queda pendiente de validación del supervisor.</p>
+  show(`<h3 class="font-bold text-emerald-400">✅ Cerrar con reporte de mantenimiento</h3><p class="text-xs text-slate-400">${esc(bkNo(b))} - ${esc(b.component)}</p><p class="text-xs text-amber-400 mb-3">Al confirmar, queda pendiente de validación del supervisor.</p>
   <form onsubmit="saveClose(event,'${id}')" class="space-y-3">
     <div class="g2">${field('closeDate','Fecha de cierre *',b.closeDate||today(),'required','date')}${field('closeTech','Técnico *',techVal(b.closeTech),'required'+techRo())}</div>
     <div class="g2">${field('closeHours','Horómetro / odómetro al cierre *',b.closeHours??eqOf(b.fleetId).hours??'','required min="0" step="any" inputmode="decimal"','number')}${field('downtimeH','Horas fuera de servicio',b.downtimeH??'','min="0" step="0.1" inputmode="decimal" placeholder="Tiempo detenido por este trabajo"','number')}</div>
@@ -303,9 +340,11 @@ function openClose(id){
     ${btns('hide()','Enviar a validación','bg-emerald-500')}</form>`);
   pv('after');sigInit(b.closeSignature||mySig());
 }
-function saveClose(ev,id){
-  ev.preventDefault();const f=Object.fromEntries(new FormData(ev.target)),b=backlogs.find(x=>x.id===id);
+async function saveClose(ev,id){
+  ev.preventDefault();const f=Object.fromEntries(new FormData(ev.target)),b0=backlogs.find(x=>x.id===id);
   if(!sig.drawn){note('Falta la firma del técnico. Firma dentro del recuadro blanco antes de confirmar el cierre.');return}
+  const sb=ev.target.querySelector('button:not([type=button])');if(sb)sb.disabled=true;
+  const b=b0.ot&&b0.ot.num?b0:{...b0,ot:{num:(await takeNums('ot'))[0],date:f.closeDate||today(),resp:(f.closeTech||'').trim(),esp:'',place:'',approved:'',start:'',end:'',acts:(f.closeNotes||'').trim(),loto:true,ats:true,by:me.name}};
   const hrs=Number(f.closeHours),eq=fleet.find(x=>x.id===b.fleetId);
   if(eq&&hrs>(Number(eq.hours)||0))put('fleet',{...eq,hours:hrs});
   put('backlogs',{...b,...f,closeHours:hrs,downtimeH:f.downtimeH===''?'':Number(f.downtimeH),status:'PENDIENTE_VALIDACION',photosAfter:tmp.after,closeSignature:sigData(),closePos:posOf(f.closeTech),supName:'',supDate:'',supNotes:'',supSignature:'',log:bkLog(b,'Cerrado con reporte por '+f.closeTech+' · pasa a validación del supervisor')});
@@ -368,11 +407,11 @@ function makePdf(id){
   const J=window.jspdf&&window.jspdf.jsPDF;
   if(!J){note('No se pudo cargar el generador de PDF. Revisa tu conexión a internet y recarga la página.');return}
   const e=eqOf(b.fleetId),d=delay(b),doc=new J({unit:'mm',format:'a4'}),W=210,M=15,done=b.status==='COMPLETADO'||b.status==='PENDIENTE_VALIDACION';
-  const ot=b.ot&&b.ot.num?b.ot.num:'OT-'+String(b.id).replace(/^BKL-/,'');let y=0;
+  const ot=b.ot&&b.ot.num?b.ot.num:'Sin OT';let y=0;
   const need=h=>{if(y+h>280){doc.addPage();y=M+4}};
   doc.setFillColor(15,23,42);doc.rect(0,0,W,28,'F');doc.setTextColor(255,255,255);
   doc.setFont('helvetica','bold');doc.setFontSize(17);doc.text('ORDEN DE TRABAJO',M,13);
-  doc.setFont('helvetica','normal');doc.setFontSize(10);doc.text('Backlog '+b.id+' - '+eqOf(b.fleetId).code,M,20);
+  doc.setFont('helvetica','normal');doc.setFontSize(10);doc.text('Backlog '+bkNo(b)+' - '+eqOf(b.fleetId).code,M,20);
   doc.setFont('helvetica','bold');doc.setFontSize(14);doc.text(ot,W-M,13,{align:'right'});
   doc.setFont('helvetica','normal');doc.setFontSize(9);doc.text('Emitida: '+fmtD(today()),W-M,20,{align:'right'});
   y=37;
@@ -422,7 +461,7 @@ function renderSup(){
   const done=backlogs.filter(b=>b.status==='COMPLETADO'&&b.supName).length+pms.filter(p=>p.status==='COMPLETADO'&&p.supName).length;
   el.innerHTML=`<div class="bg-slate-800 border border-slate-700 rounded-xl p-3 flex justify-between items-center gap-2"><div><h3 class="font-bold">🛡️ Validación del supervisor</h3><p class="text-xs text-slate-400">${pend.length+pendPm.length} por validar · ${done} validados</p></div></div>
   ${pend.length?'<h4 class="text-xs text-slate-400 uppercase">Backlogs</h4>':''}<div class="grid gap-3 md:grid-cols-2">${pend.map(b=>{const e=eqOf(b.fleetId);
-    return `<div class="bg-slate-800 border border-slate-700 rounded-xl p-4"><div class="flex justify-between items-start gap-2"><div class="min-w-0"><span class="font-bold text-amber-400 text-sm">${esc(b.id)}</span><p class="text-xs text-slate-400 truncate">${esc(e.code)} · ${esc(e.brand)} ${esc(e.model)}</p></div>${bkPrBadge(b.criticality)}</div>
+    return `<div class="bg-slate-800 border border-slate-700 rounded-xl p-4"><div class="flex justify-between items-start gap-2"><div class="min-w-0"><span class="font-bold text-amber-400 text-sm">${esc(bkNo(b))}</span><p class="text-xs text-slate-400 truncate">${esc(e.code)} · ${esc(e.brand)} ${esc(e.model)}</p></div>${bkPrBadge(b.criticality)}</div>
     <p class="font-semibold mt-2">${esc(b.component)}</p><p class="text-xs text-slate-400">${esc(b.system)}</p>
     <p class="text-xs mt-2 text-slate-400">Cerrado por <b class="text-slate-200">${esc(b.closeTech)}</b> el <b class="text-slate-200">${fmtD(b.closeDate)}</b>${b.closeHours!=null&&b.closeHours!==''?` · Horómetro: <b class="text-slate-200">${esc(b.closeHours)}</b>`:''}</p>
     <div class="flex justify-end mt-3"><button onclick="openValidate('${b.id}')" class="btn bg-amber-500 text-slate-950 !py-1">🔎 Revisar y validar</button></div></div>`}).join('')}</div>
@@ -433,7 +472,7 @@ function openValidate(id){
   if(!supOk)return;const b=backlogs.find(x=>x.id===id);if(!b)return;const e=eqOf(b.fleetId);
   const ph=a=>(a&&a.length)?a.map(x=>`<img src="${esc(x)}" class="w-24 h-24 object-cover rounded border border-slate-700">`).join(''):'<p class="text-xs text-slate-500">Sin imágenes</p>';
   let last='';try{last=sessionStorage.getItem('supName')||''}catch(_){}
-  show(`<div class="flex justify-between items-start"><div><span class="text-xs font-bold text-amber-400">${esc(b.id)}</span><h3 class="text-lg font-bold">${esc(b.component)}</h3>
+  show(`<div class="flex justify-between items-start"><div><span class="text-xs font-bold text-amber-400">${esc(bkNo(b))}</span><h3 class="text-lg font-bold">${esc(b.component)}</h3>
   <p class="text-xs text-slate-400">${esc(e.code)} (${esc(e.brand)} ${esc(e.model)} · S/N ${esc(e.serialNumber)})</p></div><button type="button" onclick="hide()" class="text-slate-400 text-xl">✕</button></div>
   <div class="grid grid-cols-2 gap-2 text-xs bg-slate-900 p-3 rounded-lg my-3"><div><span class="text-slate-400 block">Sistema</span>${esc(b.system)}</div><div><span class="text-slate-400 block">Prioridad</span>${bkPrBadge(b.criticality)}</div>
   <div><span class="text-slate-400 block">Detectado</span>${fmtD(b.observationDate)}</div><div><span class="text-slate-400 block">Fecha límite</span>${fmtD(bkLimit(b))}</div>${b.ot?`<div><span class="text-slate-400 block">OT</span>${esc(b.ot.num)}</div>`:''}${b.downtimeH?`<div><span class="text-slate-400 block">Horas fuera de servicio</span>${esc(b.downtimeH)} h</div>`:''}</div>
@@ -500,11 +539,11 @@ const PM_PLANS=['Mantenimiento 250 h','Mantenimiento 500 h','Mantenimiento 1000 
 /* ---------- Lista ---------- */
 function renderPm(){
   const s=($('qpm').value||'').toLowerCase(),st=$('fpm').value,ord={VENCIDO:0,PROGRAMADO:1,PENDIENTE_VALIDACION:2,COMPLETADO:3};
-  const l=pms.filter(p=>{const e=eqOf(p.fleetId);return (!st||pmKey(p)===st)&&[p.id,e.code,p.plan,p.responsible].some(v=>String(v||'').toLowerCase().includes(s))})
+  const l=pms.filter(p=>{const e=eqOf(p.fleetId);return (!st||pmKey(p)===st)&&[p.id,p.otNum,e.code,p.plan,p.responsible].some(v=>String(v||'').toLowerCase().includes(s))})
     .sort((a,b)=>(ord[pmKey(a)]-ord[pmKey(b)])||(a.scheduledDate||'').localeCompare(b.scheduledDate||''));
   $('list-pm').innerHTML=l.map(p=>{const e=eqOf(p.fleetId),k=pmKey(p),over=k==='VENCIDO',a=actStats(p.acts);
     return `<div class="bg-slate-800 border border-slate-700 rounded-xl p-4">
-      <div class="flex justify-between items-start gap-2"><div class="min-w-0"><span class="font-bold text-amber-400 text-sm">${esc(p.id)}</span><p class="text-xs text-slate-400 truncate">${esc(e.code)} · ${esc(e.brand)} ${esc(e.model)}</p></div>${pmBadge(k)}</div>
+      <div class="flex justify-between items-start gap-2"><div class="min-w-0"><span class="font-bold text-amber-400 text-sm">${esc(pmOt(p))}</span><p class="text-xs text-slate-400 truncate">${esc(e.code)} · ${esc(e.brand)} ${esc(e.model)}</p></div>${pmBadge(k)}</div>
       <p class="font-semibold mt-2">${esc(p.plan)}</p>
       <p class="text-xs mt-1 text-slate-400">Programado: <b class="text-slate-200">${fmtD(p.scheduledDate)}</b>${p.scheduledHours!==''&&p.scheduledHours!=null?` · a las <b class="text-slate-200">${fmtH(p.scheduledHours)}</b>`:''}</p>
       ${p.status==='PROGRAMADO'?`<p class="text-xs mt-1 font-semibold ${over?'text-red-400':'text-slate-400'}">${pmWhen(p)}</p>`:''}
@@ -538,8 +577,10 @@ function openPm(id){if(!isSup())return;
   const sl=document.querySelector('#modal select[name=fleetId]');
   if(sl)sl.onchange=function(){const f=fleet.find(x=>x.id===this.value),ta=document.querySelector('#modal textarea[name=acts]');if(f&&(!pmDirty||!ta.value.trim())){ta.value=defActs(f.category).join('\n');pmDirty=false}};
 }
-function savePm(ev,id){
-  ev.preventDefault();const f=Object.fromEntries(new FormData(ev.target)),old=pms.find(x=>x.id===id)||{},eq=eqOf(f.fleetId);
+async function savePm(ev,id){
+  ev.preventDefault();const f=Object.fromEntries(new FormData(ev.target)),old0=pms.find(x=>x.id===id)||{},eq=eqOf(f.fleetId);
+  const sb=ev.target.querySelector('button:not([type=button])');if(sb)sb.disabled=true;
+  const old=numOf('ot',old0.otNum)?old0:{...old0,otNum:(await takeNums('ot'))[0]};
   let acts=(f.acts||'').split('\n').map(x=>x.replace(/^\s*(?:[-*•]|\d+[.)])\s*/,'').trim()).filter(Boolean);if(!acts.length)acts=defActs(eq.category);
   put('preventive',{status:'PROGRAMADO',...old,id:id||'PM-'+Date.now().toString().slice(-7),fleetId:f.fleetId,plan:f.plan.trim(),scheduledDate:f.scheduledDate,
     scheduledHours:f.scheduledHours===''?'':Number(f.scheduledHours),responsible:(f.responsible||'').trim(),plannedActs:acts,notes:(f.notes||'').trim()});
@@ -569,7 +610,7 @@ function openClosePm(id){
   pmT={acts:(p.acts&&p.acts.length?p.acts:(p.plannedActs&&p.plannedActs.length?p.plannedActs:defActs(e.category)).map(d=>({d,res:'',note:''}))).map(a=>({d:a.d,res:a.res||'',note:a.note||'',extra:!!a.extra})),
        parts:(p.parts||[]).map(r=>({...r})),crew:(p.crew&&p.crew.length?p.crew:[{n:techVal(''),h:''}]).map(r=>({...r}))};
   const H=t=>`<p class="text-sm font-semibold text-amber-400 mb-2">${t}</p>`;
-  show(`<h3 class="font-bold text-emerald-400">✅ Cierre de OT de mantenimiento</h3><p class="text-xs text-slate-400">${esc(p.id)} · ${esc(p.plan)} · ${esc(e.code)} ${esc(e.brand)} ${esc(e.model)}</p>
+  show(`<h3 class="font-bold text-emerald-400">✅ Cierre de OT de mantenimiento</h3><p class="text-xs text-slate-400">${esc(pmOt(p))} · ${esc(p.plan)} · ${esc(e.code)} ${esc(e.brand)} ${esc(e.model)}</p>
   <p class="text-xs text-amber-400 mb-3">Al confirmar, queda pendiente de validación del supervisor.</p>
   ${(p.rejectNote&&p.status==='PROGRAMADO')?`<p class="text-xs text-red-400 mb-3">⚠️ Devuelto por supervisor: ${esc(p.rejectNote)}</p>`:''}
   <form onsubmit="savePmClose(event,'${id}')" class="space-y-4">
@@ -628,7 +669,7 @@ function pmBodyHtml(p){
   ${(p.rejectNote&&p.status==='PROGRAMADO')?`<div class="bg-red-500/10 border border-red-500/30 p-3 rounded-lg text-xs mt-3"><b class="text-red-400">Devuelto por el supervisor${p.rejectBy?' ('+esc(p.rejectBy)+')':''}:</b><p class="mt-1 text-slate-300">${esc(p.rejectNote)}</p></div>`:''}`;
 }
 function pmHead(p){const e=eqOf(p.fleetId);
-  return `<div class="flex justify-between items-start"><div><span class="text-xs font-bold text-amber-400">${esc(p.id)}</span><h3 class="text-lg font-bold">${esc(p.plan)}</h3>
+  return `<div class="flex justify-between items-start"><div><span class="text-xs font-bold text-amber-400">${esc(pmOt(p))}</span><h3 class="text-lg font-bold">${esc(p.plan)}</h3>
   <p class="text-xs text-slate-400">${esc(e.code)} (${esc(e.brand)} ${esc(e.model)} · S/N ${esc(e.serialNumber)})</p></div><button type="button" onclick="hide()" class="text-slate-400 text-xl">✕</button></div>
   <div class="grid grid-cols-2 gap-2 text-xs bg-slate-900 p-3 rounded-lg my-3"><div><span class="text-slate-400 block">Estado</span>${pmBadge(pmKey(p))}</div><div><span class="text-slate-400 block">Programado</span>${fmtD(p.scheduledDate)}</div>
   <div><span class="text-slate-400 block">Horómetro programado</span>${fmtH(p.scheduledHours)}</div><div><span class="text-slate-400 block">Responsable</span>${esc(p.responsible||'-')}</div></div>
@@ -640,7 +681,7 @@ function openDetailPm(id){
 
 /* ---------- Supervisor ---------- */
 function supPmCard(p){const e=eqOf(p.fleetId),a=actStats(p.acts);
-  return `<div class="bg-slate-800 border border-slate-700 rounded-xl p-4"><div class="flex justify-between items-start gap-2"><div class="min-w-0"><span class="font-bold text-amber-400 text-sm">${esc(p.id)}</span><p class="text-xs text-slate-400 truncate">${esc(e.code)} · ${esc(e.brand)} ${esc(e.model)}</p></div>${pmBadge('PENDIENTE_VALIDACION')}</div>
+  return `<div class="bg-slate-800 border border-slate-700 rounded-xl p-4"><div class="flex justify-between items-start gap-2"><div class="min-w-0"><span class="font-bold text-amber-400 text-sm">${esc(pmOt(p))}</span><p class="text-xs text-slate-400 truncate">${esc(e.code)} · ${esc(e.brand)} ${esc(e.model)}</p></div>${pmBadge('PENDIENTE_VALIDACION')}</div>
   <p class="font-semibold mt-2">${esc(p.plan)}</p>
   <p class="text-xs mt-1 text-slate-400">Ejecutado por <b class="text-slate-200">${esc(p.closeTech)}</b> el <b class="text-slate-200">${fmtD(p.execDate)}</b> · Horómetro: <b class="text-slate-200">${fmtH(p.closeHours)}</b></p>
   <p class="text-xs mt-1 text-slate-400">${RES_ICO.OK} ${a.OK} · ${RES_ICO.OBS} ${a.OBS} · ${RES_ICO.NA} ${a.NA}</p>
@@ -732,8 +773,8 @@ async function readImport(inp){
   ${ok.slice(0,4).map(o=>`<p class="text-slate-300">• ${esc(eqOf(o.fleetId).code)} · ${esc(o.plan)} · ${fmtD(o.scheduledDate)}</p>`).join('')}${ok.length>4?`<p class="text-slate-500">… y ${ok.length-4} más</p>`:''}</div>`;
   if(ok.length){go.disabled=false;go.style.opacity='1';go.textContent='Importar '+ok.length}
 }
-function doImportPm(){
-  if(!impRows.length)return;const n=impRows.length,list=impRows;impRows=[];
+async function doImportPm(){
+  if(!impRows.length)return;const n=impRows.length,nums=await takeNums('ot',n),list=impRows.map((o,i)=>({...o,otNum:nums[i]}));impRows=[];
   putMany('preventive',list).then(()=>note(`Se importaron ${n} mantenimiento(s) preventivo(s).`));
 }
 
@@ -742,7 +783,7 @@ function makePdfPm(id){
   const p=pms.find(x=>x.id===id);if(!p)return;
   const J=window.jspdf&&window.jspdf.jsPDF;
   if(!J){note('No se pudo cargar el generador de PDF. Revisa tu conexión a internet y recarga la página.');return}
-  const e=eqOf(p.fleetId),doc=new J({unit:'mm',format:'a4'}),W=210,M=15,done=!!p.acts,ot='OT-P'+String(p.id).replace(/^PM-/,'');let y=0;
+  const e=eqOf(p.fleetId),doc=new J({unit:'mm',format:'a4'}),W=210,M=15,done=!!p.acts,ot=pmOt(p);let y=0;
   const pt=s=>String(s==null?'':s).replace(/[^\x20-\x7E -ÿ\n]/g,'');
   const need=h=>{if(y+h>280){doc.addPage();y=M+4}};
   doc.setFillColor(15,23,42);doc.rect(0,0,W,28,'F');doc.setTextColor(255,255,255);
@@ -1405,7 +1446,7 @@ function pendItems(){
   const L=[];
   stOpen().forEach(s=>L.push(pRow('par',0,`${pTag('par')}<b class="text-amber-400">${esc(s.cod)}</b> <span class="text-slate-300">${esc(s.motivo||'')}</span><p class="text-xs text-slate-400">${esc(s.flota)} · desde ${fmtDT(s.fp)} · ${esc(s.resp)}</p>`,stCan(s)?`<button onclick="openStop('${s.id}','close')" class="btn bg-emerald-500/20 text-emerald-400 !py-1">✅ Cerrar</button>`:`<button onclick="openStopView('${s.id}')" class="btn bg-slate-700 !py-1">👁️</button>`)));
   if(isSup()){
-    backlogs.filter(b=>b.status==='PENDIENTE_VALIDACION').forEach(b=>{const e=eqOf(b.fleetId);L.push(pRow('val',1,`${pTag('val')}<b class="text-amber-400">${esc(e.code)}</b> <span class="text-slate-300">${esc(b.component)}</span><p class="text-xs text-slate-400">Backlog ${esc(b.id)} esperando validación</p>`,`<button onclick="openValidate('${b.id}')" class="btn bg-violet-500/20 text-violet-300 !py-1">Revisar</button>`))});
+    backlogs.filter(b=>b.status==='PENDIENTE_VALIDACION').forEach(b=>{const e=eqOf(b.fleetId);L.push(pRow('val',1,`${pTag('val')}<b class="text-amber-400">${esc(e.code)}</b> <span class="text-slate-300">${esc(b.component)}</span><p class="text-xs text-slate-400">Backlog ${esc(bkNo(b))} esperando validación</p>`,`<button onclick="openValidate('${b.id}')" class="btn bg-violet-500/20 text-violet-300 !py-1">Revisar</button>`))});
     pms.filter(p=>p.status==='PENDIENTE_VALIDACION').forEach(p=>{const e=eqOf(p.fleetId);L.push(pRow('val',1,`${pTag('val')}<b class="text-amber-400">${esc(e.code)}</b> <span class="text-slate-300">${esc(p.plan)}</span><p class="text-xs text-slate-400">Preventivo esperando validación</p>`,`<button onclick="openValidatePm('${p.id}')" class="btn bg-violet-500/20 text-violet-300 !py-1">Revisar</button>`))});
   }
   bkOpenSorted().forEach(b=>{const e=eqOf(b.fleetId),d=delay(b),ret=b.rejectNote&&b.status==='EN_EJECUCION',sev=ret?0:b.criticality==='ALTA'?1:d?2:3;
@@ -1440,7 +1481,7 @@ function dashQuick(){
   <div style="display:grid;gap:.5rem;grid-template-columns:repeat(4,1fr)">${sm('🔧','Backlog',"qaBack()")}${sm('🛢️','Engrase',"qaPick('gr')")}${sm('📏','Neumáticos',"qaPick('tr')")}${sm('⏱️','Horómetro',"qaPick('hrs')")}</div></div>`}
 function dashValidar(){
   if(!isSup())return '';
-  const l=[...backlogs.filter(b=>b.status==='PENDIENTE_VALIDACION').map(b=>({t:'Backlog '+b.id,e:eqOf(b.fleetId),x:b.component,f:`openValidate('${b.id}')`})),...pms.filter(p=>p.status==='PENDIENTE_VALIDACION').map(p=>({t:'Preventivo',e:eqOf(p.fleetId),x:p.plan,f:`openValidatePm('${p.id}')`}))];
+  const l=[...backlogs.filter(b=>b.status==='PENDIENTE_VALIDACION').map(b=>({t:'Backlog '+bkNo(b),e:eqOf(b.fleetId),x:b.component,f:`openValidate('${b.id}')`})),...pms.filter(p=>p.status==='PENDIENTE_VALIDACION').map(p=>({t:'Preventivo',e:eqOf(p.fleetId),x:p.plan,f:`openValidatePm('${p.id}')`}))];
   return dCard('🛡️ Esperan tu validación ('+l.length+')',l.length?l.slice(0,8).map(o=>dRow(`<b class="text-amber-400">${esc(o.e.code)}</b> <span class="text-slate-300">${esc(o.x||'')}</span><p class="text-xs text-slate-400">${o.t}</p>`,`<button onclick="${o.f}" class="btn bg-violet-500/20 text-violet-300 !py-1">Revisar</button>`)).join('')+(l.length>8?`<button onclick="tab('sup')" class="btn bg-slate-700 !py-1">Ver todos</button>`:''):dEmpty('✅ Nada pendiente de validar.'))}
 const bkRow=b=>{const e=eqOf(b.fleetId),d=delay(b),ret=b.rejectNote&&b.status==='EN_EJECUCION';
   return dRow(`<b class="text-amber-400">${esc(e.code)}</b> <span class="text-slate-300">${esc(b.component)}</span><p class="text-xs ${ret?'text-red-400':d?'text-red-400':'text-slate-400'}">${ret?'⚠️ Devuelto: '+esc(b.rejectNote):(d?'+'+d+' d de atraso · ':'')+esc(b.criticality)+' · '+(STL[b.status]||b.status)}</p>`,bkOpen(b)?`<button onclick="openClose('${b.id}')" class="btn bg-emerald-500/20 text-emerald-400 !py-1">✅ Cerrar</button>`:`<button onclick="openDetail('${b.id}')" class="btn bg-slate-700 !py-1">👁️</button>`)};
@@ -1497,7 +1538,7 @@ function openEquip(id,t){
      <div class="flex gap-2 flex-wrap mt-3"><button onclick="hide();openBack();setTimeout(()=>{const s=document.querySelector('#modal select[name=fleetId]');if(s){s.value='${id}';s.onchange&&s.onchange()}},30)" class="btn bg-amber-500/20 text-amber-400">🔧 Nuevo backlog</button><button onclick="openStop('','start','${id}')" class="btn bg-slate-700">🛑 Iniciar parada</button><button onclick="openHours('${id}')" class="btn bg-slate-700">⏱️ Horómetro</button><button onclick="openGrease('${id}')" class="btn bg-slate-700">🛢️ Engrase</button><button onclick="trFid='${id}';openMeasure('${id}')" class="btn bg-slate-700">📏 Medir</button></div>`;
   }else if(eqTab==='bk'){
     const l=[...bks].sort((a,b)=>bkOpen(b)-bkOpen(a)||(b.observationDate||'').localeCompare(a.observationDate||''));
-    body=l.map(b=>`<div class="${box} flex justify-between items-center gap-2"><div class="min-w-0"><b class="text-amber-400">${esc(b.id)}</b> <span class="text-slate-300">${esc(b.component)}</span><p class="text-xs text-slate-400">${bkPrBadge(b.criticality)} ${bkStBadge(b.status)} · ${fmtD(b.observationDate)} · ${bkAge(b)} d${bkVenc(b)?' <b class="text-red-400">VENCIDO</b>':''}</p></div><div class="flex gap-1"><button onclick="openDetail('${b.id}')" class="btn bg-slate-700 !py-1">👁️</button>${bkOpen(b)?`<button onclick="openClose('${b.id}')" class="btn bg-emerald-500/20 text-emerald-400 !py-1">✅</button>`:''}</div></div>`).join('')||dEmpty('Sin backlogs para este equipo.');
+    body=l.map(b=>`<div class="${box} flex justify-between items-center gap-2"><div class="min-w-0"><b class="text-amber-400">${esc(bkNo(b))}</b> <span class="text-slate-300">${esc(b.component)}</span><p class="text-xs text-slate-400">${bkPrBadge(b.criticality)} ${bkStBadge(b.status)} · ${fmtD(b.observationDate)} · ${bkAge(b)} d${bkVenc(b)?' <b class="text-red-400">VENCIDO</b>':''}</p></div><div class="flex gap-1"><button onclick="openDetail('${b.id}')" class="btn bg-slate-700 !py-1">👁️</button>${bkOpen(b)?`<button onclick="openClose('${b.id}')" class="btn bg-emerald-500/20 text-emerald-400 !py-1">✅</button>`:''}</div></div>`).join('')||dEmpty('Sin backlogs para este equipo.');
   }else if(eqTab==='pm'){
     const l=[...pmx].sort((a,b)=>(b.scheduledDate||'').localeCompare(a.scheduledDate||''));
     body=l.map(q=>`<div class="${box} flex justify-between items-center gap-2"><div class="min-w-0"><b class="text-slate-200">${esc(q.plan)}</b><p class="text-xs text-slate-400">${pmBadge(pmKey(q))} ${fmtD(q.scheduledDate)} ${pmWhen(q)}</p></div><div class="flex gap-1"><button onclick="openDetailPm('${q.id}')" class="btn bg-slate-700 !py-1">👁️</button>${q.status==='PROGRAMADO'?`<button onclick="openClosePm('${q.id}')" class="btn bg-emerald-500/20 text-emerald-400 !py-1">✅</button>`:''}</div></div>`).join('')||dEmpty('Sin preventivos para este equipo.');
@@ -1507,7 +1548,7 @@ function openEquip(id,t){
   }else if(eqTab==='tr'){
     body=(poss.length?`<div class="${box}">Montados: <b>${mt.length}/${poss.length}</b> · ${esc(trCfgName(e))}</div>`+mt.sort((a,b)=>poss.indexOf(a.pos)-poss.indexOf(b.pos)).map(x=>{const h=trHealth(x);return `<div class="${box} flex justify-between items-center mt-2"><span><b class="text-amber-400">${esc(x.pos)}</b> <span class="text-slate-300">${esc(x.code)}</span></span><b style="color:${TR_COL[h.k]}">${h.c!=null?h.c+' mm':'—'}</b></div>`}).join(''):dEmpty('Este equipo no tiene posiciones de neumáticos definidas.'))+`<div class="flex gap-2 flex-wrap mt-3"><button onclick="trFid='${id}';openMeasure('${id}')" class="btn bg-emerald-500/20 text-emerald-400">📏 Medir</button><button onclick="hide();trFid='${id}';trSub='pos';tab('tr')" class="btn bg-slate-700">🛞 Ver posiciones</button><button onclick="hide();trFid='${id}';trSub='fec';tab('tr')" class="btn bg-slate-700">📅 Por fecha</button></div>`;
   }else{
-    const ev=[...bks.map(b=>({d:b.observationDate,t:`🔧 Backlog ${esc(b.id)}: ${esc(b.component)} — ${esc(STL[b.status]||b.status)}`})),...pmx.map(q=>({d:q.scheduledDate,t:`🗓️ Preventivo ${esc(q.plan)} — ${esc(PM_L[q.status]||q.status)}`})),...grLogs(id).map(x=>({d:x.date,t:`🛢️ Engrase a ${fmtH(x.hours)} h · ${esc(x.by||'')}`})),...trSessions(id).map(x=>({d:x.d,t:`🛞 Medición de cocadas · ${Object.keys(x.rows).length} neumáticos`})),...sps.filter(x=>x.fleetId===id).map(x=>({d:(x.fp||'').slice(0,10),t:`🔧 ${esc(x.motivo)} · ${esc(x.sistema||'')} — ${esc((x.desc||'').slice(0,90))}`}))].filter(x=>x.d).sort((a,b)=>b.d.localeCompare(a.d)).slice(0,40);
+    const ev=[...bks.map(b=>({d:b.observationDate,t:`🔧 Backlog ${esc(bkNo(b))}: ${esc(b.component)} — ${esc(STL[b.status]||b.status)}`})),...pmx.map(q=>({d:q.scheduledDate,t:`🗓️ Preventivo ${esc(q.plan)} — ${esc(PM_L[q.status]||q.status)}`})),...grLogs(id).map(x=>({d:x.date,t:`🛢️ Engrase a ${fmtH(x.hours)} h · ${esc(x.by||'')}`})),...trSessions(id).map(x=>({d:x.d,t:`🛞 Medición de cocadas · ${Object.keys(x.rows).length} neumáticos`})),...sps.filter(x=>x.fleetId===id).map(x=>({d:(x.fp||'').slice(0,10),t:`🔧 ${esc(x.motivo)} · ${esc(x.sistema||'')} — ${esc((x.desc||'').slice(0,90))}`}))].filter(x=>x.d).sort((a,b)=>b.d.localeCompare(a.d)).slice(0,40);
     body=ev.map(x=>`<div class="${box}"><span class="text-xs text-slate-400">${fmtD(x.d)}</span><p>${x.t}</p></div>`).join('<div style="height:.4rem"></div>')||dEmpty('Aún no hay actividad registrada.');
   }
   show(`<div class="flex justify-between items-start gap-2"><div class="min-w-0"><h3 class="font-bold text-lg"><span class="text-amber-400">${esc(e.code)}</span> · ${esc(e.brand)} ${esc(e.model)}</h3><p class="text-xs text-slate-400">${esc(e.category)} · S/N ${esc(e.serialNumber)} · ${fmtH(e.hours)} h · ${esc(e.location||'-')} · ${stOpen(id).length?'<b class="text-red-400">EN PARADA (mantenimiento)</b>':`<b class="${sc[e.status]||''}">${esc(String(e.status).replace('_',' '))}</b>`}</p></div><button type="button" onclick="hide()" class="text-slate-400 text-xl">✕</button></div>
@@ -1569,7 +1610,7 @@ function repMore(){repLim+=40;renderRep()}
 function stCard(s,showDate){
   const ab=s.status==='ABIERTA',w=stWarn(s),ln=(l,v)=>v!==''&&v!=null?`<span style="color:#64748b">${l}</span> ${esc(v)}`:'';
   const meta=[ln('Resp.',s.resp),ln('Frente',s.frente),ln('Lugar',s.lugar),ln('Horóm.',fmtH(s.hp)+(ab?'':' → '+fmtH(s.hs))),ln('Demora',s.rdem),ln('Parada',s.rpar)].filter(Boolean).join(' · ');
-  return `<div class="bg-slate-800 border ${ab?'border-red-500/50':'border-slate-700'} rounded-xl p-4 space-y-2" style="word-break:break-word"><div class="flex justify-between items-start gap-2"><div class="min-w-0"><b class="text-amber-400">${esc(s.cod)}</b> <span class="text-xs text-slate-400">${esc(s.flota)}</span> ${stBadge(s.motivo)}${ab?' <span class="bdg" style="color:#f87171;background:rgba(239,68,68,.12);border-color:#f8717155">PARADA ABIERTA</span>':''}
+  return `<div class="bg-slate-800 border ${ab?'border-red-500/50':'border-slate-700'} rounded-xl p-4 space-y-2" style="word-break:break-word"><div class="flex justify-between items-start gap-2"><div class="min-w-0">${s.num?`<span class="mono text-xs text-slate-400">${esc(s.num)}</span> `:''}<b class="text-amber-400">${esc(s.cod)}</b> <span class="text-xs text-slate-400">${esc(s.flota)}</span> ${stBadge(s.motivo)}${ab?' <span class="bdg" style="color:#f87171;background:rgba(239,68,68,.12);border-color:#f8717155">PARADA ABIERTA</span>':''}
     <p class="text-xs text-slate-400 mt-1">${showDate?fmtD(s.fp.slice(0,10))+' · ':''}${s.fp.slice(11,16)}${ab?' → en curso':' → '+(s.fs||'').slice(11,16)+' · <b class="text-slate-200">'+s.t+' h</b>'} · ${esc(s.tipo==='PLANIFICADA'?'Planificada':'No planificada')} · ${esc(s.sistema||'')}</p></div>
     <div class="flex gap-1" style="flex-shrink:0"><button onclick="openStopView('${s.id}')" class="btn bg-slate-700 !py-1">👁️</button>${ab&&stCan(s)?`<button onclick="openStop('${s.id}','close')" class="btn bg-emerald-500/20 text-emerald-400 !py-1">✅</button>`:''}${!ab&&stCan(s)?`<button onclick="openStop('${s.id}','edit')" class="btn bg-slate-700 !py-1">✏️</button>`:''}${adm(`<button onclick="delStop('${s.id}')" class="btn bg-red-500/20 !py-1">🗑️</button>`)}</div></div>
     <p class="text-sm text-slate-200" style="white-space:pre-line">${esc((s.desc||'').trim()||'–')}</p>${s.obs&&s.obs.trim()?`<p class="text-xs" style="color:#fcd34d;white-space:pre-line">📌 ${esc(s.obs.trim())}</p>`:''}
@@ -1577,7 +1618,7 @@ function stCard(s,showDate){
 }
 function stTable(L){
   const th='padding:8px 10px;text-align:left;border-bottom:1px solid #334155;white-space:nowrap;color:#94a3b8;font-weight:600;position:sticky;top:0;background:#1e293b',td='padding:8px 10px;border-bottom:1px solid #1e293b;vertical-align:top',stk='position:sticky;left:0;background:#1e293b;z-index:1;border-right:1px solid #334155';
-  const C=[['EQUIPO',s=>`<b class="text-amber-400">${esc(s.cod)}</b><div style="font-size:10px;color:#94a3b8">${esc(s.flota)}</div>`,'min-width:110px;'+stk],['PARADA',s=>fmtDT(s.fp),'white-space:nowrap'],['SALIDA',s=>s.status==='ABIERTA'?'en curso':fmtDT(s.fs),'white-space:nowrap'],['H',s=>s.t,'text-align:right'],['TIPO',s=>s.tipo==='PLANIFICADA'?'PLAN.':'NO PLAN.','white-space:nowrap'],['MOTIVO',s=>esc(s.motivo),''],['SISTEMA',s=>esc(s.sistema),''],['DESCRIPCIÓN',s=>esc(s.desc),'min-width:260px;white-space:pre-line'],['RESPONSABLE',s=>esc(s.resp),'min-width:150px'],['FRENTE',s=>esc(s.frente),'white-space:nowrap'],['LUGAR',s=>esc(s.lugar),'white-space:nowrap'],['HORÓM. PARADA',s=>fmtH(s.hp),'text-align:right'],['HORÓM. SALIDA',s=>s.status==='ABIERTA'?'':fmtH(s.hs),'text-align:right'],['DEMORA',s=>esc(s.rdem),''],['PARADA POR',s=>esc(s.rpar),''],['OBSERVACIONES',s=>esc(s.obs),'min-width:240px;white-space:pre-line']];
+  const C=[['N°',s=>`<span class="mono">${esc(spNo(s))}</span>`,'white-space:nowrap'],['EQUIPO',s=>`<b class="text-amber-400">${esc(s.cod)}</b><div style="font-size:10px;color:#94a3b8">${esc(s.flota)}</div>`,'min-width:110px;'+stk],['PARADA',s=>fmtDT(s.fp),'white-space:nowrap'],['SALIDA',s=>s.status==='ABIERTA'?'en curso':fmtDT(s.fs),'white-space:nowrap'],['H',s=>s.t,'text-align:right'],['TIPO',s=>s.tipo==='PLANIFICADA'?'PLAN.':'NO PLAN.','white-space:nowrap'],['MOTIVO',s=>esc(s.motivo),''],['SISTEMA',s=>esc(s.sistema),''],['DESCRIPCIÓN',s=>esc(s.desc),'min-width:260px;white-space:pre-line'],['RESPONSABLE',s=>esc(s.resp),'min-width:150px'],['FRENTE',s=>esc(s.frente),'white-space:nowrap'],['LUGAR',s=>esc(s.lugar),'white-space:nowrap'],['HORÓM. PARADA',s=>fmtH(s.hp),'text-align:right'],['HORÓM. SALIDA',s=>s.status==='ABIERTA'?'':fmtH(s.hs),'text-align:right'],['DEMORA',s=>esc(s.rdem),''],['PARADA POR',s=>esc(s.rpar),''],['OBSERVACIONES',s=>esc(s.obs),'min-width:240px;white-space:pre-line']];
   return `<div style="overflow:auto;max-height:70vh;border:1px solid #334155;border-radius:.75rem"><table style="border-collapse:collapse;font-size:12px;color:#e2e8f0"><thead><tr>${C.map((c,i)=>`<th style="${th}${i===0?';left:0;z-index:3;border-right:1px solid #334155':''}">${c[0]}</th>`).join('')}</tr></thead><tbody>${L.map(s=>`<tr onclick="openStopView('${s.id}')" style="cursor:pointer">${C.map(c=>`<td style="${td};${c[2]}">${c[1](s)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
 }
 function renderRep(){
@@ -1585,7 +1626,7 @@ function renderRep(){
   const d=repDate,ym=d.slice(0,7),op=stOpen(),inM=s=>(s.fp||'').slice(0,7)===ym&&s.status!=='ABIERTA',M=sps.filter(inM);
   let L=(repView==='day'?stDay(d):sps.filter(s=>repView==='all'||(s.fp||'').slice(0,7)===ym).sort((a,b)=>(b.fp||'').localeCompare(a.fp||''))).filter(s=>s.status!=='ABIERTA');
   if(repMot)L=L.filter(s=>s.motivo===repMot);
-  const q=stNorm(repQ);if(q)L=L.filter(s=>stNorm([s.cod,s.flota,s.desc,s.obs,s.resp,s.sistema,s.frente,s.motivo].join(' ')).includes(q));
+  const q=stNorm(repQ);if(q)L=L.filter(s=>stNorm([s.num,s.cod,s.flota,s.desc,s.obs,s.resp,s.sistema,s.frente,s.motivo].join(' ')).includes(q));
   const sum=a=>Math.round(a.reduce((t,s)=>t+(Number(s.t)||0),0)*10)/10,H=sum(M),pl=M.filter(s=>s.tipo==='PLANIFICADA'),by={};M.forEach(s=>by[s.motivo]=(by[s.motivo]||0)+(Number(s.t)||0));
   const week=Array.from({length:7},(_,i)=>{const x=new Date(today()+'T12:00:00');x.setDate(x.getDate()-i);return fmtISO(x)}),seg=(k,l)=>`<button onclick="repSet('view','${k}')" class="btn ${repView===k?'bg-amber-500 text-slate-950':'bg-slate-700'}" style="flex:1;padding:.45rem .2rem;font-size:12px">${l}</button>`;
   const title=repView==='day'?'Intervenciones del '+fmtD(d):repView==='month'?ST_MES[+ym.slice(5,7)-1]+' '+ym.slice(0,4):'Todas las intervenciones';
@@ -1638,7 +1679,7 @@ function openStop(id,mode,fid){
    <p id="st-err" class="text-xs text-red-400 hidden"></p>${btns('hide()',mode==='start'?'Iniciar parada':'Guardar','bg-emerald-500')}</form>`,'38rem');
   if(closing)pv('stop');
 }
-function saveStop(ev,id,mode){
+async function saveStop(ev,id,mode){
   ev.preventDefault();const f=Object.fromEntries(new FormData(ev.target)),er=$('st-err'),bad=m=>{er.textContent=m;er.classList.remove('hidden');er.scrollIntoView({block:'center'})};
   const e=fleet.find(x=>x.id===f.fleetId);if(!e){bad('Elige el equipo.');return}
   const closing=mode!=='start',old=sps.find(x=>x.id===id)||{},now=stNow();
@@ -1658,12 +1699,13 @@ function saveStop(ev,id,mode){
   if(sps.some(x=>x.id!==id&&x.fleetId===e.id&&x.fp&&stMs(x.fp)<a1&&(x.fs?stMs(x.fs):Infinity)>a0))warn.push('se cruza con otra intervención del mismo equipo');
   if(warn.length&&!stFlag){stFlag=true;bad('Revisa: '+warn.join('; ')+'. Si es correcto, presiona Guardar otra vez.');return}
   const rec={...old,id:id||'ST-'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),ts:old.ts||Date.now(),fleetId:e.id,flota:stFleetTxt(e),cod:e.code,tipo:f.tipo,motivo:f.motivo,sistema:f.sistema.trim().toUpperCase(),desc:f.desc.trim(),resp:f.resp.trim(),respUid:old.respUid||me.uid,frente:(f.frente||'').trim().toUpperCase(),hp,hs,fp:f.fp,fs,t,rdem:f.rdem||old.rdem||'MANTENIMIENTO',rpar:f.rpar||old.rpar||'MANTENIMIENTO',lugar:(f.lugar||'').trim().toUpperCase(),obs:(f.obs!=null?f.obs:(old.obs||'')).trim(),foto:old.foto||'',photos:closing?(tmp.stop||[]):(old.photos||[]),status:closing?'CERRADA':'ABIERTA',src:old.src||'app'};
-  let extra='';
-  if(closing&&stFinding(rec.obs)&&f.mkb&&!old.backlogId){const bid='BKL-'+Date.now().toString().slice(-7);put('backlogs',stBacklogFrom(rec,e,bid));rec.backlogId=bid;extra+=' Se creó un backlog con las observaciones.'}
+  let extra='';const sb=ev.target.querySelector('button:not([type=button])');if(sb)sb.disabled=true;
+  if(!numOf('rp',rec.num))rec.num=(await takeNums('rp'))[0];
+  if(closing&&stFinding(rec.obs)&&f.mkb&&!old.backlogId){const bid='BKL-'+Date.now().toString().slice(-7),nb=stBacklogFrom(rec,e,bid);nb.num=(await takeNums('bk'))[0];put('backlogs',nb);rec.backlogId=bid;extra+=' Se creó el backlog '+nb.num+' con las observaciones.'}
   if(closing&&rec.motivo==='ENGRASE'&&!old.grLogId){const gid='GR-'+Date.now().toString().slice(-8);put('grease',stGreaseFrom(rec,gid));rec.grLogId=gid;extra+=' Se registró también en Engrase.'}
   put('stops',rec);
   if((closing?hs:hp)>(Number(e.hours)||0))put('fleet',{...e,hours:closing?hs:hp});
-  repDate=f.fp.slice(0,10);hide();note(mode==='start'?'Parada iniciada: '+e.code+' figura en mantenimiento hasta que la cierres.':'Intervención guardada ('+(t||0)+' h).'+extra);if(cur==='rep')render();else if(mode==='start')tab('rep');
+  repDate=f.fp.slice(0,10);hide();note(mode==='start'?'Parada '+rec.num+' iniciada: '+e.code+' figura en mantenimiento hasta que la cierres.':'Intervención '+rec.num+' guardada ('+(t||0)+' h).'+extra);if(cur==='rep')render();else if(mode==='start')tab('rep');
 }
 function stBacklogFrom(s,e,id){
   const obs=stFinding(s.obs),first=obs.split(/[.\n;]/)[0].trim(),comp=first?(first.length>70?first.slice(0,67)+'…':first):'Observación de intervención',day=s.fp.slice(0,10);
@@ -1892,7 +1934,7 @@ async function doReset(ev){ev.preventDefault();const em=ev.target.email.value.tr
 function blocked(msg){showLogin(`<p class="text-sm text-amber-400">${esc(msg)}</p><button type="button" onclick="logout(true)" class="btn bg-slate-700 w-full">Cerrar sesión</button>`)}
 
 /* ---------- Sesión ---------- */
-function stopData(){unsubs.forEach(f=>{try{f()}catch(_){}});unsubs=[];fleet=[];backlogs=[];pms=[];grs=[];gpl=[];trs=[];trp=[];sps=[];usersList=[]}
+function stopData(){unsubs.forEach(f=>{try{f()}catch(_){}});unsubs=[];loadedCols.clear();fleet=[];backlogs=[];pms=[];grs=[];gpl=[];trs=[];trp=[];sps=[];usersList=[]}
 // al salir se borra la copia offline de Firestore para que el siguiente usuario del equipo no vea datos ajenos
 // antes se suben los cambios pendientes: clearPersistence borra también la cola offline
 async function logout(force){
@@ -1962,11 +2004,11 @@ const toCsv=rows=>'﻿'+rows.map(r=>r.map(csvCell).join(';')).join('\r\n');
 function exportCsv(kind){
   let rows,name;
   if(kind==='back'){name='backlogs';rows=[['N° backlog','Equipo','Familia','Fecha detección','Detectado por','Fuente','Horómetro/km','Sistema','Componente','Observación','Prioridad','Tipo','Requiere parada','Estado','Fecha límite','Vencido','Días abierto','Días fuera de plazo','HH estimadas','N° requerimiento','OT','Responsable OT','Fecha programada','Fecha cierre','Técnico','Horas fuera de servicio','Supervisor','Fecha validación','Costo']];
-    backlogs.forEach(b=>{const e=eqOf(b.fleetId);rows.push([b.id,e.code,e.category,b.observationDate,b.detectedBy,b.source,b.hoursAt,b.system,b.component,b.description,PR_L[b.criticality]||b.criticality,b.workType,b.needsStop?'Sí':'No',stLabel(b.status),bkLimit(b),bkVenc(b)?'Sí':'No',bkAge(b),bkLate(b),b.hh,b.rqMain,b.ot?b.ot.num:'',b.ot?b.ot.resp:'',b.scheduledDate,b.closeDate,b.closeTech,b.downtimeH,b.supName,b.supDate,b.cost])})}
+    backlogs.forEach(b=>{const e=eqOf(b.fleetId);rows.push([bkNo(b),e.code,e.category,b.observationDate,b.detectedBy,b.source,b.hoursAt,b.system,b.component,b.description,PR_L[b.criticality]||b.criticality,b.workType,b.needsStop?'Sí':'No',stLabel(b.status),bkLimit(b),bkVenc(b)?'Sí':'No',bkAge(b),bkLate(b),b.hh,b.rqMain,b.ot?b.ot.num:'',b.ot?b.ot.resp:'',b.scheduledDate,b.closeDate,b.closeTech,b.downtimeH,b.supName,b.supDate,b.cost])})}
   else if(kind==='rq'){name='requerimientos';rows=[['Tipo','N° requerimiento','Descripción','Proveedor','Solicitado','Llegada estimada','Estado','Días de espera','Atrasado','Backlog','Equipo','Componente','Estado del backlog']];
-    rqRows().forEach(({b,r})=>{const e=eqOf(b.fleetId);rows.push([RQ_T[r.type],r.num,r.desc,r.provider,r.reqDate,r.estDate,RQ_ST[r.st].l,rqWait(r),rqLate(r)?'Sí':'No',b.id,e.code,b.component,stLabel(b.status)])})}
+    rqRows().forEach(({b,r})=>{const e=eqOf(b.fleetId);rows.push([RQ_T[r.type],r.num,r.desc,r.provider,r.reqDate,r.estDate,RQ_ST[r.st].l,rqWait(r),rqLate(r)?'Sí':'No',bkNo(b),e.code,b.component,stLabel(b.status)])})}
   else if(kind==='pm'){name='preventivos';rows=[['Código','Equipo','Plan','Fecha programada','Estado','Fecha ejecución','Horómetro cierre','Técnico','Duración (h)','Act. realizadas','Act. observadas','Horas-hombre','Supervisor','Fecha validación']];
-    pms.forEach(p=>{const e=eqOf(p.fleetId),a=actStats(p.acts);rows.push([p.id,e.code,p.plan,p.scheduledDate,PM_LONG[p.status]||p.status,p.execDate,p.closeHours,p.closeTech,p.durationH,p.acts?a.OK:'',p.acts?a.OBS:'',(p.crew||[]).reduce((t,r)=>t+(Number(r.h)||0),0),p.supName,p.supDate])})}
+    pms.forEach(p=>{const e=eqOf(p.fleetId),a=actStats(p.acts);rows.push([pmOt(p),e.code,p.plan,p.scheduledDate,PM_LONG[p.status]||p.status,p.execDate,p.closeHours,p.closeTech,p.durationH,p.acts?a.OK:'',p.acts?a.OBS:'',(p.crew||[]).reduce((t,r)=>t+(Number(r.h)||0),0),p.supName,p.supDate])})}
   else if(kind==='tr'){name='neumaticos';rows=[['Código','Marca','Diseño','Medida','Tipo','Estado','Equipo','Posición','Cocada nueva (mm)','Cocada actual (mm)','Última medición','Recorrido','Costo ($)','Costo por hora ($)','Recapados']];
     trs.forEach(t=>{const e=eqOf(t.fleetId),c=trCph(t);rows.push([t.code,t.brand,t.design,t.size,t.type,TR_L[t.status]||t.status,t.status==='MONTADO'?e.code:'',t.status==='MONTADO'?t.pos:'',t.cocadaInit,t.lastCocada,t.lastReadDate,Math.round(trRun(t)),(Number(t.cost)||0)+(Number(t.retreadCost)||0),c?c.toFixed(2):'',t.retreads||0])})}
   else if(kind==='trm'){name='mediciones_cocada';rows=[['Neumático','Equipo','Posición','Fecha','Horómetro','Tipo','Medidas (mm)','Mínima (mm)','Diferencia (mm)','psi','Técnico','Observación']];
