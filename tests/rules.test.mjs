@@ -24,5 +24,10 @@ await t('autorregistro NO se crea activo',assertFails(setDoc(doc(db('nuevo2'),'u
 await t('autorregistro NO se crea como admin',assertFails(setDoc(doc(db('nuevo3'),'users/nuevo3'),{...solicitud,uid:'nuevo3',role:'admin'})));
 await t('autorregistro NO crea perfil de otro',assertFails(setDoc(doc(db('nuevo4'),'users/otro'),{...solicitud,uid:'otro'})));
 await t('pendiente NO se aprueba solo',assertFails(updateDoc(doc(db('nuevo'),'users/nuevo'),{signature:'x',signatureAt:2})));
+await t('técnico registra backlog nuevo (REGISTRADO)',assertSucceeds(setDoc(doc(db('tec'),'backlogs/b9'),{status:'REGISTRADO',criticality:'ALTA'})));
+await t('técnico mueve a Espera repuestos',assertSucceeds(updateDoc(doc(db('tec'),'backlogs/b9'),{status:'ESPERA_REPUESTOS'})));
+await t('técnico NO anula',assertFails(updateDoc(doc(db('tec'),'backlogs/b9'),{status:'ANULADO'})));
+await t('supervisor sí anula',assertSucceeds(updateDoc(doc(db('sup'),'backlogs/b9'),{status:'ANULADO'})));
+await t('técnico NO crea backlog ya cerrado',assertFails(setDoc(doc(db('tec'),'backlogs/b10'),{status:'COMPLETADO'})));
 await t('técnico edita backlog abierto sin tocar closeUid',assertSucceeds(updateDoc(doc(db('tec'),'backlogs/b1'),{description:'x'})));
 console.log(ok.join('\n'));await env.cleanup();

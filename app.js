@@ -6,14 +6,11 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const uid=p=>p+Date.now().toString(36)+Math.random().toString(36).slice(2,5);
 const today=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
 const day=s=>new Date(s+'T00:00:00');
-function delay(b){
-  if(!b.scheduledDate)return 0;
-  const ref=((b.status==='COMPLETADO'||b.status==='PENDIENTE_VALIDACION')&&b.closeDate)?day(b.closeDate):day(today());
-  return Math.max(0,Math.round((ref-day(b.scheduledDate))/864e5));
-}
+// días fuera del plazo de su prioridad (Alta 3 d · Media 7 d · Baja 30 d desde la detección): ver backlog.js
+function delay(b){return bkLate(b)}
 const CRIT={ALTA:'bg-red-500/10 text-red-400 border-red-500/30',MEDIA:'bg-amber-500/10 text-amber-400 border-amber-500/30',BAJA:'bg-blue-500/10 text-blue-400 border-blue-500/30'};
-const STL={PENDIENTE:'PENDIENTE',EN_PROCESO:'EN PROCESO',PENDIENTE_VALIDACION:'POR VALIDAR',COMPLETADO:'COMPLETADO'};
-const stLabel=k=>({PENDIENTE:'Pendiente',EN_PROCESO:'En proceso',PENDIENTE_VALIDACION:'Pendiente por validacion',COMPLETADO:'Completado y validado'}[k]||k);
+const STL={PENDIENTE:'PENDIENTE',EN_PROCESO:'EN PROCESO',REGISTRADO:'REGISTRADO',PLANIFICADO:'PLANIFICADO',ESPERA_REPUESTOS:'ESPERA REPUESTOS',ESPERA_SERVICIO:'ESPERA SERVICIO',PROGRAMADO:'PROGRAMADO',EN_EJECUCION:'EN EJECUCIÓN',PENDIENTE_VALIDACION:'POR VALIDAR',COMPLETADO:'CERRADO',ANULADO:'ANULADO'};
+const stLabel=k=>({PENDIENTE:'Pendiente',EN_PROCESO:'En proceso',REGISTRADO:'Registrado',PLANIFICADO:'Planificado',ESPERA_REPUESTOS:'Espera repuestos',ESPERA_SERVICIO:'Espera servicio',PROGRAMADO:'Programado',EN_EJECUCION:'En ejecucion',PENDIENTE_VALIDACION:'Pendiente por validacion',COMPLETADO:'Cerrado y validado',ANULADO:'Anulado'}[k]||k);
 const STAT={PENDIENTE:'bg-amber-500/10 text-amber-400 border-amber-500/30',EN_PROCESO:'bg-blue-500/10 text-blue-400 border-blue-500/30',PENDIENTE_VALIDACION:'bdg-v',COMPLETADO:'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'};
 const badge=(m,k)=>`<span class="bdg ${m[k]||''}">${esc(STL[k]||k.replace(/_/g,' '))}</span>`;
 function field(n,l,v='',x='',t='text'){return `<label class="block text-xs text-slate-400 font-semibold">${l}<input class="inp mt-1 font-normal" name="${n}" type="${t}" value="${esc(v)}" maxlength="500" ${x}></label>`}
@@ -91,14 +88,15 @@ function tab(t){
     $('t-'+k).className='btn navb '+(k===t?'bg-amber-500 text-slate-950':'text-slate-300 hover:bg-slate-700');
   }
   try{$('t-'+t).scrollIntoView({block:'nearest',inline:'center'})}catch(_){}
-  navEdge();
+  navEdge();try{window.scrollTo(0,0)}catch(_){}
   render();
 }
 // menú inferior del celular: sombra a la derecha mientras queden opciones ocultas
 function navEdge(){const n=$('nav');n.classList.toggle('more-r',n.scrollLeft+n.clientWidth<n.scrollWidth-4)}
 $('nav').addEventListener('scroll',navEdge,{passive:true});addEventListener('resize',navEdge);
 function renderDash(){if(isAdmin())renderDashAdm();else if(isSup())renderDashSup();else renderDashTec()}
-function render(){ if(cur==='dash')renderDash();else if(cur==='back')renderBack();else if(cur==='sup')renderSup();else if(cur==='adm')renderAdm();else if(cur==='gr')renderGr();else if(cur==='tr')renderTr();else if(cur==='pm')renderPm();else if(cur==='rep')renderRep();else renderFleet(); supBadge() }
+function render(){ renderSide();if(bkDetId&&$('bkd')&&!$('modal').classList.contains('hidden'))bkDetail(bkDetId,true);
+  if(cur==='dash')renderDash();else if(cur==='back')renderBack();else if(cur==='sup')renderSup();else if(cur==='adm')renderAdm();else if(cur==='gr')renderGr();else if(cur==='tr')renderTr();else if(cur==='pm')renderPm();else if(cur==='rep')renderRep();else renderFleet(); supBadge() }
 function supBadge(){const n=backlogs.filter(b=>b.status==='PENDIENTE_VALIDACION').length+pms.filter(p=>p.status==='PENDIENTE_VALIDACION').length;
   $('t-sup').innerHTML='<span class="ic">🛡️'+(n?`<span class="bdg" style="border-width:1px;background:#7e22ce;color:#fff;border-color:#7e22ce;position:absolute;top:-6px;left:60%;font-size:10px;padding:0 5px;line-height:15px">${n}</span>`:'')+'</span><span class="lbl">Supervisor</span>'}
 const eqOf=id=>fleet.find(f=>f.id===id)||{code:'N/A',brand:'Equipo',model:'eliminado',serialNumber:'N/A'};
@@ -108,36 +106,18 @@ function bars(counts,colors,total){
   return Object.keys(counts).map(k=>{const n=counts[k],p=total?Math.round(n/total*100):0;
     return `<div><div class="flex justify-between text-xs mb-1"><span>${STL[k]||k.replace(/_/g,' ')}</span><span class="text-slate-400">${n} (${p}%)</span></div><div class="bg-slate-900 h-2 rounded-full overflow-hidden"><div class="${colors[k]} h-full" style="width:${p}%"></div></div></div>`}).join('');
 }
-function renderDashAdm(){
-  const open=backlogs.filter(b=>b.status!=='COMPLETADO');
-  const avg=open.length?Math.round(open.reduce((a,b)=>a+delay(b),0)/open.length):0;
-  const cost=open.reduce((a,b)=>a+(b.cost||0),0);
-  const crit=open.filter(b=>b.criticality==='ALTA').length;
-  const sc={PENDIENTE:0,EN_PROCESO:0,PENDIENTE_VALIDACION:0,COMPLETADO:0},pv=backlogs.filter(b=>b.status==='PENDIENTE_VALIDACION').length+pms.filter(p=>p.status==='PENDIENTE_VALIDACION').length,pmProg=pms.filter(p=>p.status==='PROGRAMADO'&&!pmOver(p)).length,pmVenc=pms.filter(pmOver).length,cc={ALTA:0,MEDIA:0,BAJA:0};
-  backlogs.forEach(b=>{sc[b.status]=(sc[b.status]||0)+1;cc[b.criticality]=(cc[b.criticality]||0)+1});
-  const k=(l,v,c)=>`<div class="bg-slate-800 border border-slate-700 rounded-xl p-4"><p class="text-[11px] uppercase text-slate-400 font-semibold">${l}</p><p class="text-2xl font-extrabold mt-1 ${c}">${v}</p></div>`;
-  $('v-dash').innerHTML=dashHello()+dashQuick()+dashKpis()+`<div class="dsplit">`+dashPend()+`<div class="lap-only">${pmUpcomingHtml()}</div></div>`+`<h3 class="font-semibold text-slate-300" style="margin-top:.5rem">📊 Resumen general</h3><div style="display:grid;gap:.75rem;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
-    ${k('Total backlogs',backlogs.length,'text-white')}${k('Atraso promedio (abiertos)',avg+' d','text-amber-400')}
-    ${k('Preventivos programados',pmProg,'text-blue-400')}${k('Preventivos vencidos',pmVenc,'text-red-400')}${k('Por validar (supervisor)',pv,'text-amber-400')}${k('Criticidad alta (abiertos)',crit,'text-red-400')}${k('Costo pendiente','$'+cost.toLocaleString(),'text-emerald-400')}${k('Engrase vencido',grCount('VENCIDO'),'text-red-400')}${k('Neumáticos a cambiar',trCount('CAMBIO'),'text-red-400')}${k('Neumáticos en alerta',trCount('ALERTA'),'text-amber-400')}</div>
-    <div class="grid lg:grid-cols-2 gap-4">
-    <div class="bg-slate-800 border border-slate-700 rounded-xl p-4 space-y-3"><h3 class="font-semibold">Estado de intervenciones</h3>${bars(sc,{PENDIENTE:'bg-amber-500',EN_PROCESO:'bg-blue-500',PENDIENTE_VALIDACION:'bg-violet',COMPLETADO:'bg-emerald-500'},backlogs.length)}</div>
-    <div class="bg-slate-800 border border-slate-700 rounded-xl p-4 space-y-3"><h3 class="font-semibold">Distribución por criticidad</h3>${bars(cc,{ALTA:'bg-red-500',MEDIA:'bg-amber-500',BAJA:'bg-blue-500'},backlogs.length)}</div></div><div class="mob-only">${pmUpcomingHtml()}</div>`;
-}
+function renderDashAdm(){$('v-dash').innerHTML=dashBk()+dashOther()}
 
-function backActs(b){return `${(b.status==='PENDIENTE'||b.status==='EN_PROCESO')?`<button onclick="openClose('${b.id}')" class="btn bg-emerald-500/20 text-emerald-400 !py-1">✅ Cerrar</button>`:''}
-      <button onclick="makePdf('${b.id}')" title="Orden de trabajo PDF" class="btn bg-slate-700 !py-1">📄 OT</button><button onclick="openDetail('${b.id}')" class="btn bg-slate-700 !py-1">👁️</button><button onclick="openBack('${b.id}')" class="btn bg-slate-700 !py-1">✏️</button>${(isAdmin()&&(b.status==='COMPLETADO'||b.status==='PENDIENTE_VALIDACION'))?`<button onclick="reopen('backlogs','${b.id}')" title="Reabrir" class="btn bg-slate-700 !py-1">↩️</button>`:''}${adm(`<button onclick="delBack('${b.id}')" class="btn bg-red-500/20 !py-1">🗑️</button>`)}`}
 function pmActs(p){return `${p.status==='PROGRAMADO'?`<button onclick="openClosePm('${p.id}')" class="btn bg-emerald-500/20 text-emerald-400 !py-1">✅ Cerrar OT</button>`:''}
       <button onclick="makePdfPm('${p.id}')" title="Orden de trabajo PDF" class="btn bg-slate-700 !py-1">📄 OT</button><button onclick="openDetailPm('${p.id}')" class="btn bg-slate-700 !py-1">👁️</button>${sup(`<button onclick="openPm('${p.id}')" class="btn bg-slate-700 !py-1">✏️</button>`)}${(isAdmin()&&(p.status==='COMPLETADO'||p.status==='PENDIENTE_VALIDACION'))?`<button onclick="reopen('preventive','${p.id}')" title="Reabrir" class="btn bg-slate-700 !py-1">↩️</button>`:''}${adm(`<button onclick="delPm('${p.id}')" class="btn bg-red-500/20 !py-1">🗑️</button>`)}`}
 function fleetActs(e){return `<button onclick="openEquip('${e.id}')" class="btn bg-amber-500/20 text-amber-400 !py-1">📋 Ficha</button>${adm(`<button onclick="openFleet('${e.id}')" class="btn bg-slate-700 !py-1">✏️</button><button onclick="delFleet('${e.id}')" class="btn bg-red-500/20 !py-1">🗑️</button>`)}`}
 
 /* ---------- Vista de tabla (solo laptop, ≥1024 px) ---------- */
 function lapTbl(head,rows,empty){return rows.length?`<div class="ltw"><table class="ltbl"><thead><tr>${head.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div>`:`<p class="text-slate-500 text-sm">${empty}</p>`}
-function tblBack(l){$('tbl-back').innerHTML=lapTbl(['Código','Equipo','Componente','Criticidad','Estado','Observado','Programado','Atraso','Acciones'],l.map(b=>{const e=eqOf(b.fleetId),d=delay(b);
-  return `<tr><td><b class="text-amber-400">${esc(b.id)}</b></td><td><b>${esc(e.code)}</b><span class="lsub">${esc(e.brand)} ${esc(e.model)}</span></td><td><span class="font-semibold">${esc(b.component)}</span><span class="lsub">${esc(b.system)}</span>${(b.rejectNote&&b.status==='EN_PROCESO')?`<span class="lsub text-red-400">⚠️ Devuelto: ${esc(b.rejectNote)}</span>`:''}</td><td>${badge(CRIT,b.criticality)}</td><td>${badge(STAT,b.status)}</td><td class="nw">${fmtD(b.observationDate)}</td><td class="nw">${fmtD(b.scheduledDate)}</td><td class="nw font-semibold ${d?'text-red-400':'text-slate-400'}">${d?'+'+d+' d':'A tiempo'}</td><td><div class="lact">${backActs(b)}</div></td></tr>`}),'Sin backlogs.')}
 function tblPm(l){$('tbl-pm').innerHTML=lapTbl(['Código','Equipo','Plan','Programado','Situación','Responsable','Actividades','Estado','Acciones'],l.map(p=>{const e=eqOf(p.fleetId),k=pmKey(p),a=actStats(p.acts);
   return `<tr><td><b class="text-amber-400">${esc(p.id)}</b></td><td><b>${esc(e.code)}</b><span class="lsub">${esc(e.brand)} ${esc(e.model)}</span></td><td class="font-semibold">${esc(p.plan)}${(p.rejectNote&&p.status==='PROGRAMADO')?`<span class="lsub text-red-400">⚠️ Devuelto: ${esc(p.rejectNote)}</span>`:''}</td><td class="nw">${fmtD(p.scheduledDate)}${p.scheduledHours!==''&&p.scheduledHours!=null?`<span class="lsub">a las ${fmtH(p.scheduledHours)}</span>`:''}</td><td class="${k==='VENCIDO'?'text-red-400 font-semibold':'text-slate-400'}">${p.status==='PROGRAMADO'?pmWhen(p):'—'}</td><td>${esc(p.responsible||'—')}</td><td class="nw text-slate-400">${p.acts?`${RES_ICO.OK} ${a.OK} · ${RES_ICO.OBS} ${a.OBS} · ${RES_ICO.NA} ${a.NA}`:`${(p.plannedActs||[]).length} programadas`}</td><td>${pmBadge(k)}</td><td><div class="lact">${pmActs(p)}</div></td></tr>`}),'Sin preventivos.')}
 function tblFleet(l){const sc={OPERATIVO:'text-emerald-400',INOPERATIVO:'text-red-400',EN_MANTENIMIENTO:'text-amber-400'};
-  $('tbl-fleet').innerHTML=lapTbl(['Código','Equipo','Categoría','Nº de serie','Horómetro','Ubicación','Estado','Backlogs','Preventivos','Acciones'],l.map(e=>{const n=backlogs.filter(b=>b.fleetId===e.id&&b.status!=='COMPLETADO').length,pn=pms.filter(p=>p.fleetId===e.id&&p.status!=='COMPLETADO').length;
+  $('tbl-fleet').innerHTML=lapTbl(['Código','Equipo','Categoría','Nº de serie','Horómetro','Ubicación','Estado','Backlogs','Preventivos','Acciones'],l.map(e=>{const n=backlogs.filter(b=>b.fleetId===e.id&&bkOpen(b)).length,pn=pms.filter(p=>p.fleetId===e.id&&p.status!=='COMPLETADO').length;
   return `<tr><td><b class="text-amber-400">${esc(e.code)}</b></td><td><button type="button" onclick="openEquip('${e.id}')" class="font-semibold lnk">${esc(e.brand)} ${esc(e.model)}</button></td><td>${esc(e.category)}</td><td class="text-slate-400">${esc(e.serialNumber)}</td><td class="nw num">${esc(e.hours)} h</td><td>${esc(e.location||'-')}</td><td class="nw font-semibold ${sc[e.status]||''}">${esc(String(e.status||'').replace('_',' '))}</td><td class="num"><b class="${n?'text-amber-400':'text-slate-500'}">${n}</b></td><td class="num"><b class="${pn?'text-blue-400':'text-slate-500'}">${pn}</b></td><td><div class="lact">${fleetActs(e)}</div></td></tr>`}),'Sin equipos registrados.')}
 
 /* ---------- Apartados donde aparece cada equipo ---------- */
@@ -171,7 +151,7 @@ function renderFleet(){
   const l=fleet.filter(e=>[e.code,e.brand,e.model,e.serialNumber].some(v=>String(v||'').toLowerCase().includes(s)));
   const sc={OPERATIVO:'text-emerald-400',INOPERATIVO:'text-red-400',EN_MANTENIMIENTO:'text-amber-400'};
   $('list-fleet').innerHTML=l.map(e=>{
-    const n=backlogs.filter(b=>b.fleetId===e.id&&b.status!=='COMPLETADO').length,pn=pms.filter(p=>p.fleetId===e.id&&p.status!=='COMPLETADO').length;
+    const n=backlogs.filter(b=>b.fleetId===e.id&&bkOpen(b)).length,pn=pms.filter(p=>p.fleetId===e.id&&p.status!=='COMPLETADO').length;
     return `<div class="bg-slate-800 border border-slate-700 rounded-xl p-4">
       <div class="flex justify-between mb-2"><span class="bdg bg-amber-500/10 text-amber-400 border-amber-500/30">${esc(e.code)}</span><span class="text-xs font-semibold ${sc[e.status]||''}">${esc(e.status.replace('_',' '))}</span></div>
       <h4 class="font-bold" style="cursor:pointer" onclick="openEquip('${e.id}')">${esc(e.brand)} ${esc(e.model)}</h4>
@@ -294,22 +274,7 @@ function doFleetImport(){
   putMany('fleet',list).then(()=>note(`Se importaron ${n} equipo(s) a la flota.`));
 }
 
-/* ---------- Backlogs ---------- */
-function renderBack(){
-  const s=$('q').value.toLowerCase(),st=$('fs').value,cr=$('fc').value;
-  const l=backlogs.filter(b=>{const e=eqOf(b.fleetId);
-    return (!st||b.status===st)&&(!cr||b.criticality===cr)&&[b.id,e.code,b.component].some(v=>String(v||'').toLowerCase().includes(s))})
-    .sort((a,b)=>(a.status==='COMPLETADO')-(b.status==='COMPLETADO')||(a.scheduledDate||'').localeCompare(b.scheduledDate||''));
-  $('list-back').innerHTML=l.map(b=>{const e=eqOf(b.fleetId),d=delay(b);
-    return `<div class="bg-slate-800 border border-slate-700 rounded-xl p-4">
-      <div class="flex justify-between items-start gap-2"><div class="min-w-0"><span class="font-bold text-amber-400 text-sm">${esc(b.id)}</span><p class="text-xs text-slate-400 truncate">${esc(e.code)} · ${esc(e.brand)} ${esc(e.model)}</p></div><div class="flex gap-1 flex-wrap justify-end">${badge(CRIT,b.criticality)}${badge(STAT,b.status)}</div></div>
-      <p class="font-semibold mt-2">${esc(b.component)}</p><p class="text-xs text-slate-400">${esc(b.system)}</p>
-      <p class="text-xs mt-2 text-slate-400">Observado: <b class="text-slate-200">${fmtD(b.observationDate)}</b> · Programado: <b class="text-slate-200">${fmtD(b.scheduledDate)}</b></p>
-      <p class="text-xs mt-1 font-semibold ${d?'text-red-400':'text-slate-400'}">${d?'+'+d+' días de atraso':'A tiempo'}</p>
-      ${(b.rejectNote&&b.status==='EN_PROCESO')?`<p class="text-xs mt-2 text-red-400">⚠️ Devuelto por supervisor: ${esc(b.rejectNote)}</p>`:''}
-      <div class="cact flex gap-1 justify-end mt-3 flex-wrap">${backActs(b)}</div></div>`}).join('')||'<p class="text-slate-500 text-sm">Sin backlogs.</p>';
-  tblBack(l);
-}
+/* ---------- Fotos (backlogs, preventivos y paradas) ---------- */
 let tmp={before:[],after:[]};
 function photoBox(key,label){
   return `<div class="border border-slate-700 bg-slate-900/50 p-3 rounded-lg space-y-2"><p class="text-xs text-amber-400 font-semibold">📷 ${label} (máx. ${key==='stop'?5:3})</p>
@@ -327,36 +292,13 @@ async function addPhotos(inp,key){
   for(const f of inp.files){const mx=key==='stop'?5:3;if(tmp[key].length>=mx){note('Máximo '+mx+' fotos');break}if(!/^image\//.test(f.type)||f.size>20e6){note(f.name+': no es una imagen válida o pesa más de 20 MB');continue}const d=await compress(f);if(d)tmp[key].push(d)}
   inp.value='';pv(key);
 }
-function openBack(id){
-  const b=backlogs.find(x=>x.id===id)||{};if(!fleetIn('bk',b.fleetId).length){note(fleet.length?'Ningún equipo está habilitado en Backlogs (usa 🧩 Equipos).':'Primero registra un equipo en la pestaña Flota.');return}
-tmp={before:[...(b.photosBefore||[])],after:[]};const locked=b.status==='PENDIENTE_VALIDACION'||b.status==='COMPLETADO';
-  show(`<h3 class="font-bold mb-3">${id?'Editar backlog':'Nuevo backlog'}</h3>
-  <form onsubmit="saveBack(event,'${id||''}')" class="space-y-3">
-    <div class="grid sm:grid-cols-2 gap-3">${sel('fleetId','Equipo *',fleetIn('bk',b.fleetId).map(f=>[f.id,`${f.code} - ${f.brand} ${f.model}`]),b.fleetId)}
-    ${sel('system','Sistema afectado *',['Motor','Sistema Hidráulico','Transmisión','Tren de Rodaje','Sistema Eléctrico','Estructura/Cuchara','Frenos','Suspensión/Neumáticos','Sistema de Enfriamiento','Generador/Alternador','Iluminación','Carrocería/Cabina','Bomba/Cisterna'],b.system)}
-    ${field('component','Componente observado *',b.component,'required')}
-    ${sel('criticality','Criticidad *',[['ALTA','ALTA (inmediata)'],['MEDIA','MEDIA (programable)'],['BAJA','BAJA (monitoreo)']],b.criticality)}</div>
-    <label class="block text-xs text-slate-400 font-semibold">Descripción del hallazgo *<textarea maxlength="5000" name="description" required rows="3" class="inp mt-1 font-normal">${esc(b.description)}</textarea></label>
-    <div class="g2">${field('observationDate','Fecha de observación *',b.observationDate||today(),`required max="${today()}"`,'date')}${field('scheduledDate','Fecha programada *',b.scheduledDate||today(),'required','date')}</div>
-    <div class="g2">${field('cost','Costo ($)',b.cost??0,'min="0" step="0.01"','number')}
-    ${locked?`<label class="block text-xs text-slate-400 font-semibold">Estado (lo cambia el cierre y la validación)<input class="inp mt-1 font-normal" value="${esc(stLabel(b.status))}" disabled></label>`:sel('status','Estado',[['PENDIENTE','Pendiente'],['EN_PROCESO','En proceso']],b.status)}</div>
-    ${photoBox('before','Fotos del hallazgo (antes)')}${btns()}</form>`);
-  pv('before');
-}
-function saveBack(ev,id){
-  ev.preventDefault();const f=Object.fromEntries(new FormData(ev.target));
-  const old=backlogs.find(x=>x.id===id)||{};
-  const n={photosAfter:[],closeDate:'',closeTech:'',closeNotes:'',...old,...f,id:id||'BKL-'+Date.now().toString().slice(-7),cost:Number(f.cost||0),photosBefore:tmp.before};
-  put('backlogs',n);hide();
-}
-function delBack(id){if(!isAdmin())return;ask('¿Eliminar este backlog? Esta acción no se puede deshacer.',()=>del('backlogs',id))}
 function openClose(id){
-  const b=backlogs.find(x=>x.id===id);if(!b)return;tmp={before:[],after:[...(b.photosAfter||[])]};
-  show(`<h3 class="font-bold text-emerald-400">✅ Cierre del trabajo (técnico)</h3><p class="text-xs text-slate-400">${esc(b.id)} - ${esc(b.component)}</p><p class="text-xs text-amber-400 mb-3">Al confirmar, queda pendiente de validación del supervisor.</p>
+  const b=backlogs.find(x=>x.id===id);if(!b)return;if(!bkOpen(b)){note('Este backlog ya está cerrado o anulado.');return}tmp={before:[],after:[...(b.photosAfter||[])]};
+  show(`<h3 class="font-bold text-emerald-400">✅ Cerrar con reporte de mantenimiento</h3><p class="text-xs text-slate-400">${esc(b.id)} - ${esc(b.component)}</p><p class="text-xs text-amber-400 mb-3">Al confirmar, queda pendiente de validación del supervisor.</p>
   <form onsubmit="saveClose(event,'${id}')" class="space-y-3">
     <div class="g2">${field('closeDate','Fecha de cierre *',b.closeDate||today(),'required','date')}${field('closeTech','Técnico *',techVal(b.closeTech),'required'+techRo())}</div>
-    ${field('closeHours','Horómetro / odómetro del equipo al cierre *',b.closeHours??eqOf(b.fleetId).hours??'','required min="0" step="any" inputmode="decimal"','number')}
-    <label class="block text-xs text-slate-400 font-semibold">Notas de reparación<textarea maxlength="5000" name="closeNotes" rows="2" class="inp mt-1 font-normal">${esc(b.closeNotes)}</textarea></label>
+    <div class="g2">${field('closeHours','Horómetro / odómetro al cierre *',b.closeHours??eqOf(b.fleetId).hours??'','required min="0" step="any" inputmode="decimal"','number')}${field('downtimeH','Horas fuera de servicio',b.downtimeH??'','min="0" step="0.1" inputmode="decimal" placeholder="Tiempo detenido por este trabajo"','number')}</div>
+    <label class="block text-xs text-slate-400 font-semibold">Trabajo realizado *<textarea maxlength="5000" name="closeNotes" rows="3" required class="inp mt-1 font-normal" placeholder="Qué se hizo, repuestos cambiados, pruebas realizadas">${esc(b.closeNotes)}</textarea></label>
     ${photoBox('after','Evidencia de reparación (después)')}${sigBox('Firma del técnico')}
     ${btns('hide()','Enviar a validación','bg-emerald-500')}</form>`);
   pv('after');sigInit(b.closeSignature||mySig());
@@ -366,27 +308,10 @@ function saveClose(ev,id){
   if(!sig.drawn){note('Falta la firma del técnico. Firma dentro del recuadro blanco antes de confirmar el cierre.');return}
   const hrs=Number(f.closeHours),eq=fleet.find(x=>x.id===b.fleetId);
   if(eq&&hrs>(Number(eq.hours)||0))put('fleet',{...eq,hours:hrs});
-  put('backlogs',{...b,...f,closeHours:hrs,status:'PENDIENTE_VALIDACION',photosAfter:tmp.after,closeSignature:sigData(),closePos:posOf(f.closeTech),supName:'',supDate:'',supNotes:'',supSignature:''});note('Cierre registrado. El backlog quedó PENDIENTE POR VALIDACIÓN del supervisor.');
+  put('backlogs',{...b,...f,closeHours:hrs,downtimeH:f.downtimeH===''?'':Number(f.downtimeH),status:'PENDIENTE_VALIDACION',photosAfter:tmp.after,closeSignature:sigData(),closePos:posOf(f.closeTech),supName:'',supDate:'',supNotes:'',supSignature:'',log:bkLog(b,'Cerrado con reporte por '+f.closeTech+' · pasa a validación del supervisor')});
+  if(bkDetId===id)setTimeout(()=>bkDetail(id),80);else note('Cierre registrado. El backlog quedó PENDIENTE POR VALIDACIÓN del supervisor.');
 }
-function openDetail(id){
-  const b=backlogs.find(x=>x.id===id);if(!b)return;const e=eqOf(b.fleetId),d=delay(b);
-  const ph=a=>(a&&a.length)?a.map(s=>`<img src="${esc(s)}" class="w-24 h-24 object-cover rounded border border-slate-700">`).join(''):'<p class="text-xs text-slate-500">Sin imágenes</p>';
-  show(`<div class="flex justify-between items-start"><div><span class="text-xs font-bold text-amber-400">${esc(b.id)}</span><h3 class="text-lg font-bold">${esc(b.component)}</h3>
-  <p class="text-xs text-slate-400">${esc(e.code)} (${esc(e.brand)} ${esc(e.model)} · S/N ${esc(e.serialNumber)})</p></div><button onclick="hide()" class="text-slate-400 text-xl">✕</button></div>
-  <div class="grid grid-cols-2 gap-2 text-xs bg-slate-900 p-3 rounded-lg my-3"><div><span class="text-slate-400 block">Sistema</span>${esc(b.system)}</div><div><span class="text-slate-400 block">Criticidad</span>${badge(CRIT,b.criticality)}</div>
-  <div><span class="text-slate-400 block">Estado</span>${badge(STAT,b.status)}</div><div><span class="text-slate-400 block">Atraso</span>${d?d+' días':'Al día'}</div>
-  <div><span class="text-slate-400 block">Costo est.</span>$${(b.cost||0).toLocaleString()}</div><div><span class="text-slate-400 block">Observado</span>${fmtD(b.observationDate)}</div><div><span class="text-slate-400 block">Programado</span>${fmtD(b.scheduledDate)}</div></div>
-  <p class="text-sm bg-slate-900/50 p-3 rounded-lg border border-slate-700">${esc(b.description)}</p>
-  ${(b.status==='COMPLETADO'||b.status==='PENDIENTE_VALIDACION')?`<div class="bg-emerald-950/30 border border-emerald-500/30 p-3 rounded-lg text-xs mt-3"><b class="text-emerald-400">Cierre del técnico:</b> ${fmtD(b.closeDate)} · ${esc(b.closeTech)}${b.closePos?' ('+esc(b.closePos)+')':''}${b.closeHours!=null&&b.closeHours!==''?` · Horómetro: <b>${esc(b.closeHours)}</b>`:''}${b.closeNotes?`<p class="mt-1 text-slate-300">${esc(b.closeNotes)}</p>`:''}</div>`:''}
-  ${b.supName?`<div class="bg-emerald-950/30 border border-emerald-500/30 p-3 rounded-lg text-xs mt-3"><b class="text-emerald-400">Validado por el supervisor:</b> ${esc(b.supName)}${b.supPos?' ('+esc(b.supPos)+')':''} · ${fmtD(b.supDate)}${b.supNotes?`<p class="mt-1 text-slate-300">${esc(b.supNotes)}</p>`:''}</div>`:''}
-  ${(b.rejectNote&&b.status==='EN_PROCESO')?`<div class="bg-red-500/10 border border-red-500/30 p-3 rounded-lg text-xs mt-3"><b class="text-red-400">Devuelto por el supervisor${b.rejectBy?' ('+esc(b.rejectBy)+')':''}:</b><p class="mt-1 text-slate-300">${esc(b.rejectNote)}</p></div>`:''}
-  <h4 class="text-xs text-slate-400 uppercase mt-3 mb-1">Antes</h4><div class="flex flex-wrap gap-2">${ph(b.photosBefore)}</div>
-  <h4 class="text-xs text-slate-400 uppercase mt-3 mb-1">Después</h4><div class="flex flex-wrap gap-2">${ph(b.photosAfter)}</div>
-  ${b.closeSignature?`<h4 class="text-xs text-slate-400 uppercase mt-3 mb-1">Firma del técnico</h4><img src="${esc(b.closeSignature)}" style="height:5rem" class="bg-white rounded">`:''}
-  ${b.supSignature?`<h4 class="text-xs text-slate-400 uppercase mt-3 mb-1">Firma del supervisor</h4><img src="${esc(b.supSignature)}" style="height:5rem" class="bg-white rounded">`:''}
-  <div class="flex justify-end mt-4"><button onclick="makePdf('${b.id}')" class="btn bg-amber-500 text-slate-950">📄 Generar orden de trabajo (PDF)</button></div>`);
-}
-
+function openDetail(id){bkDetail(id)}
 
 /* ---------- Firma digital (precargada desde el perfil del personal) ---------- */
 let sig={c:null,x:null,drawn:false,down:false,dirty:false,src:''};
@@ -443,11 +368,11 @@ function makePdf(id){
   const J=window.jspdf&&window.jspdf.jsPDF;
   if(!J){note('No se pudo cargar el generador de PDF. Revisa tu conexión a internet y recarga la página.');return}
   const e=eqOf(b.fleetId),d=delay(b),doc=new J({unit:'mm',format:'a4'}),W=210,M=15,done=b.status==='COMPLETADO'||b.status==='PENDIENTE_VALIDACION';
-  const ot='OT-'+String(b.id).replace(/^BKL-/,'');let y=0;
+  const ot=b.ot&&b.ot.num?b.ot.num:'OT-'+String(b.id).replace(/^BKL-/,'');let y=0;
   const need=h=>{if(y+h>280){doc.addPage();y=M+4}};
   doc.setFillColor(15,23,42);doc.rect(0,0,W,28,'F');doc.setTextColor(255,255,255);
   doc.setFont('helvetica','bold');doc.setFontSize(17);doc.text('ORDEN DE TRABAJO',M,13);
-  doc.setFont('helvetica','normal');doc.setFontSize(10);doc.text('Mantenimiento de maquinaria y flota',M,20);
+  doc.setFont('helvetica','normal');doc.setFontSize(10);doc.text('Backlog '+b.id+' - '+eqOf(b.fleetId).code,M,20);
   doc.setFont('helvetica','bold');doc.setFontSize(14);doc.text(ot,W-M,13,{align:'right'});
   doc.setFont('helvetica','normal');doc.setFontSize(9);doc.text('Emitida: '+fmtD(today()),W-M,20,{align:'right'});
   y=37;
@@ -459,13 +384,15 @@ function makePdf(id){
   row('Codigo:',e.code);row('Equipo:',(e.brand||'')+' '+(e.model||''));row('Nº de serie:',e.serialNumber);
   row('Categoria:',e.category);row('Horometro / Odometro:',e.hours!=null?e.hours:'-');row('Ubicacion / Frente:',e.location);row('Estado operativo:',e.status?String(e.status).replace('_',' '):'-');
   y+=2;sec('DATOS DEL BACKLOG');
-  row('Codigo backlog:',b.id);row('Sistema afectado:',b.system);row('Componente:',b.component);row('Criticidad:',b.criticality);
-  row('Estado:',stLabel(b.status));row('Fecha de observacion:',fmtD(b.observationDate));row('Fecha programada:',fmtD(b.scheduledDate));row('Atraso:',d?d+' dias':'A tiempo');row('Costo estimado:','$ '+(b.cost||0).toLocaleString());
-  y+=2;sec('DESCRIPCION DEL HALLAZGO');para(b.description);
-  if(done){y+=1;sec('CIERRE DEL TECNICO');row('Fecha de cierre:',fmtD(b.closeDate));row('Horometro al cierre:',b.closeHours!=null&&b.closeHours!==''?b.closeHours:'-');row('Tecnico responsable:',b.closeTech);y+=1;doc.setFont('helvetica','bold');doc.setFontSize(9.5);need(6);doc.text('Notas de reparacion:',M+2,y);y+=5;para(b.closeNotes||'Sin observaciones.')}
+  row('Codigo backlog:',b.id);row('Sistema afectado:',b.system);row('Componente:',b.component);row('Prioridad:',(PR_L[b.criticality]||b.criticality)+' ('+(PLAZO[b.criticality]||7)+' dias)');row('Tipo de trabajo:',b.workType);
+  row('Estado:',stLabel(b.status));row('Detectado:',fmtD(b.observationDate)+(b.detectedBy?' por '+b.detectedBy:''));row('Fuente:',b.source);row('Fecha limite:',fmtD(bkLimit(b))+(d?' (fuera de plazo '+d+' dias)':''));row('Requiere parada:',b.needsStop?'Si':'No');if(b.hh)row('HH estimadas:',b.hh);if(b.cost)row('Costo estimado:','$ '+(b.cost||0).toLocaleString());
+  y+=2;sec('DESCRIPCION DE LA OBSERVACION');para(b.description);
+  if(b.ot){const o=b.ot;y+=1;sec('ORDEN DE TRABAJO');row('N° de OT:',o.num);row('Apertura:',fmtD(o.date));row('Elaborado por:',o.by);row('Aprobado por:',o.approved);row('Responsable:',o.resp);row('Especialidad:',o.esp);row('Lugar:',o.place);row('Programado:',fmtD(o.start)+' al '+fmtD(o.end));row('Seguridad:',[o.loto?'Bloqueo y etiquetado':'',o.ats?'ATS / IPERC':''].filter(Boolean).join(' / ')||'-');doc.setFont('helvetica','bold');doc.setFontSize(9.5);need(6);doc.text('Actividades a ejecutar:',M+2,y);y+=5;para(o.acts)}
+  if((b.reqs||[]).length){y+=1;sec('REQUERIMIENTOS DE REPUESTOS Y SERVICIOS');b.reqs.forEach(r=>row((r.type==='S'?'Servicio ':'Repuesto ')+r.num+':',[r.desc,r.provider,'solicitado '+fmtD(r.reqDate),'estimado '+fmtD(r.estDate),RQ_ST[r.st]?RQ_ST[r.st].l:r.st].filter(Boolean).join(' - ')))}
+  if(done){y+=1;sec('REPORTE DE CIERRE (TECNICO)');row('Fecha de cierre:',fmtD(b.closeDate));row('Horometro al cierre:',b.closeHours!=null&&b.closeHours!==''?b.closeHours:'-');if(b.downtimeH)row('Horas fuera de servicio:',b.downtimeH);row('Tecnico responsable:',b.closeTech);y+=1;doc.setFont('helvetica','bold');doc.setFontSize(9.5);need(6);doc.text('Trabajo realizado:',M+2,y);y+=5;para(b.closeNotes||'Sin observaciones.')}
   if(b.supName){y+=1;sec('VALIDACION DEL SUPERVISOR');row('Supervisor:',b.supName);row('Fecha de validacion:',fmtD(b.supDate));if(b.supNotes){doc.setFont('helvetica','bold');doc.setFontSize(9.5);need(6);doc.text('Observaciones:',M+2,y);y+=5;para(b.supNotes)}}
   else if(b.status==='PENDIENTE_VALIDACION'){y+=1;sec('VALIDACION DEL SUPERVISOR');row('Estado:','Pendiente de validacion por el supervisor')}
-  if(b.rejectNote&&b.status==='EN_PROCESO'){y+=1;sec('TRABAJO DEVUELTO POR EL SUPERVISOR');row('Supervisor:',b.rejectBy);row('Fecha:',fmtD(b.rejectDate));para(b.rejectNote)}
+  if(b.rejectNote&&b.status==='EN_EJECUCION'){y+=1;sec('TRABAJO DEVUELTO POR EL SUPERVISOR');row('Supervisor:',b.rejectBy);row('Fecha:',fmtD(b.rejectDate));para(b.rejectNote)}
   const photos=(t,a)=>{
     if(!a||!a.length)return;sec(t);const w=42,h=32,g=4;let x=M+2;need(h+4);
     a.forEach(src=>{if(x+w>W-M+1){x=M+2;y+=h+g;need(h+4)}try{doc.addImage(src,'JPEG',x,y,w,h)}catch(_){}x+=w+g});y+=h+6;
@@ -495,7 +422,7 @@ function renderSup(){
   const done=backlogs.filter(b=>b.status==='COMPLETADO'&&b.supName).length+pms.filter(p=>p.status==='COMPLETADO'&&p.supName).length;
   el.innerHTML=`<div class="bg-slate-800 border border-slate-700 rounded-xl p-3 flex justify-between items-center gap-2"><div><h3 class="font-bold">🛡️ Validación del supervisor</h3><p class="text-xs text-slate-400">${pend.length+pendPm.length} por validar · ${done} validados</p></div></div>
   ${pend.length?'<h4 class="text-xs text-slate-400 uppercase">Backlogs</h4>':''}<div class="grid gap-3 md:grid-cols-2">${pend.map(b=>{const e=eqOf(b.fleetId);
-    return `<div class="bg-slate-800 border border-slate-700 rounded-xl p-4"><div class="flex justify-between items-start gap-2"><div class="min-w-0"><span class="font-bold text-amber-400 text-sm">${esc(b.id)}</span><p class="text-xs text-slate-400 truncate">${esc(e.code)} · ${esc(e.brand)} ${esc(e.model)}</p></div>${badge(CRIT,b.criticality)}</div>
+    return `<div class="bg-slate-800 border border-slate-700 rounded-xl p-4"><div class="flex justify-between items-start gap-2"><div class="min-w-0"><span class="font-bold text-amber-400 text-sm">${esc(b.id)}</span><p class="text-xs text-slate-400 truncate">${esc(e.code)} · ${esc(e.brand)} ${esc(e.model)}</p></div>${bkPrBadge(b.criticality)}</div>
     <p class="font-semibold mt-2">${esc(b.component)}</p><p class="text-xs text-slate-400">${esc(b.system)}</p>
     <p class="text-xs mt-2 text-slate-400">Cerrado por <b class="text-slate-200">${esc(b.closeTech)}</b> el <b class="text-slate-200">${fmtD(b.closeDate)}</b>${b.closeHours!=null&&b.closeHours!==''?` · Horómetro: <b class="text-slate-200">${esc(b.closeHours)}</b>`:''}</p>
     <div class="flex justify-end mt-3"><button onclick="openValidate('${b.id}')" class="btn bg-amber-500 text-slate-950 !py-1">🔎 Revisar y validar</button></div></div>`}).join('')}</div>
@@ -508,8 +435,8 @@ function openValidate(id){
   let last='';try{last=sessionStorage.getItem('supName')||''}catch(_){}
   show(`<div class="flex justify-between items-start"><div><span class="text-xs font-bold text-amber-400">${esc(b.id)}</span><h3 class="text-lg font-bold">${esc(b.component)}</h3>
   <p class="text-xs text-slate-400">${esc(e.code)} (${esc(e.brand)} ${esc(e.model)} · S/N ${esc(e.serialNumber)})</p></div><button type="button" onclick="hide()" class="text-slate-400 text-xl">✕</button></div>
-  <div class="grid grid-cols-2 gap-2 text-xs bg-slate-900 p-3 rounded-lg my-3"><div><span class="text-slate-400 block">Sistema</span>${esc(b.system)}</div><div><span class="text-slate-400 block">Criticidad</span>${badge(CRIT,b.criticality)}</div>
-  <div><span class="text-slate-400 block">Observado</span>${fmtD(b.observationDate)}</div><div><span class="text-slate-400 block">Programado</span>${fmtD(b.scheduledDate)}</div></div>
+  <div class="grid grid-cols-2 gap-2 text-xs bg-slate-900 p-3 rounded-lg my-3"><div><span class="text-slate-400 block">Sistema</span>${esc(b.system)}</div><div><span class="text-slate-400 block">Prioridad</span>${bkPrBadge(b.criticality)}</div>
+  <div><span class="text-slate-400 block">Detectado</span>${fmtD(b.observationDate)}</div><div><span class="text-slate-400 block">Fecha límite</span>${fmtD(bkLimit(b))}</div>${b.ot?`<div><span class="text-slate-400 block">OT</span>${esc(b.ot.num)}</div>`:''}${b.downtimeH?`<div><span class="text-slate-400 block">Horas fuera de servicio</span>${esc(b.downtimeH)} h</div>`:''}</div>
   <p class="text-xs text-slate-400 uppercase mb-1">Hallazgo</p><p class="text-sm bg-slate-900/50 p-3 rounded-lg border border-slate-700">${esc(b.description)}</p>
   <div class="bg-emerald-950/30 border border-emerald-500/30 p-3 rounded-lg text-xs mt-3"><b class="text-emerald-400">Trabajo del técnico:</b> ${esc(b.closeTech)} · ${fmtD(b.closeDate)}${b.closeHours!=null&&b.closeHours!==''?` · Horómetro: <b>${esc(b.closeHours)}</b>`:''}${b.closeNotes?`<p class="mt-1 text-slate-300">${esc(b.closeNotes)}</p>`:'<p class="mt-1 text-slate-500">Sin notas de reparación.</p>'}</div>
   <h4 class="text-xs text-slate-400 uppercase mt-3 mb-1">Antes</h4><div class="flex flex-wrap gap-2">${ph(b.photosBefore)}</div>
@@ -532,10 +459,10 @@ function decide(id,how){
   const name=me.name,notes=(f.supNotes||'').trim();try{sessionStorage.setItem('supName',name)}catch(_){}
   if(how==='ok'){
     if(!sig.drawn){supErr('Falta la firma del supervisor para aprobar y cerrar el backlog.');return}
-    put('backlogs',{...b,status:'COMPLETADO',supName:name,supPos:me.position||'',supDate:f.supDate,supNotes:notes,supSignature:sigData(),rejectNote:'',rejectBy:'',rejectDate:''});hide();
+    put('backlogs',{...b,status:'COMPLETADO',supName:name,supPos:me.position||'',supDate:f.supDate,supNotes:notes,supSignature:sigData(),rejectNote:'',rejectBy:'',rejectDate:'',log:bkLog(b,'Validado y cerrado por '+name)});hide();
   }else{
     if(!notes){supErr('Escribe en Observaciones el motivo por el que devuelves el trabajo al técnico.');return}
-    put('backlogs',{...b,status:'EN_PROCESO',rejectNote:notes,rejectBy:name,rejectDate:f.supDate,closeSignature:'',closeDate:'',supName:'',supDate:'',supNotes:'',supSignature:''});hide();
+    put('backlogs',{...b,status:'EN_EJECUCION',rejectNote:notes,rejectBy:name,rejectDate:f.supDate,closeSignature:'',closeDate:'',supName:'',supDate:'',supNotes:'',supSignature:'',log:bkLog(b,'Devuelto al técnico por '+name+': '+notes)});hide();
   }
 }
 
@@ -1481,7 +1408,7 @@ function pendItems(){
     backlogs.filter(b=>b.status==='PENDIENTE_VALIDACION').forEach(b=>{const e=eqOf(b.fleetId);L.push(pRow('val',1,`${pTag('val')}<b class="text-amber-400">${esc(e.code)}</b> <span class="text-slate-300">${esc(b.component)}</span><p class="text-xs text-slate-400">Backlog ${esc(b.id)} esperando validación</p>`,`<button onclick="openValidate('${b.id}')" class="btn bg-violet-500/20 text-violet-300 !py-1">Revisar</button>`))});
     pms.filter(p=>p.status==='PENDIENTE_VALIDACION').forEach(p=>{const e=eqOf(p.fleetId);L.push(pRow('val',1,`${pTag('val')}<b class="text-amber-400">${esc(e.code)}</b> <span class="text-slate-300">${esc(p.plan)}</span><p class="text-xs text-slate-400">Preventivo esperando validación</p>`,`<button onclick="openValidatePm('${p.id}')" class="btn bg-violet-500/20 text-violet-300 !py-1">Revisar</button>`))});
   }
-  bkOpenSorted().forEach(b=>{const e=eqOf(b.fleetId),d=delay(b),ret=b.rejectNote&&b.status==='EN_PROCESO',sev=ret?0:b.criticality==='ALTA'?1:d?2:3;
+  bkOpenSorted().forEach(b=>{const e=eqOf(b.fleetId),d=delay(b),ret=b.rejectNote&&b.status==='EN_EJECUCION',sev=ret?0:b.criticality==='ALTA'?1:d?2:3;
     L.push(pRow('bk',sev,`${pTag('bk')}<b class="text-amber-400">${esc(e.code)}</b> <span class="text-slate-300">${esc(b.component)}</span><p class="text-xs ${ret||d?'text-red-400':'text-slate-400'}">${ret?'⚠️ Devuelto: '+esc(b.rejectNote):(d?'+'+d+' d de atraso · ':'')+esc(b.criticality)+' · '+(STL[b.status]||b.status)}</p>`,`<button onclick="openClose('${b.id}')" class="btn bg-emerald-500/20 text-emerald-400 !py-1">✅ Cerrar</button>`))});
   pms.filter(p=>p.status==='PROGRAMADO'&&p.scheduledDate&&(pmOver(p)||daysTo(p.scheduledDate)<=7)).sort((a,b)=>a.scheduledDate.localeCompare(b.scheduledDate)).forEach(p=>{const e=eqOf(p.fleetId),o=pmOver(p);
     L.push(pRow('pm',o?0:3,`${pTag('pm')}<b class="text-amber-400">${esc(e.code)}</b> <span class="text-slate-300">${esc(p.plan)}</span><p class="text-xs ${o?'text-red-400':'text-slate-400'}">${fmtD(p.scheduledDate)} · ${pmWhen(p)}</p>`,`<button onclick="openClosePm('${p.id}')" class="btn bg-emerald-500/20 text-emerald-400 !py-1">✅ Cerrar OT</button>`))});
@@ -1500,7 +1427,7 @@ function dashPend(){
   ${L.length?L.slice(0,pendLim).map(x=>x.html).join('')+(L.length>pendLim?`<button onclick="pendMore()" class="btn bg-slate-700 w-full">Ver ${Math.min(10,L.length-pendLim)} más (${L.length-pendLim} restantes)</button>`:''):dEmpty('✅ Todo al día. No hay pendientes aquí.')}</div>`;
 }
 function dashKpis(){
-  const o=stOpen().length,alta=backlogs.filter(b=>b.status!=='COMPLETADO'&&b.criticality==='ALTA').length,venc=pms.filter(pmOver).length,pv=isSup()?backlogs.filter(b=>b.status==='PENDIENTE_VALIDACION').length+pms.filter(p=>p.status==='PENDIENTE_VALIDACION').length:0,gv=grCount('VENCIDO'),tc=trCount('CAMBIO');
+  const o=stOpen().length,alta=backlogs.filter(b=>bkOpen(b)&&b.criticality==='ALTA').length,venc=pms.filter(pmOver).length,pv=isSup()?backlogs.filter(b=>b.status==='PENDIENTE_VALIDACION').length+pms.filter(p=>p.status==='PENDIENTE_VALIDACION').length:0,gv=grCount('VENCIDO'),tc=trCount('CAMBIO');
   const k=(n,l,c,f)=>`<button onclick="${f}" style="text-align:left;background:#1e293b;border:1px solid ${n?c+'66':'#334155'};border-radius:.75rem;padding:.4rem .6rem;flex:0 0 auto;min-width:96px"><span style="display:block;font-size:20px;font-weight:800;line-height:1.1;color:${n?c:'#64748b'}">${n}</span><span style="display:block;font-size:11px;color:#94a3b8">${l}</span></button>`;
   return `<div class="kpis">${k(o,'Paradas abiertas','#f87171',"pendSet('par')")}${isSup()?k(pv,'Por validar','#c4b5fd',"pendSet('val')"):''}${k(alta,'Backlogs críticos','#f87171',"pendSet('bk')")}${k(venc,'Preventivos vencidos','#f87171',"pendSet('pm')")}${k(gv,'Engrase vencido','#fbbf24',"pendSet('gr')")}${k(tc,'Neumát. a cambiar','#fb923c',"pendSet('tr')")}</div>`;
 }
@@ -1515,20 +1442,17 @@ function dashValidar(){
   if(!isSup())return '';
   const l=[...backlogs.filter(b=>b.status==='PENDIENTE_VALIDACION').map(b=>({t:'Backlog '+b.id,e:eqOf(b.fleetId),x:b.component,f:`openValidate('${b.id}')`})),...pms.filter(p=>p.status==='PENDIENTE_VALIDACION').map(p=>({t:'Preventivo',e:eqOf(p.fleetId),x:p.plan,f:`openValidatePm('${p.id}')`}))];
   return dCard('🛡️ Esperan tu validación ('+l.length+')',l.length?l.slice(0,8).map(o=>dRow(`<b class="text-amber-400">${esc(o.e.code)}</b> <span class="text-slate-300">${esc(o.x||'')}</span><p class="text-xs text-slate-400">${o.t}</p>`,`<button onclick="${o.f}" class="btn bg-violet-500/20 text-violet-300 !py-1">Revisar</button>`)).join('')+(l.length>8?`<button onclick="tab('sup')" class="btn bg-slate-700 !py-1">Ver todos</button>`:''):dEmpty('✅ Nada pendiente de validar.'))}
-const bkRow=b=>{const e=eqOf(b.fleetId),d=delay(b),ret=b.rejectNote&&b.status==='EN_PROCESO';
-  return dRow(`<b class="text-amber-400">${esc(e.code)}</b> <span class="text-slate-300">${esc(b.component)}</span><p class="text-xs ${ret?'text-red-400':d?'text-red-400':'text-slate-400'}">${ret?'⚠️ Devuelto: '+esc(b.rejectNote):(d?'+'+d+' d de atraso · ':'')+esc(b.criticality)+' · '+(STL[b.status]||b.status)}</p>`,(b.status==='PENDIENTE'||b.status==='EN_PROCESO')?`<button onclick="openClose('${b.id}')" class="btn bg-emerald-500/20 text-emerald-400 !py-1">✅ Cerrar</button>`:`<button onclick="openDetail('${b.id}')" class="btn bg-slate-700 !py-1">👁️</button>`)};
+const bkRow=b=>{const e=eqOf(b.fleetId),d=delay(b),ret=b.rejectNote&&b.status==='EN_EJECUCION';
+  return dRow(`<b class="text-amber-400">${esc(e.code)}</b> <span class="text-slate-300">${esc(b.component)}</span><p class="text-xs ${ret?'text-red-400':d?'text-red-400':'text-slate-400'}">${ret?'⚠️ Devuelto: '+esc(b.rejectNote):(d?'+'+d+' d de atraso · ':'')+esc(b.criticality)+' · '+(STL[b.status]||b.status)}</p>`,bkOpen(b)?`<button onclick="openClose('${b.id}')" class="btn bg-emerald-500/20 text-emerald-400 !py-1">✅ Cerrar</button>`:`<button onclick="openDetail('${b.id}')" class="btn bg-slate-700 !py-1">👁️</button>`)};
 const pmRow=p=>{const e=eqOf(p.fleetId),o=pmOver(p);
   return dRow(`<b class="text-amber-400">${esc(e.code)}</b> <span class="text-slate-300">${esc(p.plan)}</span><p class="text-xs ${o?'text-red-400':'text-slate-400'}">${fmtD(p.scheduledDate)} · ${pmWhen(p)}</p>`,p.status==='PROGRAMADO'?`<button onclick="openClosePm('${p.id}')" class="btn bg-emerald-500/20 text-emerald-400 !py-1">✅ Cerrar OT</button>`:`<button onclick="openDetailPm('${p.id}')" class="btn bg-slate-700 !py-1">👁️</button>`)};
-const bkOpenSorted=()=>backlogs.filter(b=>b.status==='PENDIENTE'||b.status==='EN_PROCESO').sort((a,b)=>(!!(b.rejectNote&&b.status==='EN_PROCESO'))-(!!(a.rejectNote&&a.status==='EN_PROCESO'))||(CR_O[a.criticality]??3)-(CR_O[b.criticality]??3)||delay(b)-delay(a));
+const bkOpenSorted=()=>backlogs.filter(bkOpen).sort((a,b)=>(!!(b.rejectNote&&b.status==='EN_EJECUCION'))-(!!(a.rejectNote&&a.status==='EN_EJECUCION'))||(CR_O[a.criticality]??3)-(CR_O[b.criticality]??3)||delay(b)-delay(a));
 const pmSoon=()=>pms.filter(p=>p.status==='PROGRAMADO'&&p.scheduledDate&&daysTo(p.scheduledDate)<=7).sort((a,b)=>a.scheduledDate.localeCompare(b.scheduledDate));
 function renderDashTec(){
   const wait=backlogs.filter(b=>b.status==='PENDIENTE_VALIDACION'&&b.closeUid===me.uid).length+pms.filter(p=>p.status==='PENDIENTE_VALIDACION'&&p.closeUid===me.uid).length;
   $('v-dash').innerHTML=dashHello()+dashQuick()+dashKpis()+(wait?`<div class="bg-violet-500/10 border border-violet-500/30 rounded-xl p-3 text-sm text-violet-300">⏳ Tienes ${wait} cierre(s) esperando validación del supervisor.</div>`:'')+dashPend();
 }
-function renderDashSup(){
-  const open=backlogs.filter(b=>b.status!=='COMPLETADO');
-  $('v-dash').innerHTML=dashHello()+dashQuick()+dashKpis()+`<div class="dsplit">`+dashPend()+pmUpcomingHtml()+`</div>`;
-}
+function renderDashSup(){$('v-dash').innerHTML=dashBk()+dashOther()}
 
 /* ---------- Registro rápido (+) ---------- */
 function quickAdd(){
@@ -1559,7 +1483,7 @@ let eqTab='res';
 const EQ_TABS=[['res','Resumen'],['bk','Backlogs'],['pm','Preventivos'],['gr','Engrase'],['tr','Neumáticos'],['his','Historial']];
 function openEquip(id,t){
   const e=fleet.find(x=>x.id===id);if(!e)return;eqTab=t||'res';
-  const bks=backlogs.filter(b=>b.fleetId===id),pmx=pms.filter(q=>q.fleetId===id),op=bks.filter(b=>b.status!=='COMPLETADO'),sc={OPERATIVO:'text-emerald-400',INOPERATIVO:'text-red-400',EN_MANTENIMIENTO:'text-amber-400'};
+  const bks=backlogs.filter(b=>b.fleetId===id),pmx=pms.filter(q=>q.fleetId===id),op=bks.filter(bkOpen),sc={OPERATIVO:'text-emerald-400',INOPERATIVO:'text-red-400',EN_MANTENIMIENTO:'text-amber-400'};
   const g=grStatus(e),mt=trMounted(id),poss=trPositions(e),box='bg-slate-900/50 border border-slate-700 rounded-lg p-3 text-sm';
   let body='';
   if(eqTab==='res'){
@@ -1570,10 +1494,10 @@ function openEquip(id,t){
      ${c('Próximo preventivo',nx?`<b class="text-blue-400">${fmtD(nx.scheduledDate)}</b>`:'<span class="text-slate-500">Sin programar</span>',nx?esc(nx.plan)+' · '+pmWhen(nx):'')}
      ${c('Engrase',grBadge(g.k),grLines(g)[0]||'')}
      ${c('Neumáticos','<b class="text-xl">'+mt.length+'/'+poss.length+'</b> <span class="text-xs text-slate-400">montados</span>',(cnt.CAMBIO?cnt.CAMBIO+' para cambiar · ':'')+(cnt.ALERTA?cnt.ALERTA+' en alerta · ':'')+(cnt.SINMED?cnt.SINMED+' por medir':''))}</div>
-     <div class="flex gap-2 flex-wrap mt-3"><button onclick="hide();openBack();setTimeout(()=>{const s=document.querySelector('#modal select[name=fleetId]');if(s)s.value='${id}'},30)" class="btn bg-amber-500/20 text-amber-400">🔧 Nuevo backlog</button><button onclick="openStop('','start','${id}')" class="btn bg-slate-700">🛑 Iniciar parada</button><button onclick="openHours('${id}')" class="btn bg-slate-700">⏱️ Horómetro</button><button onclick="openGrease('${id}')" class="btn bg-slate-700">🛢️ Engrase</button><button onclick="trFid='${id}';openMeasure('${id}')" class="btn bg-slate-700">📏 Medir</button></div>`;
+     <div class="flex gap-2 flex-wrap mt-3"><button onclick="hide();openBack();setTimeout(()=>{const s=document.querySelector('#modal select[name=fleetId]');if(s){s.value='${id}';s.onchange&&s.onchange()}},30)" class="btn bg-amber-500/20 text-amber-400">🔧 Nuevo backlog</button><button onclick="openStop('','start','${id}')" class="btn bg-slate-700">🛑 Iniciar parada</button><button onclick="openHours('${id}')" class="btn bg-slate-700">⏱️ Horómetro</button><button onclick="openGrease('${id}')" class="btn bg-slate-700">🛢️ Engrase</button><button onclick="trFid='${id}';openMeasure('${id}')" class="btn bg-slate-700">📏 Medir</button></div>`;
   }else if(eqTab==='bk'){
-    const l=[...bks].sort((a,b)=>(a.status==='COMPLETADO')-(b.status==='COMPLETADO')||(a.scheduledDate||'').localeCompare(b.scheduledDate||''));
-    body=l.map(b=>`<div class="${box} flex justify-between items-center gap-2"><div class="min-w-0"><b class="text-amber-400">${esc(b.id)}</b> <span class="text-slate-300">${esc(b.component)}</span><p class="text-xs text-slate-400">${badge(CRIT,b.criticality)} ${esc(STL[b.status]||b.status)} · prog. ${fmtD(b.scheduledDate)}</p></div><div class="flex gap-1"><button onclick="openDetail('${b.id}')" class="btn bg-slate-700 !py-1">👁️</button>${(b.status==='PENDIENTE'||b.status==='EN_PROCESO')?`<button onclick="openClose('${b.id}')" class="btn bg-emerald-500/20 text-emerald-400 !py-1">✅</button>`:''}</div></div>`).join('')||dEmpty('Sin backlogs para este equipo.');
+    const l=[...bks].sort((a,b)=>bkOpen(b)-bkOpen(a)||(b.observationDate||'').localeCompare(a.observationDate||''));
+    body=l.map(b=>`<div class="${box} flex justify-between items-center gap-2"><div class="min-w-0"><b class="text-amber-400">${esc(b.id)}</b> <span class="text-slate-300">${esc(b.component)}</span><p class="text-xs text-slate-400">${bkPrBadge(b.criticality)} ${bkStBadge(b.status)} · ${fmtD(b.observationDate)} · ${bkAge(b)} d${bkVenc(b)?' <b class="text-red-400">VENCIDO</b>':''}</p></div><div class="flex gap-1"><button onclick="openDetail('${b.id}')" class="btn bg-slate-700 !py-1">👁️</button>${bkOpen(b)?`<button onclick="openClose('${b.id}')" class="btn bg-emerald-500/20 text-emerald-400 !py-1">✅</button>`:''}</div></div>`).join('')||dEmpty('Sin backlogs para este equipo.');
   }else if(eqTab==='pm'){
     const l=[...pmx].sort((a,b)=>(b.scheduledDate||'').localeCompare(a.scheduledDate||''));
     body=l.map(q=>`<div class="${box} flex justify-between items-center gap-2"><div class="min-w-0"><b class="text-slate-200">${esc(q.plan)}</b><p class="text-xs text-slate-400">${pmBadge(pmKey(q))} ${fmtD(q.scheduledDate)} ${pmWhen(q)}</p></div><div class="flex gap-1"><button onclick="openDetailPm('${q.id}')" class="btn bg-slate-700 !py-1">👁️</button>${q.status==='PROGRAMADO'?`<button onclick="openClosePm('${q.id}')" class="btn bg-emerald-500/20 text-emerald-400 !py-1">✅</button>`:''}</div></div>`).join('')||dEmpty('Sin preventivos para este equipo.');
@@ -1743,7 +1667,7 @@ function saveStop(ev,id,mode){
 }
 function stBacklogFrom(s,e,id){
   const obs=stFinding(s.obs),first=obs.split(/[.\n;]/)[0].trim(),comp=first?(first.length>70?first.slice(0,67)+'…':first):'Observación de intervención',day=s.fp.slice(0,10);
-  return{id,fleetId:e.id,system:ST_BSYS[s.sistema]||'Estructura/Cuchara',component:comp,criticality:/(fuga|agriet|urgente|cr[ií]tic|riesgo|inoperativ)/i.test(obs)?'ALTA':'MEDIA',description:obs+'\n\n(Origen: intervención '+s.motivo+' del '+fmtD(day)+' · '+s.resp+')',observationDate:day,scheduledDate:addDays(day,7),cost:0,status:'PENDIENTE',photosBefore:s.photos||[],photosAfter:[],closeDate:'',closeTech:'',closeNotes:'',origin:'intervencion',stopId:s.id};
+  return{id,fleetId:e.id,system:ST_BSYS[s.sistema]||'Estructura/Cuchara',component:comp,criticality:/(fuga|agriet|urgente|cr[ií]tic|riesgo|inoperativ)/i.test(obs)?'ALTA':'MEDIA',description:obs+'\n\n(Origen: intervención '+s.motivo+' del '+fmtD(day)+' · '+s.resp+')',observationDate:day,scheduledDate:addDays(day,7),cost:0,status:'REGISTRADO',detectedBy:s.resp,source:'Reporte de parada '+s.motivo,workType:/^MC/.test(s.motivo)?'Correctivo':'Inspección',log:[{t:'Backlog creado desde la intervención '+s.motivo+' del '+fmtD(day),ts:Date.now(),by:me?me.name:''}],photosBefore:s.photos||[],photosAfter:[],closeDate:'',closeTech:'',closeNotes:'',origin:'intervencion',stopId:s.id};
 }
 function stGreaseFrom(s,id){return{id,fleetId:s.fleetId,date:s.fp.slice(0,10),hours:Number(s.hp)||0,tech:s.resp,techUid:s.respUid||'',grease:'',qty:'',unit:'',points:[],done:0,total:0,notes:'Registrado desde el reporte de mantenimiento.',ts:Date.now(),origin:'intervencion',stopId:s.id}}
 function openStopView(id){
@@ -2013,7 +1937,7 @@ function applyRole(){
 }
 function startApp(){
   hideLogin();applyRole();if(me.uid!=='local')toast('👋 Bienvenido(a), '+String(me.name).split(' ')[0]);
-  listen('fleet',d=>fleet=d);listen('backlogs',d=>backlogs=d);listen('preventive',d=>pms=d);listen('grease',d=>grs=d);listen('greasePlans',d=>gpl=d);listen('tires',d=>trs=d);listen('tireParams',d=>trp=d);listen('stops',d=>sps=d);
+  listen('fleet',d=>fleet=d);listen('backlogs',d=>backlogs=d.map(bkNorm));listen('preventive',d=>pms=d);listen('grease',d=>grs=d);listen('greasePlans',d=>gpl=d);listen('tires',d=>trs=d);listen('tireParams',d=>trp=d);listen('stops',d=>sps=d);
   if(db)unsubs.push(db.collection('users').doc(me.uid).onSnapshot(d=>{if(!d.exists||d.data().active===false){nextLoginMsg='Tu acceso fue desactivado.';logout(true);return}
     const p=d.data();me.name=p.name||me.name;me.position=p.position||'';me.signature=p.signature||'';applyRole()},e=>console.error(e)));
   let lastPend=0;
@@ -2029,7 +1953,7 @@ function reopen(col,id){
   const o=getStore(col).find(x=>x.id===id);if(!o||!isAdmin())return;
   ask('¿Reabrir este trabajo? Se borrarán las firmas del cierre y de la validación y volverá al técnico.',()=>{
     const clr={closeSignature:'',supName:'',supDate:'',supNotes:'',supSignature:'',closeUid:'',rejectNote:'Reabierto por el planner ('+me.name+')',rejectBy:me.name,rejectDate:today()};
-    put(col,col==='backlogs'?{...o,...clr,status:'EN_PROCESO',closeDate:''}:{...o,...clr,status:'PROGRAMADO'});
+    put(col,col==='backlogs'?{...o,...clr,status:'EN_EJECUCION',closeDate:'',log:bkLog(o,'Reabierto por '+me.name)}:{...o,...clr,status:'PROGRAMADO'});
   },'Reabrir','bg-amber-500 text-slate-950');
 }
 // texto que empieza con = + - @ se antepone ' para que Excel no lo ejecute como fórmula (CSV injection); los números se dejan tal cual
@@ -2037,8 +1961,10 @@ const csvCell=v=>{const t=typeof v==='string';v=v==null?'':String(v);if(t&&/^[=+
 const toCsv=rows=>'﻿'+rows.map(r=>r.map(csvCell).join(';')).join('\r\n');
 function exportCsv(kind){
   let rows,name;
-  if(kind==='back'){name='backlogs';rows=[['Código','Equipo','Sistema','Componente','Criticidad','Estado','Fecha observación','Fecha programada','Días de atraso','Técnico','Fecha cierre','Horómetro cierre','Supervisor','Fecha validación','Costo']];
-    backlogs.forEach(b=>{const e=eqOf(b.fleetId);rows.push([b.id,e.code,b.system,b.component,b.criticality,stLabel(b.status),b.observationDate,b.scheduledDate,delay(b),b.closeTech,b.closeDate,b.closeHours,b.supName,b.supDate,b.cost])})}
+  if(kind==='back'){name='backlogs';rows=[['N° backlog','Equipo','Familia','Fecha detección','Detectado por','Fuente','Horómetro/km','Sistema','Componente','Observación','Prioridad','Tipo','Requiere parada','Estado','Fecha límite','Vencido','Días abierto','Días fuera de plazo','HH estimadas','N° requerimiento','OT','Responsable OT','Fecha programada','Fecha cierre','Técnico','Horas fuera de servicio','Supervisor','Fecha validación','Costo']];
+    backlogs.forEach(b=>{const e=eqOf(b.fleetId);rows.push([b.id,e.code,e.category,b.observationDate,b.detectedBy,b.source,b.hoursAt,b.system,b.component,b.description,PR_L[b.criticality]||b.criticality,b.workType,b.needsStop?'Sí':'No',stLabel(b.status),bkLimit(b),bkVenc(b)?'Sí':'No',bkAge(b),bkLate(b),b.hh,b.rqMain,b.ot?b.ot.num:'',b.ot?b.ot.resp:'',b.scheduledDate,b.closeDate,b.closeTech,b.downtimeH,b.supName,b.supDate,b.cost])})}
+  else if(kind==='rq'){name='requerimientos';rows=[['Tipo','N° requerimiento','Descripción','Proveedor','Solicitado','Llegada estimada','Estado','Días de espera','Atrasado','Backlog','Equipo','Componente','Estado del backlog']];
+    rqRows().forEach(({b,r})=>{const e=eqOf(b.fleetId);rows.push([RQ_T[r.type],r.num,r.desc,r.provider,r.reqDate,r.estDate,RQ_ST[r.st].l,rqWait(r),rqLate(r)?'Sí':'No',b.id,e.code,b.component,stLabel(b.status)])})}
   else if(kind==='pm'){name='preventivos';rows=[['Código','Equipo','Plan','Fecha programada','Estado','Fecha ejecución','Horómetro cierre','Técnico','Duración (h)','Act. realizadas','Act. observadas','Horas-hombre','Supervisor','Fecha validación']];
     pms.forEach(p=>{const e=eqOf(p.fleetId),a=actStats(p.acts);rows.push([p.id,e.code,p.plan,p.scheduledDate,PM_LONG[p.status]||p.status,p.execDate,p.closeHours,p.closeTech,p.durationH,p.acts?a.OK:'',p.acts?a.OBS:'',(p.crew||[]).reduce((t,r)=>t+(Number(r.h)||0),0),p.supName,p.supDate])})}
   else if(kind==='tr'){name='neumaticos';rows=[['Código','Marca','Diseño','Medida','Tipo','Estado','Equipo','Posición','Cocada nueva (mm)','Cocada actual (mm)','Última medición','Recorrido','Costo ($)','Costo por hora ($)','Recapados']];

@@ -27,6 +27,8 @@
 
 <script src="config.js"></script>
 
+<aside id="side" aria-label="Menú principal"></aside>
+
 <header class="bg-slate-800 border-b border-slate-700 sticky top-0 z-30" style="padding-top:env(safe-area-inset-top)">
   <div class="max-w-6xl mx-auto px-3 py-2 flex items-center justify-between gap-2">
     <div class="min-w-0">
@@ -44,23 +46,14 @@
       <button id="t-sup" onclick="tab('sup')" class="btn navb"><span class="ic">🛡️</span><span class="lbl">Supervisor</span></button>
       <button id="t-adm" onclick="tab('adm')" class="btn navb"><span class="ic">⚙️</span><span class="lbl">Admin</span></button>
     </nav>
+    <div class="gsearch lap-only"><input id="gsearch" type="search" placeholder="Buscar backlog, equipo, N° RQ u OT… (Enter)" onkeydown="if(event.key==='Enter'){gSearch(this.value);this.select()}" autocomplete="off"></div>
     <div id="userbox" class="flex items-center gap-2 text-xs" style="flex-shrink:0"></div>
   </div>
 </header>
 
 <main class="max-w-6xl mx-auto px-3 py-4">
   <section id="v-dash" class="space-y-4"></section>
-  <section id="v-back" class="hidden space-y-3">
-    <div class="bg-slate-800 border border-slate-700 rounded-xl p-3 flex flex-col sm:flex-row gap-2">
-      <input id="q" class="inp sm:flex-1" placeholder="Buscar código, equipo o componente…" oninput="renderBack()">
-      <select id="fs" class="inp sm:w-44" onchange="renderBack()"><option value="">Todos los estados</option><option value="PENDIENTE">Pendiente</option><option value="EN_PROCESO">En proceso</option><option value="PENDIENTE_VALIDACION">Por validar (supervisor)</option><option value="COMPLETADO">Completado</option></select>
-      <select id="fc" class="inp sm:w-44" onchange="renderBack()"><option value="">Toda criticidad</option><option>ALTA</option><option>MEDIA</option><option>BAJA</option></select>
-      <button onclick="openBack()" class="btn bg-amber-500 text-slate-950">+ Nuevo</button>
-      <button id="bt-mod-bk" onclick="openModEq('bk')" class="btn bg-slate-700 whitespace-nowrap" style="display:none">🧩 Equipos</button>
-    </div>
-    <div id="list-back" class="grid gap-3 md:grid-cols-2"></div>
-    <div id="tbl-back" class="lap-only"></div>
-  </section>
+  <section id="v-back" class="hidden space-y-3"></section>
   <section id="v-gr" class="hidden space-y-3">
     <div class="bg-slate-800 border border-slate-700 rounded-xl p-3 flex flex-col sm:flex-row gap-2">
       <input id="qgr" class="inp sm:flex-1" placeholder="Buscar equipo, marca o categoría…" oninput="renderGr()">
@@ -109,6 +102,7 @@
 <div id="login" style="display:none;position:fixed;top:0;right:0;bottom:0;left:0;z-index:70;background:#0f172a;align-items:center;justify-content:center;padding:1rem;overflow:auto"></div>
 <div id="modal" class="fixed inset-0 z-50 bg-black/70 hidden items-end sm:items-center justify-center p-2" onclick="if(event.target===this)hide()"></div>
 
+<script src="backlog.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
