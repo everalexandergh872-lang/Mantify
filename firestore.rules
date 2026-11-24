@@ -35,7 +35,18 @@ service cloud.firestore {
     match /users/{uid} {
       allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
       allow create: if signedIn() && (isAdmin() || (planner() && request.auth.uid == uid));
+      // Autorregistro: cualquiera crea SU solicitud, siempre como técnico, inactiva y pendiente (el planner la aprueba)
+      allow create: if signedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['uid', 'name', 'position', 'username', 'authEmail', 'email', 'pass', 'signature', 'signatureAt', 'role', 'active', 'pending', 'createdAt', 'createdBy'])
+        && request.resource.data.uid == uid && request.resource.data.role == 'tecnico'
+        && request.resource.data.active == false && request.resource.data.pending == true
+        && request.resource.data.name is string && request.resource.data.name.size() <= 80
+        && request.resource.data.get('signature', '') is string && request.resource.data.get('signature', '').size() < 300000;
       allow update, delete: if isAdmin();
+      // Cada persona activa puede registrar o cambiar SOLO su propia firma (nada de rol, nombre ni cargo)
+      allow update: if signedIn() && request.auth.uid == uid && resource.data.get('active', false) == true
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['signature', 'signatureAt'])
+        && request.resource.data.signature is string && request.resource.data.signature.size() < 300000;
     }
 
     // Flota: solo el planner crea/edita/borra; técnicos y supervisores solo actualizan el horómetro al cerrar.
