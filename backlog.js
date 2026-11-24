@@ -42,7 +42,6 @@ const famOf=b=>eqOf(b.fleetId).category||'';
 const bkStBadge=k=>{const s=BK_ST[k]||{l:k,c:'#94a3b8'};return `<span class="bdg" style="color:${s.c};background:${s.c}1f;border-color:${s.c}66">${esc(s.l)}</span>`};
 const bkPrBadge=k=>`<span class="bdg" style="color:#fff;background:${PR_C[k]||'#64748b'};border-color:${PR_C[k]||'#64748b'}">${esc(PR_L[k]||k||'—')}</span>`;
 const chipMono=(t,c)=>t?`<span class="chipm" style="${c?'color:'+c+';border-color:'+c+'66':''}">${esc(t)}</span>`:'';
-const otNext=()=>{const y=today().slice(0,4),re=new RegExp('^OT-'+y+'-(\\d+)$');let n=0;backlogs.forEach(b=>{const m=b.ot&&re.exec(b.ot.num||'');if(m)n=Math.max(n,+m[1])});return 'OT-'+y+'-'+String(n+1).padStart(4,'0')};
 const monL=m=>{const [y,mo]=m.split('-');return ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Set','Oct','Nov','Dic'][+mo-1]+' '+y.slice(2)};
 const monAdd=(m,n)=>{const [y,mo]=m.split('-').map(Number),d=new Date(y,mo-1+n,1);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')};
 const monEnd=m=>{const [y,mo]=m.split('-').map(Number);return fmtISO(new Date(y,mo,0))};
@@ -68,7 +67,7 @@ function bkGo(sub,st){bkSub=sub||'list';if(st!=null){bkF.st=st;bkF.venc=false}if
 function gSearch(v){
   v=(v||'').trim();if(!v)return;const q=v.toLowerCase(),e=fleet.find(x=>String(x.code).toLowerCase()===q);
   if(e){openEquip(e.id);return}
-  const b=backlogs.find(x=>String(x.id).toLowerCase()===q||(x.ot&&String(x.ot.num).toLowerCase()===q));if(b){bkDetail(b.id);return}
+  const b=backlogs.find(x=>String(x.id).toLowerCase()===q||String(x.num||'').toLowerCase()===q||(x.ot&&String(x.ot.num).toLowerCase()===q));if(b){bkDetail(b.id);return}
   bkF.q=v;bkF.st='';bkGo('list');
 }
 
@@ -81,7 +80,7 @@ function bkFiltered(){
   return backlogs.filter(b=>{const e=eqOf(b.fleetId);
     if(bkF.st==='OPEN'?!bkOpen(b):bkF.st&&b.status!==bkF.st)return false;
     if(bkF.pr&&b.criticality!==bkF.pr)return false;if(bkF.sy&&b.system!==bkF.sy)return false;if(bkF.fa&&e.category!==bkF.fa)return false;if(bkF.venc&&!bkVenc(b))return false;
-    return !s||[b.id,e.code,e.brand,e.model,b.component,b.system,b.description,b.rqMain,b.ot&&b.ot.num,...(b.reqs||[]).map(r=>r.num)].some(v=>nk(v).includes(s))})
+    return !s||[b.id,b.num,e.code,e.brand,e.model,b.component,b.system,b.description,b.rqMain,b.ot&&b.ot.num,...(b.reqs||[]).map(r=>r.num)].some(v=>nk(v).includes(s))})
    .sort((a,b)=>(bkOpen(b)-bkOpen(a))||(b.observationDate||'').localeCompare(a.observationDate||'')||String(b.id).localeCompare(String(a.id)));
 }
 function renderBack(){
@@ -113,9 +112,9 @@ function bkList(l){
   const reqTxt=b=>[b.rqMain&&chipMono(b.rqMain),...(b.reqs||[]).filter(r=>r.num&&r.num!==b.rqMain).slice(0,2).map(r=>chipMono(r.num)),b.ot&&b.ot.num?chipMono(b.ot.num,'#60a5fa'):(bkOpen(b)?'<span class="chipm" style="color:#fbbf24;border-color:#fbbf2466">Sin OT</span>':'')].filter(Boolean).join(' ');
   const venc=b=>bkVenc(b)?`<span class="lsub text-red-400">Vencido ${fmtD(bkLimit(b))}</span>`:b.rejectNote&&b.status==='EN_EJECUCION'?`<span class="lsub text-red-400">⚠️ Devuelto</span>`:'';
   const tbl=`<div class="lap-only"><div class="ltw"><table class="ltbl"><thead><tr><th>N° / Fecha</th><th>Equipo</th><th>Observación</th><th>Prioridad</th><th>Estado</th><th>N° Req. · OT</th><th>Días</th><th></th></tr></thead><tbody>${lim.map(b=>{const e=eqOf(b.fleetId),a=bkAge(b);
-    return `<tr class="clk" onclick="if(!event.target.closest('button'))bkDetail('${b.id}')"><td class="nw"><b class="text-amber-400 mono">${esc(b.id)}</b><span class="lsub">${fmtD(b.observationDate)}</span></td><td class="nw"><b>${esc(e.code)}</b><span class="lsub">${esc(e.category||'')}</span></td><td style="max-width:28rem"><span class="lsub" style="color:#cbd5e1">${esc(b.system)} · <b>${esc(b.component)}</b></span><span class="lsub clamp2">${esc(b.description)}</span></td><td>${bkPrBadge(b.criticality)}</td><td class="nw">${bkStBadge(b.status)}${venc(b)}</td><td>${reqTxt(b)}</td><td class="num nw"><b class="${bkVenc(b)?'text-red-400':'text-slate-300'}">${a}</b></td><td><div class="lact">${bkActs(b)}</div></td></tr>`}).join('')}</tbody></table></div></div>`;
+    return `<tr class="clk" onclick="if(!event.target.closest('button'))bkDetail('${b.id}')"><td class="nw"><b class="text-amber-400 mono">${esc(bkNo(b))}</b><span class="lsub">${fmtD(b.observationDate)}</span></td><td class="nw"><b>${esc(e.code)}</b><span class="lsub">${esc(e.category||'')}</span></td><td style="max-width:28rem"><span class="lsub" style="color:#cbd5e1">${esc(b.system)} · <b>${esc(b.component)}</b></span><span class="lsub clamp2">${esc(b.description)}</span></td><td>${bkPrBadge(b.criticality)}</td><td class="nw">${bkStBadge(b.status)}${venc(b)}</td><td>${reqTxt(b)}</td><td class="num nw"><b class="${bkVenc(b)?'text-red-400':'text-slate-300'}">${a}</b></td><td><div class="lact">${bkActs(b)}</div></td></tr>`}).join('')}</tbody></table></div></div>`;
   const cards=`<div class="mob-only grid gap-3 md:grid-cols-2">${lim.map(b=>{const e=eqOf(b.fleetId);
-    return `<div class="bkcard" onclick="if(!event.target.closest('button'))bkDetail('${b.id}')" style="border-left:4px solid ${BK_ST[b.status]?BK_ST[b.status].c:'#334155'}"><div class="flex justify-between items-start gap-2"><div class="min-w-0"><span class="mono text-xs text-slate-400">${esc(b.id)} · ${fmtD(b.observationDate)}</span><p class="font-bold"><span class="text-amber-400">${esc(e.code)}</span> <span class="text-xs text-slate-400">${esc(e.category||'')}</span></p></div>${bkPrBadge(b.criticality)}</div>
+    return `<div class="bkcard" onclick="if(!event.target.closest('button'))bkDetail('${b.id}')" style="border-left:4px solid ${BK_ST[b.status]?BK_ST[b.status].c:'#334155'}"><div class="flex justify-between items-start gap-2"><div class="min-w-0"><span class="mono text-xs text-slate-400">${esc(bkNo(b))} · ${fmtD(b.observationDate)}</span><p class="font-bold"><span class="text-amber-400">${esc(e.code)}</span> <span class="text-xs text-slate-400">${esc(e.category||'')}</span></p></div>${bkPrBadge(b.criticality)}</div>
       <p class="font-semibold mt-1">${esc(b.component)}</p><p class="text-xs text-slate-400">${esc(b.system)}</p><p class="text-xs text-slate-400 clamp2 mt-1">${esc(b.description)}</p>
       <div class="flex gap-1 flex-wrap items-center mt-2">${bkStBadge(b.status)} ${reqTxt(b)} <span class="text-xs font-bold ${bkVenc(b)?'text-red-400':'text-slate-400'}" style="margin-left:auto">${bkAge(b)} d</span></div>${venc(b)}
       <div class="cact flex gap-1 justify-end mt-3 flex-wrap">${bkActs(b)}</div></div>`}).join('')}</div>`;
@@ -126,7 +125,7 @@ function bkBoard(l){
   const cols=[...BK_OPEN,'PENDIENTE_VALIDACION'];
   return `<div class="board">${cols.map(k=>{const it=l.filter(b=>b.status===k);
     return `<div class="bcol"><div class="bcol-h"><span><i style="background:${BK_ST[k].c}"></i>${BK_ST[k].l}</span><b>${it.length}</b></div><p class="bcol-d">${BK_ST[k].d}</p>
-    ${it.map(b=>{const e=eqOf(b.fleetId),v=bkVenc(b);return `<button type="button" class="bcard${v?' late':''}" onclick="bkDetail('${b.id}')"><div class="flex justify-between gap-2"><span class="mono text-[11px] text-slate-400">${esc(b.id)}</span>${bkPrBadge(b.criticality)}</div>
+    ${it.map(b=>{const e=eqOf(b.fleetId),v=bkVenc(b);return `<button type="button" class="bcard${v?' late':''}" onclick="bkDetail('${b.id}')"><div class="flex justify-between gap-2"><span class="mono text-[11px] text-slate-400">${esc(bkNo(b))}</span>${bkPrBadge(b.criticality)}</div>
       <p class="text-sm mt-1"><b>${esc(e.code)}</b> <span class="text-[11px] text-slate-400">${esc(e.category||'')}</span></p><p class="text-sm font-semibold">${esc(b.component)}</p><p class="text-xs text-slate-400 clamp2">${esc(b.description)}</p>
       <div class="flex gap-1 flex-wrap items-center mt-2">${chipMono(b.rqMain||((b.reqs||[])[0]||{}).num)}${b.ot&&b.ot.num?chipMono(b.ot.num,'#60a5fa'):'<span class="chipm" style="color:#fbbf24;border-color:#fbbf2466">Sin OT</span>'}<b class="text-xs ${v?'text-red-400':'text-slate-400'}" style="margin-left:auto">${bkAge(b)} d</b></div></button>`}).join('')||'<p class="text-xs text-slate-500" style="padding:.5rem">Sin backlogs</p>'}</div>`}).join('')}</div>`;
 }
@@ -141,7 +140,7 @@ function openBack(id){
   if(!fleetIn('bk',b.fleetId).length){note(fleet.length?'Ningún equipo está habilitado en Backlogs (usa 🧩 Equipos).':'Primero registra un equipo en la pestaña Equipos.');return}
   tmp={before:[...(b.photosBefore||[])],after:[]};bkReqT=(b.reqs||[]).map(r=>({...r}));
   const locked=!!id&&!bkOpen(b),pr=b.criticality||'MEDIA',eqs=fleetIn('bk',b.fleetId).sort((a,c)=>String(a.code).localeCompare(String(c.code)));
-  show(`<div class="flex justify-between items-start"><div><h3 class="font-bold text-lg">${id?'Editar backlog '+esc(id):'Nuevo backlog'}</h3><p class="text-xs text-slate-400">Registra la observación detectada en el equipo</p></div><button type="button" onclick="hide()" class="text-slate-400 text-xl">✕</button></div>
+  show(`<div class="flex justify-between items-start"><div><h3 class="font-bold text-lg">${id?'Editar backlog '+esc(bkNo(backlogs.find(x=>x.id===id))||id):'Nuevo backlog'}</h3><p class="text-xs text-slate-400">Registra la observación detectada en el equipo</p></div><button type="button" onclick="hide()" class="text-slate-400 text-xl">✕</button></div>
   <form onsubmit="saveBack(event,'${id||''}')" class="space-y-4 mt-3">
    ${fsec(1,'Equipo',`<select class="inp font-normal" name="fleetId" required>${eqs.map(f=>`<option value="${f.id}" ${f.id===b.fleetId?'selected':''}>${esc(f.code)} · ${esc(f.category||'')} · ${esc(f.brand)} ${esc(f.model)}</option>`).join('')}</select>`)}
    ${fsec(2,'Detección',`<div class="g2">${field('observationDate','Fecha de detección *',b.observationDate||today(),`required max="${today()}" onchange="bkLimPrev()"`,'date')}<label class="block text-xs text-slate-400 font-semibold">Detectado por *<input class="inp mt-1 font-normal" name="detectedBy" required maxlength="80" value="${esc(b.detectedBy||(id?'':me.name))}"></label></div>
@@ -168,7 +167,7 @@ function bkReqRender(){
     <div class="g3"><label class="block text-[11px] text-slate-400">Solicitado<input class="inp" type="date" value="${esc(r.reqDate)}" onchange="bkReqT[${i}].reqDate=this.value"></label><label class="block text-[11px] text-slate-400">Llegada estimada<input class="inp" type="date" value="${esc(r.estDate)}" onchange="bkReqT[${i}].estDate=this.value"></label><label class="block text-[11px] text-slate-400">Estado<select class="inp" onchange="bkReqT[${i}].st=this.value">${Object.keys(RQ_ST).map(k=>`<option value="${k}" ${k===r.st?'selected':''}>${RQ_ST[k].l}</option>`).join('')}</select></label></div></div>`).join('')
    :'<p class="text-xs text-slate-500">Sin requerimientos. Agrega uno si el trabajo necesita repuestos o un servicio de terceros.</p>';
 }
-function saveBack(ev,id){
+async function saveBack(ev,id){
   ev.preventDefault();const F=ev.target,f=Object.fromEntries(new FormData(F)),er=$('bk-err'),old=backlogs.find(x=>x.id===id)||{};
   const bad=m=>{er.textContent=m;er.classList.remove('hidden');er.scrollIntoView({block:'center'})};
   if(!f.system)return bad('Selecciona el sistema.');
@@ -181,9 +180,10 @@ function saveBack(ev,id){
   const ch=[];if(!id)ch.push('Backlog registrado por '+(n.detectedBy||me.name));else{if(old.status!==n.status)ch.push('Estado: '+(BK_ST[old.status]||{}).l+' → '+BK_ST[n.status].l);ch.push('Datos del backlog editados');}
   const nr=reqs.filter(r=>!(old.reqs||[]).some(o=>o.id===r.id));nr.forEach(r=>ch.push(`${RQ_T[r.type]} ${r.num} solicitado`));
   n.log=ch.reduce((lg,t)=>bkLog({log:lg},t),old.log||[]);
+  if(!numOf('bk',n.num)){const sb=F.querySelector('button:not([type=button])');if(sb)sb.disabled=true;n.num=(await takeNums('bk'))[0]}
   put('backlogs',n);
   const e=fleet.find(x=>x.id===n.fleetId);if(e&&n.hoursAt!==''&&n.hoursAt>(Number(e.hours)||0))put('fleet',{...e,hours:n.hoursAt});
-  if(id&&bkDetId===id)bkDetail(id);else{hide();toast(id?'✔ Backlog actualizado':'✔ Backlog '+n.id+' registrado')}
+  if(id&&bkDetId===id)bkDetail(id);else{hide();toast(id?'✔ Backlog actualizado':'✔ Backlog '+n.num+' registrado')}
 }
 function delBack(id){if(!isAdmin())return;ask('¿Eliminar este backlog? Esta acción no se puede deshacer.',()=>{del('backlogs',id);bkDetId=null})}
 
@@ -196,7 +196,7 @@ function bkDetail(id,keep){
   const ph=a=>(a&&a.length)?a.map(s=>`<img src="${esc(s)}" class="w-24 h-24 object-cover rounded border border-slate-700">`).join(''):'<p class="text-xs text-slate-500">Sin fotos.</p>';
   const moves=open?BK_OPEN.filter(k=>k!==b.status).map(k=>`<button type="button" onclick="bkMove('${b.id}','${k}')" class="mvb"><i style="background:${BK_ST[k].c}"></i>${BK_ST[k].l}</button>`).join(''):'';
   show(`<div id="bkd"><div class="flex justify-between items-center mb-2"><button type="button" onclick="hide();bkDetId=null" class="text-sm text-slate-400">← Volver</button><button type="button" onclick="hide();bkDetId=null" class="text-slate-400 text-xl">✕</button></div>
-  <div class="dhero" style="--c:${(BK_ST[b.status]||{}).c||'#334155'}"><p class="mono text-sm text-slate-400">${esc(b.id)}</p><h3 class="text-2xl font-extrabold leading-tight">${esc(b.component)}</h3><p class="text-slate-400">${esc(b.system)}</p>
+  <div class="dhero" style="--c:${(BK_ST[b.status]||{}).c||'#334155'}"><p class="mono text-sm text-slate-400">${esc(bkNo(b))}</p><h3 class="text-2xl font-extrabold leading-tight">${esc(b.component)}</h3><p class="text-slate-400">${esc(b.system)}</p>
     <p class="mono text-amber-400 font-semibold mt-1"><button type="button" class="lnk" onclick="openEquip('${e.id||''}')">${esc(e.code)}</button> · ${esc(e.brand)} ${esc(e.model)} · ${esc(e.category||'')}</p>
     <div class="flex gap-1 flex-wrap mt-2">${bkStBadge(b.status)} ${bkPrBadge(b.criticality)} ${v?'<span class="bdg" style="color:#fff;background:#dc2626;border-color:#dc2626">VENCIDO</span>':''}</div>
     <div class="flex gap-2 flex-wrap mt-3">${open?`<button onclick="openClose('${b.id}')" class="btn bg-amber-500 text-slate-950">✅ Cerrar con reporte</button>`:''}${b.status==='PENDIENTE_VALIDACION'&&isSup()?`<button onclick="openValidate('${b.id}')" class="btn bg-violet-500 text-white">🔎 Validar</button>`:''}<button onclick="makePdf('${b.id}')" class="btn bg-slate-700">📄 OT (PDF)</button>${open||isAdmin()?`<button onclick="openBack('${b.id}')" class="btn bg-slate-700">✏️ Editar</button>`:''}${isAdmin()&&!open&&b.status!=='ANULADO'?`<button onclick="reopen('backlogs','${b.id}')" class="btn bg-slate-700">↩️ Reabrir</button>`:''}${adm(`<button onclick="delBack('${b.id}')" class="btn bg-red-500/20 text-red-400">🗑️ Eliminar</button>`)}</div>
@@ -229,7 +229,7 @@ function bkMove(id,k){
 }
 function bkAnul(id){
   const b=backlogs.find(x=>x.id===id);if(!b||!isSup())return;
-  show(`<h3 class="font-bold">⦸ Anular backlog ${esc(id)}</h3><p class="text-xs text-slate-400 mb-3">${esc(b.component)} · ${esc(eqOf(b.fleetId).code)}</p><form onsubmit="event.preventDefault();const m=this.m.value.trim();if(!m)return;const b=backlogs.find(x=>x.id==='${id}');put('backlogs',{...b,status:'ANULADO',annulNote:m,annulBy:me.name,annulDate:today(),log:bkLog(b,'Backlog anulado: '+m)});setTimeout(()=>bkDetail('${id}'),60)" class="space-y-3"><label class="block text-xs text-slate-400 font-semibold">Motivo *<textarea name="m" required maxlength="500" rows="2" class="inp mt-1 font-normal" placeholder="Ej. duplicado, ya corregido en el PM, no procede"></textarea></label>${btns(`bkDetail('${id}')`,'Anular','bg-red-500')}</form>`,'30rem');
+  show(`<h3 class="font-bold">⦸ Anular backlog ${esc(bkNo(b))}</h3><p class="text-xs text-slate-400 mb-3">${esc(b.component)} · ${esc(eqOf(b.fleetId).code)}</p><form onsubmit="event.preventDefault();const m=this.m.value.trim();if(!m)return;const b=backlogs.find(x=>x.id==='${id}');put('backlogs',{...b,status:'ANULADO',annulNote:m,annulBy:me.name,annulDate:today(),log:bkLog(b,'Backlog anulado: '+m)});setTimeout(()=>bkDetail('${id}'),60)" class="space-y-3"><label class="block text-xs text-slate-400 font-semibold">Motivo *<textarea name="m" required maxlength="500" rows="2" class="inp mt-1 font-normal" placeholder="Ej. duplicado, ya corregido en el PM, no procede"></textarea></label>${btns(`bkDetail('${id}')`,'Anular','bg-red-500')}</form>`,'30rem');
 }
 function bkReqSet(id,rid,k){
   const b=backlogs.find(x=>x.id===id);if(!b)return;const r=(b.reqs||[]).find(x=>x.id===rid);if(!r||r.st===k)return;
@@ -243,9 +243,9 @@ function bkReqSet(id,rid,k){
 function openOt(id){
   const b=backlogs.find(x=>x.id===id);if(!b)return;const o=b.ot||{},e=eqOf(b.fleetId);
   const acts=o.acts||`Intervenir ${b.component.toLowerCase()} (${b.system.toLowerCase()}): ${b.description}\nRealizar pruebas de funcionamiento y dejar la zona limpia.`;
-  show(`<h3 class="font-bold">${o.num?'✏️ Editar':'＋ Aperturar'} orden de trabajo</h3><p class="text-xs text-slate-400 mb-3">${esc(b.id)} · ${esc(e.code)} · ${esc(b.component)}</p>
+  show(`<h3 class="font-bold">${o.num?'✏️ Editar':'＋ Aperturar'} orden de trabajo</h3><p class="text-xs text-slate-400 mb-3">${esc(bkNo(b))} · ${esc(e.code)} · ${esc(b.component)}</p>
   <form onsubmit="saveOt(event,'${id}')" class="space-y-3">
-   <div class="g2"><label class="block text-xs text-slate-400 font-semibold">N° de OT<input class="inp mt-1 font-normal mono" name="num" value="${esc(o.num||otNext())}" maxlength="40" required></label>${field('date','Fecha de apertura *',o.date||today(),'required','date')}</div>
+   <div class="g2"><label class="block text-xs text-slate-400 font-semibold">N° de OT<input class="inp mt-1 font-normal mono" value="${esc(o.num||'Se asigna al guardar ('+fmtNum('ot',numMax('ot')+1)+')')}" readonly tabindex="-1" style="opacity:.75"></label>${field('date','Fecha de apertura *',o.date||today(),'required','date')}</div>
    <div class="g2">${field('resp','Responsable *',o.resp||'','required placeholder="Técnico a cargo"')}<label class="block text-xs text-slate-400 font-semibold">Especialidad${lst('esp',OT_ESP,o.esp||'Mecánica')}</label></div>
    <div class="g2">${field('place','Lugar',o.place||e.location||'','placeholder="Taller, patio, frente…"')}${field('approved','Aprobado por',o.approved||'')}</div>
    <div class="g2">${field('start','Inicio programado',o.start||b.scheduledDate||'','','date')}${field('end','Término programado',o.end||b.scheduledDate||'','','date')}</div>
@@ -253,9 +253,10 @@ function openOt(id){
    <div class="flex gap-4 flex-wrap text-sm"><label class="flex items-center gap-2"><input type="checkbox" name="loto" ${o.loto!==false?'checked':''} style="width:20px;height:20px;accent-color:#f59e0b"> Bloqueo y etiquetado</label><label class="flex items-center gap-2"><input type="checkbox" name="ats" ${o.ats!==false?'checked':''} style="width:20px;height:20px;accent-color:#f59e0b"> ATS / IPERC</label></div>
    ${btns(`bkDetail('${id}')`,o.num?'Guardar OT':'Aperturar OT')}</form>`,'40rem');
 }
-function saveOt(ev,id){
-  ev.preventDefault();const b=backlogs.find(x=>x.id===id);if(!b)return;const f=Object.fromEntries(new FormData(ev.target)),num=f.num.trim().toUpperCase();
-  if(backlogs.some(x=>x.id!==id&&x.ot&&x.ot.num===num)){note('Ya existe otra OT con el número '+num+'.');return}
+async function saveOt(ev,id){
+  ev.preventDefault();const b=backlogs.find(x=>x.id===id);if(!b)return;const f=Object.fromEntries(new FormData(ev.target));
+  const sb=ev.target.querySelector('button:not([type=button])');if(sb)sb.disabled=true;
+  const num=b.ot&&b.ot.num?b.ot.num:(await takeNums('ot'))[0];
   const nw=!b.ot;const ot={num,date:f.date,resp:f.resp.trim(),esp:(f.esp||'').trim(),place:(f.place||'').trim(),approved:(f.approved||'').trim(),start:f.start||'',end:f.end||'',acts:f.acts.trim(),loto:!!f.loto,ats:!!f.ats,by:(b.ot&&b.ot.by)||me.name};
   const st=nw&&b.status==='REGISTRADO'?'PLANIFICADO':b.status;
   put('backlogs',{...b,ot,status:st,scheduledDate:b.scheduledDate||ot.start,log:bkLog(b,nw?'OT '+num+' aperturada':'OT '+num+' editada')});
@@ -274,14 +275,14 @@ function rqRows(){
 const rqWait=r=>r.reqDate?Math.max(0,dDiff(r.reqDate,r.st==='ATENDIDO'&&r.doneDate?r.doneDate:today())):0;
 function rqView(){
   const all=rqRows(),pend=all.filter(x=>bkOpen(x.b)&&rqPend(x.r)),late=pend.filter(x=>rqLate(x.r)),avg=pend.length?Math.round(pend.reduce((t,x)=>t+rqWait(x.r),0)/pend.length*10)/10:0,s=nk(rqF.q);
-  const l=all.filter(({b,r})=>(!rqF.t||r.type===rqF.t)&&(rqF.st==='PEND'?bkOpen(b)&&rqPend(r):rqF.st==='LATE'?bkOpen(b)&&rqLate(r):!rqF.st||r.st===rqF.st)&&(!s||[r.num,r.desc,r.provider,b.id,eqOf(b.fleetId).code,b.component].some(v=>nk(v).includes(s))))
+  const l=all.filter(({b,r})=>(!rqF.t||r.type===rqF.t)&&(rqF.st==='PEND'?bkOpen(b)&&rqPend(r):rqF.st==='LATE'?bkOpen(b)&&rqLate(r):!rqF.st||r.st===rqF.st)&&(!s||[r.num,r.desc,r.provider,b.id,b.num,eqOf(b.fleetId).code,b.component].some(v=>nk(v).includes(s))))
     .sort((a,b)=>rqPend(b.r)-rqPend(a.r)||rqWait(b.r)-rqWait(a.r));
   const o=(v,t,c)=>`<option value="${v}" ${c===v?'selected':''}>${t}</option>`;
   return `<div class="pghead"><div class="flex items-center gap-3"><span class="pgic">📦</span><div><h2 class="text-xl font-bold">Repuestos y servicios</h2><p class="text-xs text-slate-400">Seguimiento de cada N° de requerimiento vinculado a un backlog</p></div></div><button onclick="exportCsv('rq')" class="btn bg-slate-700">📊 Excel</button></div>
   <div class="kgrid">${kpi('Pendientes repuestos',pend.filter(x=>x.r.type==='R').length,'Solicitados sin recibir','#f97316','📦')}${kpi('Pendientes servicios',pend.filter(x=>x.r.type==='S').length,'Terceros / taller','#a855f7','🛠️')}${kpi('Atrasados',late.length,'Pasó la fecha estimada','#ef4444','⏰')}${kpi('Espera promedio',avg+' d','Desde la solicitud','#94a3b8','⌛')}</div>
   <div class="bg-slate-800 border border-slate-700 rounded-xl p-3 bkfilt" style="grid-template-columns:2fr 1fr 1fr"><input class="inp" placeholder="Buscar N°, repuesto, proveedor o equipo…" value="${esc(rqF.q)}" onchange="rqSet('q',this.value)"><select class="inp" onchange="rqSet('t',this.value)">${o('','Repuestos y servicios',rqF.t)}${o('R','Repuestos',rqF.t)}${o('S','Servicios',rqF.t)}</select><select class="inp" onchange="rqSet('st',this.value)">${o('','Todos los estados',rqF.st)}${o('PEND','Solo pendientes',rqF.st)}${Object.keys(RQ_ST).map(k=>o(k,RQ_ST[k].l,rqF.st)).join('')}${o('LATE','Atrasados',rqF.st)}</select></div>
   ${l.length?`<div class="ltw" style="overflow-x:auto"><table class="ltbl"><thead><tr><th>Tipo</th><th>N° requerimiento</th><th>Backlog / equipo</th><th>Proveedor</th><th>Solicitado</th><th>Estimado</th><th>Espera</th><th>Estado</th></tr></thead><tbody>${l.map(({b,r})=>{const e=eqOf(b.fleetId),ed=bkOpen(b)&&r.id;
-    return `<tr><td class="nw"><b class="${r.type==='S'?'text-violet-300':'text-orange-300'}">${RQ_T[r.type]}</b></td><td><b class="mono">${esc(r.num)}</b><span class="lsub">${esc(r.desc||(r.main?'N° principal del backlog':''))}</span></td><td><button type="button" class="lnk" onclick="bkDetail('${b.id}')"><b>${esc(e.code)}</b> · ${esc(b.component)}</button><span class="lsub mono">${esc(b.id)} · ${(BK_ST[b.status]||{}).l||''}</span></td><td>${esc(r.provider||'—')}</td><td class="nw">${fmtD(r.reqDate)}</td><td class="nw ${rqLate(r)?'text-red-400 font-semibold':''}">${fmtD(r.estDate)}${rqLate(r)?' ⚠':''}</td><td class="num nw"><b>${rqWait(r)} d</b></td>
+    return `<tr><td class="nw"><b class="${r.type==='S'?'text-violet-300':'text-orange-300'}">${RQ_T[r.type]}</b></td><td><b class="mono">${esc(r.num)}</b><span class="lsub">${esc(r.desc||(r.main?'N° principal del backlog':''))}</span></td><td><button type="button" class="lnk" onclick="bkDetail('${b.id}')"><b>${esc(e.code)}</b> · ${esc(b.component)}</button><span class="lsub mono">${esc(bkNo(b))} · ${(BK_ST[b.status]||{}).l||''}</span></td><td>${esc(r.provider||'—')}</td><td class="nw">${fmtD(r.reqDate)}</td><td class="nw ${rqLate(r)?'text-red-400 font-semibold':''}">${fmtD(r.estDate)}${rqLate(r)?' ⚠':''}</td><td class="num nw"><b>${rqWait(r)} d</b></td>
      <td>${ed?`<select class="inp" style="min-width:9.5rem;padding:.3rem .5rem;color:${RQ_ST[r.st].c}" onchange="bkReqSet('${b.id}','${r.id}',this.value)">${Object.keys(RQ_ST).map(k=>`<option value="${k}" ${k===r.st?'selected':''}>${RQ_ST[k].l}</option>`).join('')}</select>`:`<span class="bdg" style="color:${RQ_ST[r.st].c};border-color:${RQ_ST[r.st].c}66">${RQ_ST[r.st].l}</span>`}</td></tr>`}).join('')}</tbody></table></div>`:'<p class="text-sm text-slate-500">Sin requerimientos con estos filtros. Se agregan desde el backlog (Editar → Requerimientos).</p>'}`;
 }
 function kpi(l,v,sub,c,ic,f){return `<${f?'button type="button" onclick="'+f+'"':'div'} class="kpi"><div class="flex justify-between items-start gap-2"><p class="kpi-l">${l}</p><span class="kpi-i" style="color:${c};background:${c}22">${ic}</span></div><p class="kpi-v" style="color:${c}">${v}</p><p class="kpi-s">${sub}</p></${f?'button':'div'}>`}
@@ -291,7 +292,7 @@ let otF={q:'',m:'',st:''};
 function otSet(k,v){otF[k]=v;renderBack()}
 function otRows(){
   const L=backlogs.filter(b=>b.ot&&b.ot.num).map(b=>({num:b.ot.num,date:b.ot.date,fid:b.fleetId,mot:'Backlog',orig:b.id,motivo:b.workType||'Correctivo',st:b.status==='ANULADO'?'Anulada':b.status==='COMPLETADO'?'Cerrada':b.status==='PENDIENTE_VALIDACION'?'Por validar':'Abierta',rep:bkClosed(b)?fmtD(b.closeDate)+' · '+(b.closeTech||''):'',pdf:`makePdf('${b.id}')`,ver:`bkDetail('${b.id}')`}));
-  pms.forEach(p=>L.push({num:'OT-P'+String(p.id).replace(/^PM-/,''),date:p.scheduledDate,fid:p.fleetId,mot:'Preventivo',orig:p.plan,motivo:'Preventivo',st:p.status==='COMPLETADO'?'Cerrada':p.status==='PENDIENTE_VALIDACION'?'Por validar':'Abierta',rep:p.execDate?fmtD(p.execDate)+' · '+(p.closeTech||''):'',pdf:`makePdfPm('${p.id}')`,ver:`openDetailPm('${p.id}')`}));
+  pms.forEach(p=>L.push({num:pmOt(p),date:p.scheduledDate,fid:p.fleetId,mot:'Preventivo',orig:p.plan,motivo:'Preventivo',st:p.status==='COMPLETADO'?'Cerrada':p.status==='PENDIENTE_VALIDACION'?'Por validar':'Abierta',rep:p.execDate?fmtD(p.execDate)+' · '+(p.closeTech||''):'',pdf:`makePdfPm('${p.id}')`,ver:`openDetailPm('${p.id}')`}));
   return L;
 }
 function otView(){
@@ -383,7 +384,7 @@ function dashBk(){
   // pendientes por repuestos / servicios
   const pend=t=>{const L=[];open.forEach(b=>{(b.reqs||[]).filter(r=>r.type===t&&rqPend(r)).forEach(r=>L.push({b,r}));if(!(b.reqs||[]).some(r=>r.type===t)&&b.rqMain&&b.status===(t==='R'?'ESPERA_REPUESTOS':'ESPERA_SERVICIO'))L.push({b,r:{num:b.rqMain,reqDate:b.observationDate,estDate:'',provider:'',st:'SOLICITADO'}})});return L.sort((a,b)=>rqWait(b.r)-rqWait(a.r))};
   const pR=pend('R'),pS=pend('S');
-  const pTbl=(L,c)=>L.length?`<div class="ptbl"><div class="ptr ph"><span>Equipo / backlog</span><span>N° requerimiento</span><span>Espera</span><span>Llegada est.</span></div>${L.slice(0,7).map(({b,r})=>{const e=eqOf(b.fleetId);return `<button type="button" class="ptr" onclick="bkDetail('${b.id}')"><span class="min-w-0"><b class="mono">${esc(e.code)}</b> <span class="text-slate-400">· ${esc(b.component)}</span><small class="mono">${esc(b.id)}${r.provider?' · '+esc(r.provider):''}</small></span><span><span class="chipm">${esc(r.num)}</span></span><b>${rqWait(r)} d</b><span class="${rqLate(r)?'text-red-400 font-semibold':'text-slate-400'}">${fmtD(r.estDate)}${rqLate(r)?' ⚠':''}</span></button>`}).join('')}</div>${L.length>7?`<button onclick="rqF.t='${c}';rqF.st='PEND';bkGo('req')" class="btn bg-slate-700 !py-1 w-full mt-2">Ver los ${L.length}</button>`:''}`:'<p class="text-sm text-slate-500">Nada pendiente. ✅</p>';
+  const pTbl=(L,c)=>L.length?`<div class="ptbl"><div class="ptr ph"><span>Equipo / backlog</span><span>N° requerimiento</span><span>Espera</span><span>Llegada est.</span></div>${L.slice(0,7).map(({b,r})=>{const e=eqOf(b.fleetId);return `<button type="button" class="ptr" onclick="bkDetail('${b.id}')"><span class="min-w-0"><b class="mono">${esc(e.code)}</b> <span class="text-slate-400">· ${esc(b.component)}</span><small class="mono">${esc(bkNo(b))}${r.provider?' · '+esc(r.provider):''}</small></span><span><span class="chipm">${esc(r.num)}</span></span><b>${rqWait(r)} d</b><span class="${rqLate(r)?'text-red-400 font-semibold':'text-slate-400'}">${fmtD(r.estDate)}${rqLate(r)?' ⚠':''}</span></button>`}).join('')}</div>${L.length>7?`<button onclick="rqF.t='${c}';rqF.st='PEND';bkGo('req')" class="btn bg-slate-700 !py-1 w-full mt-2">Ver los ${L.length}</button>`:''}`:'<p class="text-sm text-slate-500">Nada pendiente. ✅</p>';
   // tendencia
   const trend=[];for(let i=5;i>=0;i--){const m=monAdd(M,-i),me_=monEnd(m);trend.push({m,g:live.filter(b=>(b.observationDate||'').startsWith(m)).length,c:live.filter(b=>bkClosed(b)&&(b.closeDate||'').startsWith(m)).length,o:live.filter(b=>(b.observationDate||'')<=me_&&!(bkClosed(b)&&b.closeDate&&b.closeDate<=me_)).length})}
   const ageB=[['0–7 días',0,7,'#22c55e'],['8–15 días',8,15,'#f59e0b'],['16–30 días',16,30,'#f97316'],['> 30 días',31,1e9,'#ef4444']].map(([l,a,z,c])=>({l,c,v:open.filter(b=>{const d=bkAge(b);return d>=a&&d<=z}).length}));
@@ -400,7 +401,7 @@ function dashBk(){
   <div class="dgrid3a">${ccard('📈','Tendencia de backlogs (6 meses)','Generados vs cerrados por mes y backlogs abiertos al cierre de cada mes',svgTrend(trend))}${ccard('🚨','Abiertos por prioridad','',svgDonut(['ALTA','MEDIA','BAJA'].map(k=>({l:PR_L[k],c:PR_C[k],v:open.filter(b=>b.criticality===k).length})),open.length,'abiertos'))}</div>
   <div class="dgrid3">${ccard('📋','Abiertos por estado','Clic para ver la lista',`<div class="space-y-3">${BK_OPEN.map(k=>{const v=open.filter(b=>b.status===k).length;return `<button type="button" class="stbar" onclick="bkGo('list','${k}')"><span class="flex justify-between"><span>${BK_ST[k].l}</span><b>${v}</b></span><span class="stbar-t"><i style="width:${open.length?Math.max(v?4:0,v/open.length*100):0}%;background:${BK_ST[k].c}"></i></span></button>`}).join('')}</div>`)}
    ${ccard('⏳','Antigüedad de abiertos','Días desde la detección',svgCols(ageB))}
-   ${ccard('⏰','Vencidos más antiguos','Atender primero',oldest.length?oldest.map(b=>{const e=eqOf(b.fleetId);return `<button type="button" class="oldr" onclick="bkDetail('${b.id}')"><span class="min-w-0"><b class="mono">${esc(e.code)}</b> <span class="text-slate-400">· ${esc(b.component)}</span><small class="mono">${esc(b.id)} · ${fmtD(b.observationDate)}</small></span>${bkPrBadge(b.criticality)}<b class="text-red-400 nw">${bkAge(b)} d</b></button>`}).join(''):'<p class="text-sm text-slate-500">Sin vencidos. ✅</p>',`<button onclick="bkF.venc=true;bkF.st='';bkGo('list')" class="text-sm text-amber-400">Ver todos →</button>`)}</div>`;
+   ${ccard('⏰','Vencidos más antiguos','Atender primero',oldest.length?oldest.map(b=>{const e=eqOf(b.fleetId);return `<button type="button" class="oldr" onclick="bkDetail('${b.id}')"><span class="min-w-0"><b class="mono">${esc(e.code)}</b> <span class="text-slate-400">· ${esc(b.component)}</span><small class="mono">${esc(bkNo(b))} · ${fmtD(b.observationDate)}</small></span>${bkPrBadge(b.criticality)}<b class="text-red-400 nw">${bkAge(b)} d</b></button>`}).join(''):'<p class="text-sm text-slate-500">Sin vencidos. ✅</p>',`<button onclick="bkF.venc=true;bkF.st='';bkGo('list')" class="text-sm text-amber-400">Ver todos →</button>`)}</div>`;
 }
 function dashOther(){
   return `<h3 class="font-semibold text-slate-300" style="margin-top:.75rem">🧰 Otros controles</h3>
@@ -417,7 +418,7 @@ function bkPdfOpen(){
   doc.setFont('helvetica','normal');doc.setFontSize(9);doc.text(`${l.length} abiertos · ${l.filter(bkVenc).length} vencidos · emitido ${fmtD(today())}`,M,15);
   const ws=[24,22,48,38,15,26,20,11,20,26,27],hd=['N°','Equipo','Componente','Sistema','Prior.','Estado','Deteccion','Dias','Limite','N° Req.','OT'];y=28;
   const head=()=>{doc.setFillColor(226,232,240);doc.rect(M,y-4.5,W-2*M,6.5,'F');doc.setTextColor(30,41,59);doc.setFont('helvetica','bold');doc.setFontSize(8);let x=M;hd.forEach((h,i)=>{doc.text(h,x+1,y);x+=ws[i]});y+=5;doc.setFont('helvetica','normal')};head();
-  l.forEach(b=>{const e=eqOf(b.fleetId),cells=[b.id,e.code,b.component,b.system,PR_L[b.criticality]||'',(BK_ST[b.status]||{}).l||b.status,fmtD(b.observationDate),bkAge(b),fmtD(bkLimit(b)),b.rqMain||'',b.ot?b.ot.num:'Sin OT'].map((c,i)=>doc.splitTextToSize(pt(c),ws[i]-2));
+  l.forEach(b=>{const e=eqOf(b.fleetId),cells=[bkNo(b),e.code,b.component,b.system,PR_L[b.criticality]||'',(BK_ST[b.status]||{}).l||b.status,fmtD(b.observationDate),bkAge(b),fmtD(bkLimit(b)),b.rqMain||'',b.ot?b.ot.num:'Sin OT'].map((c,i)=>doc.splitTextToSize(pt(c),ws[i]-2));
     const n=Math.max(...cells.map(c=>c.length));if(y+n*3.8>196){doc.addPage();y=14;head()}
     let x=M;cells.forEach((c,i)=>{if(i===7&&bkVenc(b))doc.setTextColor(220,38,38);doc.text(c,x+1,y+3);doc.setTextColor(30,41,59);x+=ws[i]});y+=n*3.8+2;doc.setDrawColor(226,232,240);doc.line(M,y-.5,W-M,y-.5)});
   const n=doc.getNumberOfPages();for(let q=1;q<=n;q++){doc.setPage(q);doc.setFontSize(8);doc.setTextColor(100,116,139);doc.text('Pagina '+q+' de '+n,W/2,205,{align:'center'})}
