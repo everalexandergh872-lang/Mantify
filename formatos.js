@@ -573,5 +573,5 @@ function themeToggle(){
   const on=!isLight();document.documentElement.classList.toggle('light',on);
   try{localStorage.setItem('theme',on?'light':'dark')}catch(_){}
   const m=document.querySelector('meta[name=theme-color]');if(m)m.setAttribute('content',on?'#ffffff':'#0F2A44');
-  if(me)applyRole();render();
+  if(me)applyRole();render();eqnPing('theme');
 }

@@ -125,7 +125,7 @@ function tab(t){
     $('t-'+k).className='btn navb '+(k===t?'bg-amber-500 text-slate-950':'text-slate-300 hover:bg-slate-700');
   }
   try{$('t-'+t).scrollIntoView({block:'nearest',inline:'center'})}catch(_){}
-  navEdge();try{window.scrollTo(0,0)}catch(_){}
+  eqnTab(t);navEdge();try{window.scrollTo(0,0)}catch(_){}
   render();
 }
 // menú inferior del celular: sombra a la derecha mientras queden opciones ocultas
@@ -791,8 +791,11 @@ const defGrPts=c=>[...(GR_PTS[c]||['Puntos de engrase generales del equipo'])];
 const defGrFreq=c=>GR_LIGHT.includes(c)?{h:0,d:30}:{h:50,d:7};
 const fmtISO=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 const addDays=(s,n)=>{const d=day(s);d.setDate(d.getDate()+n);return fmtISO(d)};
-const grLogs=fid=>grs.filter(g=>g.fleetId===fid).sort((a,b)=>(b.date||'').localeCompare(a.date||'')||(b.ts||0)-(a.ts||0));
-function grStatus(e){
+/* Engrase y Neumáticos: ahora los lleva el módulo integrado (carpeta eqn/). Aquí solo se lee su resumen. */
+const eqnSumOf=(k,e)=>{const S=window.EQN_SUM;return S&&e&&e.code?S[k][String(e.code).toUpperCase()]:null};
+const grLogs=fid=>{const s=eqnSumOf('gr',fleet.find(x=>x.id===fid));return s?(s.last||[]).map(x=>({date:x.date,hours:x.hours,by:x.by,tipo:x.tipo})):[]};
+function grStatus(e){const s=eqnSumOf('gr',e);return s?{k:s.k,lines:(s.lines||[]).map(x=>esc(x))}:{k:window.EQN_SUM?'SINREG':'SINREG',lines:window.EQN_SUM?[]:['Cargando el módulo de engrase…']}}
+function grStatusOld(e){
   const pl=gpl.find(x=>x.fleetId===e.id),last=grLogs(e.id)[0],cur=Number(e.hours)||0;
   if(!pl)return{k:'SINPLAN',last};
   if(!last)return{k:'SINREG',pl};
@@ -802,7 +805,7 @@ function grStatus(e){
   return{k,pl,last,remH,remD,pct:Math.max(0,Math.min(100,Math.round(pct)))};
 }
 function grLines(g){
-  const o=[];if(!g.pl||!g.last)return o;
+  if(g.lines)return g.lines;const o=[];if(!g.pl||!g.last)return o;
   if(g.remH!=null)o.push(g.remH<0?`Vencido por ${fmtH(Math.round(-g.remH*10)/10)} h`:`Próximo a las ${fmtH(Number(g.last.hours)+Number(g.pl.freqHours))} h (faltan ${fmtH(Math.round(g.remH*10)/10)} h)`);
   if(g.remD!=null){const due=addDays(g.last.date,g.pl.freqDays);o.push(g.remD<0?`Vencido hace ${-g.remD} día(s) (era el ${fmtD(due)})`:`Próximo el ${fmtD(due)} (${g.remD===0?'es hoy':'faltan '+g.remD+' día(s)'})`)}
   return o;
@@ -816,7 +819,7 @@ function grDueHtml(){
 }
 
 /* ---------- Lista ---------- */
-function renderGr(){
+function renderGrOld(){
   const s=($('qgr').value||'').toLowerCase(),st=$('fgr').value,ord={VENCIDO:0,PROXIMO:1,SINREG:2,AL_DIA:3,SINPLAN:4};
   const l=fleetIn('gr').map(e=>({e,g:grStatus(e)})).filter(x=>(!st||x.g.k===st)&&[x.e.code,x.e.brand,x.e.model,x.e.category].some(v=>String(v||'').toLowerCase().includes(s)))
     .sort((a,b)=>ord[a.g.k]-ord[b.g.k]||String(a.e.code).localeCompare(String(b.e.code)));
@@ -979,13 +982,15 @@ function trRecalc(t){
   else{t.lastCocada=t.mountCocada??'';t.lastDiff=null;t.lastReadDate=t.mountDate||''}
   return t;
 }
-const trMounted=fid=>trs.filter(t=>t.status==='MONTADO'&&t.fleetId===fid);
+const trMounted=fid=>{const s=eqnSumOf('tr',fleet.find(x=>x.id===fid));return s?s.mounted.map(m=>({_eqn:1,pos:m.pos,code:m.code,_k:m.k,_c:m.c,fleetId:fid})):[]};
+const eqnPos=e=>{const s=eqnSumOf('tr',e);return s?Array.from({length:s.pos},(_,i)=>i):[]};
 const trAt=(fid,pos)=>trs.find(t=>t.status==='MONTADO'&&t.fleetId===fid&&t.pos===pos);
 
 /* ---------- Estado, desgaste y proyección ---------- */
 function trRun(t){const e=fleet.find(x=>x.id===t.fleetId);return(Number(t.hoursRun)||0)+(t.status==='MONTADO'&&e?Math.max(0,(Number(e.hours)||0)-(Number(t.mountHours)||0)):0)}
 function trCph(t){const h=trRun(t),c=(Number(t.cost)||0)+(Number(t.retreadCost)||0);return h>0&&c>0?c/h:null}
 function trHealth(t){
+  if(t&&t._eqn)return{k:t._k,c:t._c,flags:[],e:fleet.find(x=>x.id===t.fleetId)||{}};
   if(t.status!=='MONTADO')return{k:t.status,flags:[]};
   const e=fleet.find(x=>x.id===t.fleetId)||{},P=trParamE(e),c=(t.lastCocada===''||t.lastCocada==null)?null:Number(t.lastCocada),flags=[];let k='OK',late=0;
   if(c==null)k='SINMED';else if(c<=P.min)k='CAMBIO';else if(c<=P.alert)k='ALERTA';
@@ -1001,17 +1006,17 @@ function trHealth(t){
   const init=Number(t.cocadaInit)||0,pct=c!=null&&init>P.min?Math.max(0,Math.min(100,Math.round((init-c)/(init-P.min)*100))):null;
   return{k,flags,P,e,proj,c,pct};
 }
-const trList=()=>trs.filter(t=>t.status==='MONTADO'&&inMod(fleet.find(e=>e.id===t.fleetId),'tr')).map(t=>({t,h:trHealth(t)}));
+const trList=()=>fleetIn('tr').flatMap(e=>trMounted(e.id)).map(t=>({t,h:trHealth(t)}));
 const trCount=k=>trList().filter(x=>x.h.k===k).length;
 function trDueHtml(){
   const ord={CAMBIO:0,ALERTA:1,SINMED:2},l=trList().filter(x=>ord[x.h.k]!=null).sort((a,b)=>ord[a.h.k]-ord[b.h.k]).slice(0,6);
-  return `<div class="bg-slate-800 border border-slate-700 rounded-xl p-4 space-y-2"><div class="flex justify-between items-center gap-2"><h3 class="font-semibold">🛞 Neumáticos por atender</h3><button onclick="tab('tr');trGo('alr')" class="btn bg-slate-700 !py-1">Ver todos</button></div>
+  return `<div class="bg-slate-800 border border-slate-700 rounded-xl p-4 space-y-2"><div class="flex justify-between items-center gap-2"><h3 class="font-semibold">🛞 Neumáticos por atender</h3><button onclick="eqnOpen('neumaticos')" class="btn bg-slate-700 !py-1">Ver todos</button></div>
   ${l.map(({t,h})=>`<div class="flex justify-between items-center gap-2 text-sm border-t border-slate-700" style="padding-top:.5rem"><div class="min-w-0"><b class="text-amber-400">${esc(h.e.code||'-')}</b> <span class="text-slate-300">${esc(t.pos)} · ${esc(t.code)}</span>${h.c!=null?` <span class="text-slate-400">${h.c} mm</span>`:''}</div>${trBadge(h.k)}</div>`).join('')||'<p class="text-slate-500 text-sm">Sin neumáticos en alerta.</p>'}</div>`;
 }
 
 /* ---------- Pestaña ---------- */
 function trGo(k){trSub=k;renderTr()}
-function renderTr(){
+function renderTrOld(){
   if(trSub==='par'&&!isSup())trSub='pos';
   const items=[['pos','🛞 Posiciones'],['fec','📅 Por fecha'],['inv','📦 Inventario'],['alr','⚠️ Alertas'],...(isSup()?[['par','⚙️ Parámetros']]:[])];
   $('tr-bar').innerHTML=items.map(([k,l])=>`<button onclick="trGo('${k}')" class="btn ${trSub===k?'bg-amber-500 text-slate-950':'bg-slate-700'} !py-1" style="white-space:nowrap">${l}</button>`).join('')+adm(`<button onclick="openModEq('tr')" class="btn bg-slate-700 !py-1" style="white-space:nowrap;margin-left:auto">🧩 Equipos</button>`);
@@ -1386,7 +1391,7 @@ function pendItems(){
     L.push(pRow('bk',sev,`${pTag('bk')}<b class="text-amber-400">${esc(e.code)}</b> <span class="text-slate-300">${esc(b.component)}</span><p class="text-xs ${ret||d?'text-red-400':'text-slate-400'}">${ret?'⚠️ Devuelto: '+esc(b.rejectNote):(d?'+'+d+' d de atraso · ':'')+esc(PR_L[b.criticality]||b.criticality)+' · '+(STL[b.status]||b.status)}</p>`,(otCanClose(b)?`<button onclick="openClose('${b.id}')" class="btn bg-emerald-500/20 text-emerald-400 !py-1">✅ Cerrar</button>`:`<button onclick="bkDetail('${b.id}')" class="btn bg-slate-700 !py-1">👁️</button>`)))});
   pms.filter(p=>p.status==='PROGRAMADO'&&p.scheduledDate&&(pmOver(p)||daysTo(p.scheduledDate)<=7)).sort((a,b)=>a.scheduledDate.localeCompare(b.scheduledDate)).forEach(p=>{const e=eqOf(p.fleetId),o=pmOver(p);
     L.push(pRow('pm',o?0:3,`${pTag('pm')}<b class="text-amber-400">${esc(e.code)}</b> <span class="text-slate-300">${esc(p.plan)}</span><p class="text-xs ${o?'text-red-400':'text-slate-400'}">${fmtD(p.scheduledDate)} · ${pmWhen(p)}</p>`,`<button onclick="openClosePm('${p.id}')" class="btn bg-emerald-500/20 text-emerald-400 !py-1">✅ Cerrar OT</button>`))});
-  fleetIn('gr').map(e=>({e,g:grStatus(e)})).filter(x=>x.g.k==='VENCIDO'||x.g.k==='PROXIMO').forEach(({e,g})=>L.push(pRow('gr',g.k==='VENCIDO'?1:3,`${pTag('gr')}<b class="text-amber-400">${esc(e.code)}</b> <span class="text-slate-300">${esc(e.brand)} ${esc(e.model)}</span>`,grBadge(g.k)+`<button onclick="openGrease('${e.id}')" class="btn bg-slate-700 !py-1">🛢️</button>`)));
+  fleetIn('gr').map(e=>({e,g:grStatus(e)})).filter(x=>x.g.k==='VENCIDO'||x.g.k==='PROXIMO').forEach(({e,g})=>L.push(pRow('gr',g.k==='VENCIDO'?1:3,`${pTag('gr')}<b class="text-amber-400">${esc(e.code)}</b> <span class="text-slate-300">${esc(e.brand)} ${esc(e.model)}</span>`,grBadge(g.k)+`<button onclick="eqnOpen('engrase','${esc(e.code)}')" class="btn bg-slate-700 !py-1">🛢️</button>`)));
   const ord={CAMBIO:1,ALERTA:2};trList().filter(x=>ord[x.h.k]!=null).forEach(({t,h:q})=>L.push(pRow('tr',ord[q.k],`${pTag('tr')}<b class="text-amber-400">${esc(q.e.code||'-')}</b> <span class="text-slate-300">${esc(t.pos)} · ${esc(t.code)}</span>${q.c!=null?` <span class="text-slate-400">${q.c} mm</span>`:''}`,trBadge(q.k))));
   return L.map((x,i)=>({...x,i})).sort((a,b)=>a.sev-b.sev||a.i-b.i);
 }
@@ -1441,7 +1446,7 @@ function qaPick(k){
   show(`<h3 class="font-bold mb-2">${T[k]}</h3><label class="block text-xs text-slate-400 font-semibold">¿De qué equipo?<select id="qa-eq" class="inp mt-1 font-normal">${(k==='hrs'?fleet:fleetIn(k)).map(x=>`<option value="${x.id}">${esc(x.code)} - ${esc(x.brand)} ${esc(x.model)}</option>`).join('')}</select></label>
   <div class="flex justify-end gap-2 pt-3"><button type="button" onclick="hide()" class="btn bg-slate-700">Cancelar</button><button type="button" onclick="qaGo('${k}')" class="btn bg-amber-500 text-slate-950">Continuar</button></div>`,'24rem');
 }
-function qaGo(k){const id=$('qa-eq').value;hide();if(k==='gr')openGrease(id);else if(k==='tr'){trFid=id;openMeasure(id)}else openHours(id)}
+function qaGo(k){const id=$('qa-eq').value;hide();const c=(fleet.find(x=>x.id===id)||{}).code;if(k==='gr')eqnOpen('engrase',c);else if(k==='tr')eqnOpen('neumaticos',c);else openHours(id)}
 function openHours(fid){
   const e=fleet.find(x=>x.id===fid);if(!e)return;
   show(`<h3 class="font-bold">⏱️ Horómetro de ${esc(e.code)}</h3><p class="text-xs text-slate-400 mb-3">${esc(e.brand)} ${esc(e.model)} · Actual: <b class="text-slate-200">${fmtH(e.hours)}</b></p><form onsubmit="saveHours(event,'${fid}')" class="space-y-3">${field('hours','Nueva lectura *','','required min="0" step="any" inputmode="decimal"','number')}<p id="hr-err" class="text-xs text-red-400 hidden"></p>${btns()}</form>`,'24rem');
@@ -1458,7 +1463,7 @@ const EQ_TABS=[['res','Resumen'],['bk','Backlogs'],['pm','Preventivos'],['gr','E
 function openEquip(id,t){
   const e=fleet.find(x=>x.id===id);if(!e)return;eqTab=t||'res';
   const bks=backlogs.filter(b=>b.fleetId===id),pmx=pms.filter(q=>q.fleetId===id),op=bks.filter(bkOpen),sc={OPERATIVO:'text-emerald-400',INOPERATIVO:'text-red-400',EN_MANTENIMIENTO:'text-amber-400'};
-  const g=grStatus(e),mt=trMounted(id),poss=trPositions(e),box='bg-slate-900/50 border border-slate-700 rounded-lg p-3 text-sm';
+  const g=grStatus(e),mt=trMounted(id),poss=eqnPos(e),box='bg-slate-900/50 border border-slate-700 rounded-lg p-3 text-sm';
   let body='';
   if(eqTab==='res'){
     const nx=pmx.filter(q=>q.status==='PROGRAMADO').sort((a,b)=>(a.scheduledDate||'').localeCompare(b.scheduledDate||''))[0],cnt={CAMBIO:0,ALERTA:0,SINMED:0};mt.forEach(x=>{const k=trHealth(x).k;if(cnt[k]!=null)cnt[k]++});
@@ -1468,7 +1473,7 @@ function openEquip(id,t){
      ${c('Próximo preventivo',nx?`<b class="text-blue-400">${fmtD(nx.scheduledDate)}</b>`:'<span class="text-slate-500">Sin programar</span>',nx?esc(nx.plan)+' · '+pmWhen(nx):'')}
      ${c('Engrase',grBadge(g.k),grLines(g)[0]||'')}
      ${c('Neumáticos','<b class="text-xl">'+mt.length+'/'+poss.length+'</b> <span class="text-xs text-slate-400">montados</span>',(cnt.CAMBIO?cnt.CAMBIO+' para cambiar · ':'')+(cnt.ALERTA?cnt.ALERTA+' en alerta · ':'')+(cnt.SINMED?cnt.SINMED+' por medir':''))}</div>
-     <div class="flex gap-2 flex-wrap mt-3"><button onclick="hide();openBack();setTimeout(()=>{const s=document.querySelector('#modal select[name=fleetId]');if(s){s.value='${id}';s.onchange&&s.onchange()}},30)" class="btn bg-amber-500/20 text-amber-400">🔧 Nuevo backlog</button><button onclick="openStop('','start','${id}')" class="btn bg-slate-700">🛑 Iniciar parada</button><button onclick="openHours('${id}')" class="btn bg-slate-700">⏱️ Horómetro</button><button onclick="openGrease('${id}')" class="btn bg-slate-700">🛢️ Engrase</button><button onclick="trFid='${id}';openMeasure('${id}')" class="btn bg-slate-700">📏 Medir</button></div>`;
+     <div class="flex gap-2 flex-wrap mt-3"><button onclick="hide();openBack();setTimeout(()=>{const s=document.querySelector('#modal select[name=fleetId]');if(s){s.value='${id}';s.onchange&&s.onchange()}},30)" class="btn bg-amber-500/20 text-amber-400">🔧 Nuevo backlog</button><button onclick="openStop('','start','${id}')" class="btn bg-slate-700">🛑 Iniciar parada</button><button onclick="openHours('${id}')" class="btn bg-slate-700">⏱️ Horómetro</button><button onclick="hide();eqnOpen('engrase','${esc(e.code)}')" class="btn bg-slate-700">🛢️ Engrase</button><button onclick="hide();eqnOpen('neumaticos','${esc(e.code)}')" class="btn bg-slate-700">📏 Medir</button></div>`;
   }else if(eqTab==='bk'){
     const l=[...bks].sort((a,b)=>bkOpen(b)-bkOpen(a)||(b.observationDate||'').localeCompare(a.observationDate||''));
     body=l.map(b=>`<div class="${box} flex justify-between items-center gap-2"><div class="min-w-0"><b class="text-amber-400">${esc(bkNo(b))}</b> <span class="text-slate-300">${esc(b.component)}</span><p class="text-xs text-slate-400">${bkPrBadge(b.criticality)} ${bkStBadge(b.status)} · ${fmtD(b.observationDate)} · ${bkAge(b)} d${bkVenc(b)?' <b class="text-red-400">VENCIDO</b>':''}</p></div><div class="flex gap-1"><button onclick="openDetail('${b.id}')" class="btn bg-slate-700 !py-1">👁️</button>${bkOpen(b)?`<button onclick="openClose('${b.id}')" class="btn bg-emerald-500/20 text-emerald-400 !py-1">✅</button>`:''}</div></div>`).join('')||dEmpty('Sin backlogs para este equipo.');
@@ -1477,11 +1482,11 @@ function openEquip(id,t){
     body=l.map(q=>`<div class="${box} flex justify-between items-center gap-2"><div class="min-w-0"><b class="text-slate-200">${esc(q.plan)}</b><p class="text-xs text-slate-400">${pmBadge(pmKey(q))} ${fmtD(q.scheduledDate)} ${pmWhen(q)}</p></div><div class="flex gap-1"><button onclick="openDetailPm('${q.id}')" class="btn bg-slate-700 !py-1">👁️</button>${q.status==='PROGRAMADO'?`<button onclick="openClosePm('${q.id}')" class="btn bg-emerald-500/20 text-emerald-400 !py-1">✅</button>`:''}</div></div>`).join('')||dEmpty('Sin preventivos para este equipo.');
   }else if(eqTab==='gr'){
     const lg=grLogs(id).slice(0,5);
-    body=`<div class="${box}">${grBadge(g.k)}${grLines(g).map(x=>`<p class="text-xs text-slate-300 mt-1">${x}</p>`).join('')}</div><h4 class="text-xs text-slate-400 uppercase mt-3 mb-1">Últimos registros</h4>`+(lg.map(x=>`<div class="${box} mb-2"><b>${fmtD(x.date)}</b> · ${fmtH(x.hours)} h <span class="text-xs text-slate-400">· ${esc(x.by||'')}</span></div>`).join('')||dEmpty('Sin registros de engrase.'))+`<div class="flex gap-2 flex-wrap mt-3"><button onclick="openGrease('${id}')" class="btn bg-amber-500/20 text-amber-400">🛢️ Registrar engrase</button><button onclick="openGrHist('${id}')" class="btn bg-slate-700">📜 Historial</button></div>`;
+    body=`<div class="${box}">${grBadge(g.k)}${grLines(g).map(x=>`<p class="text-xs text-slate-300 mt-1">${x}</p>`).join('')}</div><h4 class="text-xs text-slate-400 uppercase mt-3 mb-1">Últimos registros</h4>`+(lg.map(x=>`<div class="${box} mb-2"><b>${fmtD(x.date)}</b>${x.tipo?' · '+esc(x.tipo):''}${x.hours!=null&&x.hours!==''?' · '+fmtH(x.hours)+' h':''} <span class="text-xs text-slate-400">· ${esc(x.by||'')}</span></div>`).join('')||dEmpty('Sin registros de engrase.'))+`<div class="flex gap-2 flex-wrap mt-3"><button onclick="hide();eqnOpen('engrase','${esc(e.code)}')" class="btn bg-amber-500/20 text-amber-400">🛢️ Registrar engrase</button><button onclick="hide();eqnOpen('historial','${esc(e.code)}')" class="btn bg-slate-700">📜 Historial</button></div>`;
   }else if(eqTab==='tr'){
-    body=(poss.length?`<div class="${box}">Montados: <b>${mt.length}/${poss.length}</b> · ${esc(trCfgName(e))}</div>`+mt.sort((a,b)=>poss.indexOf(a.pos)-poss.indexOf(b.pos)).map(x=>{const h=trHealth(x);return `<div class="${box} flex justify-between items-center mt-2"><span><b class="text-amber-400">${esc(x.pos)}</b> <span class="text-slate-300">${esc(x.code)}</span></span><b style="color:${TR_COL[h.k]}">${h.c!=null?h.c+' mm':'—'}</b></div>`}).join(''):dEmpty('Este equipo no tiene posiciones de neumáticos definidas.'))+`<div class="flex gap-2 flex-wrap mt-3"><button onclick="trFid='${id}';openMeasure('${id}')" class="btn bg-emerald-500/20 text-emerald-400">📏 Medir</button><button onclick="hide();trFid='${id}';trSub='pos';tab('tr')" class="btn bg-slate-700">🛞 Ver posiciones</button><button onclick="hide();trFid='${id}';trSub='fec';tab('tr')" class="btn bg-slate-700">📅 Por fecha</button></div>`;
+    body=(poss.length?`<div class="${box}">Montados: <b>${mt.length}/${poss.length}</b></div>`+mt.map(x=>{const h=trHealth(x);return `<div class="${box} flex justify-between items-center mt-2"><span><b class="text-amber-400">${esc(x.pos)}</b> <span class="text-slate-300">${esc(x.code)}</span></span><b style="color:${TR_COL[h.k]}">${h.c!=null?h.c+' mm':'—'}</b></div>`}).join(''):dEmpty('Este equipo no tiene posiciones de neumáticos definidas.'))+`<div class="flex gap-2 flex-wrap mt-3"><button onclick="hide();eqnOpen('neumaticos','${esc(e.code)}')" class="btn bg-emerald-500/20 text-emerald-400">📏 Medir / inspeccionar</button><button onclick="hide();eqnOpen('neumaticos','${esc(e.code)}')" class="btn bg-slate-700">🛞 Ver diagrama</button></div>`;
   }else{
-    const ev=[...bks.map(b=>({d:b.observationDate,t:`🔧 Backlog ${esc(bkNo(b))}: ${esc(b.component)} — ${esc(STL[b.status]||b.status)}`})),...pmx.map(q=>({d:q.scheduledDate,t:`🗓️ Preventivo ${esc(q.plan)} — ${esc(PM_L[q.status]||q.status)}`})),...grLogs(id).map(x=>({d:x.date,t:`🛢️ Engrase a ${fmtH(x.hours)} h · ${esc(x.by||'')}`})),...trSessions(id).map(x=>({d:x.d,t:`🛞 Medición de cocadas · ${Object.keys(x.rows).length} neumáticos`})),...sps.filter(x=>x.fleetId===id).map(x=>({d:(x.fp||'').slice(0,10),t:`🔧 ${esc(x.motivo)} · ${esc(x.sistema||'')} — ${esc((x.desc||'').slice(0,90))}`}))].filter(x=>x.d).sort((a,b)=>b.d.localeCompare(a.d)).slice(0,40);
+    const ev=[...bks.map(b=>({d:b.observationDate,t:`🔧 Backlog ${esc(bkNo(b))}: ${esc(b.component)} — ${esc(STL[b.status]||b.status)}`})),...pmx.map(q=>({d:q.scheduledDate,t:`🗓️ Preventivo ${esc(q.plan)} — ${esc(PM_L[q.status]||q.status)}`})),...grLogs(id).map(x=>({d:x.date,t:`🛢️ Engrase ${esc(x.tipo||'')}${x.hours!=null&&x.hours!==''?' a '+fmtH(x.hours)+' h':''} · ${esc(x.by||'')}`})),...sps.filter(x=>x.fleetId===id).map(x=>({d:(x.fp||'').slice(0,10),t:`🔧 ${esc(x.motivo)} · ${esc(x.sistema||'')} — ${esc((x.desc||'').slice(0,90))}`}))].filter(x=>x.d).sort((a,b)=>b.d.localeCompare(a.d)).slice(0,40);
     body=ev.map(x=>`<div class="${box}"><span class="text-xs text-slate-400">${fmtD(x.d)}</span><p>${x.t}</p></div>`).join('<div style="height:.4rem"></div>')||dEmpty('Aún no hay actividad registrada.');
   }
   show(`<div class="flex justify-between items-start gap-2"><div class="min-w-0"><h3 class="font-bold text-lg"><span class="text-amber-400">${esc(e.code)}</span> · ${esc(e.brand)} ${esc(e.model)}</h3><p class="text-xs text-slate-400">${esc(e.category)} · S/N ${esc(e.serialNumber)} · ${fmtH(e.hours)} h · ${esc(e.location||'-')} · ${stOpen(id).length?'<b class="text-red-400">EN PARADA (mantenimiento)</b>':`<b class="${sc[e.status]||''}">${esc(String(e.status).replace('_',' '))}</b>`}</p></div><button type="button" onclick="hide()" class="text-slate-400 text-xl">✕</button></div>
@@ -1804,7 +1809,7 @@ async function doReset(ev){ev.preventDefault();const em=ev.target.email.value.tr
 function blocked(msg){showLogin(`<p class="text-sm text-amber-400">${esc(msg)}</p><button type="button" onclick="logout(true)" class="btn bg-slate-700 w-full">Cerrar sesión</button>`)}
 
 /* ---------- Sesión ---------- */
-function stopData(){unsubs.forEach(f=>{try{f()}catch(_){}});unsubs=[];loadedCols.clear();fleet=[];backlogs=[];pms=[];grs=[];gpl=[];trs=[];trp=[];sps=[];usersList=[];staffList=[]}
+function stopData(){eqnStop();unsubs.forEach(f=>{try{f()}catch(_){}});unsubs=[];loadedCols.clear();fleet=[];backlogs=[];pms=[];grs=[];gpl=[];trs=[];trp=[];sps=[];usersList=[];staffList=[]}
 // al salir se borra la copia offline de Firestore para que el siguiente usuario del equipo no vea datos ajenos
 // antes se suben los cambios pendientes: clearPersistence borra también la cola offline
 async function logout(force){
@@ -1849,7 +1854,7 @@ function applyRole(){
 }
 function startApp(){
   hideLogin();applyRole();if(me.uid!=='local')toast('👋 Bienvenido(a), '+String(me.name).split(' ')[0]);
-  listen('fleet',d=>fleet=d);listen('backlogs',d=>backlogs=d.map(bkNorm));listen('preventive',d=>pms=d);listen('grease',d=>grs=d);listen('greasePlans',d=>gpl=d);listen('tires',d=>trs=d);listen('tireParams',d=>trp=d);listen('stops',d=>sps=d);
+  listen('fleet',d=>{fleet=d;eqnPing('onFleet')});listen('backlogs',d=>backlogs=d.map(bkNorm));listen('preventive',d=>pms=d);listen('grease',d=>{grs=d;eqnPing('onOld')});listen('greasePlans',d=>gpl=d);listen('tires',d=>{trs=d;eqnPing('onOld')});eqnBootSoon();listen('tireParams',d=>trp=d);listen('stops',d=>sps=d);
   if(db)unsubs.push(db.collection('users').doc(me.uid).onSnapshot(d=>{if(!d.exists||d.data().active===false){nextLoginMsg='Tu acceso fue desactivado.';logout(true);return}
     const p=d.data();me.name=p.name||me.name;me.position=p.position||'';me.signature=p.signature||'';applyRole()},e=>console.error(e)));
   let lastPend=0;staffListen();
