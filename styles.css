@@ -466,3 +466,4 @@ html.light .rwr{border-color:#d5dce6}
 /* Engrase y Neumáticos (módulo integrado): ocupa todo el ancho disponible */
 main.eqn-wide{max-width:none}
 html.light #eqn-frame{border-color:#cbd5e1!important}
+#t-tr{display:none!important}
