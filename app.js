@@ -121,7 +121,7 @@ function tab(t){
   if(t==='tr'){eqnRoute='neumaticos';t='gr'} // Engrase y Neumáticos es un solo apartado
   if($('t-'+t).style.display==='none')t='dash';
   cur=t;
-  for(const k of['dash','back','pm','gr','tr','rep','fleet','sup','adm']){
+  for(const k of['dash','back','pm','plan','gr','tr','rep','fleet','sup','adm']){
     $('v-'+k).classList.toggle('hidden',k!==t);
     $('t-'+k).className='btn navb '+(k===t?'bg-amber-500 text-slate-950':'text-slate-300 hover:bg-slate-700');
   }
@@ -134,7 +134,7 @@ function navEdge(){const n=$('nav');n.classList.toggle('more-r',n.scrollLeft+n.c
 $('nav').addEventListener('scroll',navEdge,{passive:true});addEventListener('resize',navEdge);
 function renderDash(){if(isAdmin())renderDashAdm();else if(isSup())renderDashSup();else renderDashTec()}
 function render(){ renderSide();if(bkDetId&&$('bkd')&&!$('modal').classList.contains('hidden'))bkDetail(bkDetId,true);
-  if(cur==='dash')renderDash();else if(cur==='back')renderBack();else if(cur==='sup')renderSup();else if(cur==='adm')renderAdm();else if(cur==='gr')renderGr();else if(cur==='tr')renderTr();else if(cur==='pm')renderPm();else if(cur==='rep')renderRep();else renderFleet(); supBadge() }
+  if(cur==='dash')renderDash();else if(cur==='back')renderBack();else if(cur==='sup')renderSup();else if(cur==='adm')renderAdm();else if(cur==='gr')renderGr();else if(cur==='tr')renderTr();else if(cur==='pm')renderPm();else if(cur==='plan')renderPlan();else if(cur==='rep')renderRep();else renderFleet(); supBadge() }
 function supBadge(){const n=backlogs.filter(b=>b.status==='PENDIENTE_VALIDACION').length+pms.filter(p=>p.status==='PENDIENTE_VALIDACION').length;
   $('t-sup').innerHTML='<span class="ic">🛡️'+(n?`<span class="bdg" style="border-width:1px;background:#7e22ce;color:#fff;border-color:#7e22ce;position:absolute;top:-6px;left:60%;font-size:10px;padding:0 5px;line-height:15px">${n}</span>`:'')+'</span><span class="lbl">Supervisor</span>'}
 const eqOf=id=>fleet.find(f=>f.id===id)||{code:'N/A',brand:'Equipo',model:'eliminado',serialNumber:'N/A'};
@@ -479,7 +479,7 @@ function renderPm(){
       <div class="flex justify-between items-start gap-2"><div class="min-w-0"><span class="font-bold text-amber-400 text-sm">${esc(pmOt(p))}</span><p class="text-xs text-slate-400 truncate">${esc(e.code)} · ${esc(e.brand)} ${esc(e.model)}</p></div>${pmBadge(k)}</div>
       <p class="font-semibold mt-2">${esc(p.plan)}</p>
       <p class="text-xs mt-1 text-slate-400">Programado: <b class="text-slate-200">${fmtD(p.scheduledDate)}</b>${p.scheduledHours!==''&&p.scheduledHours!=null?` · a las <b class="text-slate-200">${fmtH(p.scheduledHours)}</b>`:''}</p>
-      ${p.status==='PROGRAMADO'?`<p class="text-xs mt-1 font-semibold ${over?'text-red-400':'text-slate-400'}">${pmWhen(p)}</p>`:''}
+      ${p.status==='PROGRAMADO'?`<p class="text-xs mt-1 font-semibold ${over?'text-red-400':'text-slate-400'}">${pmWhen(p)}</p>`+pmHrsLine(p):''}
       ${p.responsible?`<p class="text-xs text-slate-400">Responsable: ${esc(p.responsible)}</p>`:''}
       ${p.acts?`<p class="text-xs mt-1 text-slate-400">${RES_ICO.OK} ${a.OK} · ${RES_ICO.OBS} ${a.OBS} · ${RES_ICO.NA} ${a.NA} · ${(p.acts||[]).length} actividades</p>`:`<p class="text-xs mt-1 text-slate-500">${(p.plannedActs||[]).length} actividades programadas</p>`}
       ${(p.rejectNote&&p.status==='PROGRAMADO')?`<p class="text-xs mt-2 text-red-400">⚠️ Devuelto por supervisor: ${esc(p.rejectNote)}</p>`:''}
@@ -503,12 +503,14 @@ function openPm(id){if(!isSup())return;
     ${sel('fleetId','Equipo *',pf.map(f=>[f.id,`${f.code} - ${f.brand} ${f.model}`]),fid)}
     <label class="block text-xs text-slate-400 font-semibold">Plan / tipo de mantenimiento *<input class="inp mt-1 font-normal" name="plan" list="pm-plans" required placeholder="Ej: Mantenimiento 250 h" value="${esc(p.plan)}"><datalist id="pm-plans">${PM_PLANS.map(x=>`<option value="${esc(x)}">`).join('')}</datalist></label>
     <div class="g2">${field('scheduledDate','Fecha programada *',p.scheduledDate||today(),'required','date')}${field('scheduledHours','Horómetro / odómetro programado',p.scheduledHours??'','min="0" step="any" inputmode="decimal"','number')}</div>
-    ${field('responsible','Responsable / taller',p.responsible||'')}
+    <div id="pm-win"></div>
+    <div class="g2"><label class="block text-xs text-slate-400 font-semibold">Responsable / técnico<input class="inp mt-1 font-normal" name="responsible" list="dl-pmtec" maxlength="80" value="${esc(p.responsible||'')}" placeholder="Técnico o taller"><datalist id="dl-pmtec">${techList().map(u=>`<option value="${esc(u.name)}">`).join('')}</datalist></label>${field('durH','Duración estimada (h)',p.durH??'','min="0" step="0.5" inputmode="decimal" placeholder="'+PL_PM_H+'"','number')}</div>
     <label class="block text-xs text-slate-400 font-semibold">Actividades programadas (una por línea)<textarea maxlength="5000" name="acts" rows="8" class="inp mt-1 font-normal" oninput="pmDirty=true">${esc(acts)}</textarea></label>
     <label class="block text-xs text-slate-400 font-semibold">Notas<textarea maxlength="5000" name="notes" rows="2" class="inp mt-1 font-normal">${esc(p.notes)}</textarea></label>
     ${btns()}</form>`,'36rem');
   const sl=document.querySelector('#modal select[name=fleetId]');
-  if(sl)sl.onchange=function(){const f=fleet.find(x=>x.id===this.value),ta=document.querySelector('#modal textarea[name=acts]');if(f&&(!pmDirty||!ta.value.trim())){ta.value=defActs(f.category).join('\n');pmDirty=false}};
+  if(sl)sl.onchange=function(){const f=fleet.find(x=>x.id===this.value),ta=document.querySelector('#modal textarea[name=acts]');if(f&&(!pmDirty||!ta.value.trim())){ta.value=defActs(f.category).join('\n');pmDirty=false}pmWinRender()};
+  const sd=document.querySelector('#modal input[name=scheduledDate]');if(sd)sd.addEventListener('change',pmWinRender);pmWinRender();
 }
 async function savePm(ev,id){
   ev.preventDefault();const f=Object.fromEntries(new FormData(ev.target)),old0=pms.find(x=>x.id===id)||{},eq=eqOf(f.fleetId);
@@ -516,7 +518,7 @@ async function savePm(ev,id){
   const old=numOf('ot',old0.otNum)?old0:{...old0,otNum:(await takeNums('ot'))[0]};
   let acts=(f.acts||'').split('\n').map(x=>x.replace(/^\s*(?:[-*•]|\d+[.)])\s*/,'').trim()).filter(Boolean);if(!acts.length)acts=defActs(eq.category);
   put('preventive',{status:'PROGRAMADO',...old,id:id||'PM-'+Date.now().toString().slice(-7),fleetId:f.fleetId,plan:f.plan.trim(),scheduledDate:f.scheduledDate,
-    scheduledHours:f.scheduledHours===''?'':Number(f.scheduledHours),responsible:(f.responsible||'').trim(),plannedActs:acts,notes:(f.notes||'').trim()});
+    scheduledHours:f.scheduledHours===''?'':Number(f.scheduledHours),responsible:(f.responsible||'').trim(),durH:f.durH===''||f.durH==null?'':Number(f.durH),plannedActs:acts,notes:(f.notes||'').trim()});
   hide();
 }
 function delPm(id){if(!isAdmin())return;ask('¿Eliminar este mantenimiento preventivo? Esta acción no se puede deshacer.',()=>del('preventive',id))}
@@ -1355,6 +1357,7 @@ function applyRole(){
   supOk=isSup();
   $('t-sup').style.display=supOk?'':'none';$('t-sup').style.order=supOk?'1':'';
   $('t-adm').style.display=isAdmin()?'':'none';
+  $('t-plan').style.display=isSup()?'':'none';
   $('bt-fleet').style.display=isAdmin()?'':'none';
   if($('bt-fimp'))$('bt-fimp').style.display=isAdmin()?'':'none';
   if($('bt-fdelall'))$('bt-fdelall').style.display=isAdmin()?'':'none';

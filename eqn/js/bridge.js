@@ -233,6 +233,10 @@
         presionFuera: k.presionFuera, desgProm: k.desgProm, proxReemplazo: k.proxReemplazo, neumTotal: k.neumTotal, costoNeum: k.costoNeum,
         equiposCriticos: k.equiposCriticos, alertas: al.length, alertasCriticas: al.filter(a => a.prioridad === 'critica').length, moneda: C.cfg().monedaNeum || 'S/'
       };
+      // Agenda para la planificación de Mantify: engrases EG/EP del programa e inspecciones de neumáticos
+      const ag = C.programacion(U.addDays(U.today(), -45), U.addDays(U.today(), 56)).eventos;
+      out.agenda = ag.filter(e => !e.ejecutado || e.fecha >= U.addDays(U.today(), -14)).map(e => ({ d: e.fecha, code: String(e.eq.codigo).toUpperCase(), k: e.tipo, t: e.tipoEng || '', h: e.tipo === 'engrase' ? (Number(e.horas) || 0) : 0, n: e.cantidad || 0, done: !!e.ejecutado, venc: !!e.vencido }));
+      out.uso = {}; C.equiposActivos().forEach(eq => { const u = C.usoDia(eq); if (u) out.uso[String(eq.codigo).toUpperCase()] = { u: Math.round(u * 10) / 10, un: C.unidad(eq) }; });
       out.top = C.prioridadEquipos(al).slice(0, 5).map(x => ({ code: x.eq.codigo, score: Math.round(x.score), motivos: [...x.motivos].slice(0, 3) }));
     } catch (e) { console.warn(e); }
     return out;

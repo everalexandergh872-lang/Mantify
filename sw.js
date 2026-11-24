@@ -1,7 +1,7 @@
 /* Service worker: permite abrir la app sin señal y la mantiene actualizada.
    Cambia VERSION cada vez que publiques una nueva versión del index.html. */
-const VERSION='mantify-v33';
-const SHELL=['./','./index.html','./styles.css','./config.js','./backlog.js','./formatos.js','./app.js','./eqn-host.js','./manifest.webmanifest','./img/icon-192.png','./img/icon-512.png','./img/apple-touch-icon.png','./img/svg/favicon.svg',
+const VERSION='mantify-v34';
+const SHELL=['./','./index.html','./styles.css','./config.js','./backlog.js','./formatos.js','./planner.js','./app.js','./eqn-host.js','./manifest.webmanifest','./img/icon-192.png','./img/icon-512.png','./img/apple-touch-icon.png','./img/svg/favicon.svg',
  // módulo de Engrase y Neumáticos: también disponible sin señal desde la primera carga
  './eqn/index.html','./eqn/css/styles.css','./eqn/libs/chart.umd.min.js','./eqn/libs/xlsx.full.min.js','./eqn/libs/jspdf.umd.min.js','./eqn/libs/jspdf.plugin.autotable.min.js','./eqn/js/config.js','./eqn/js/db.js','./eqn/js/ui.js','./eqn/js/calc.js','./eqn/js/backlog.js','./eqn/js/views/dashboard.js','./eqn/js/views/engraseProg.js','./eqn/js/excelEngrase.js','./eqn/js/views/engrase.js','./eqn/js/views/neumaticos.js','./eqn/js/views/equipos.js','./eqn/js/views/programacion.js','./eqn/js/views/alertas.js','./eqn/js/views/historial.js','./eqn/js/views/reportes.js','./eqn/js/views/configuracion.js','./eqn/js/bridge.js','./eqn/js/app.js'];
 const LIBS=['https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
