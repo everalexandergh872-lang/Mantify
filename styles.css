@@ -439,6 +439,7 @@ html.light [style*="background:#0f172a"]{background:#f1f5f9!important}
 html.light button[style*="color:#f8fafc"],html.light button[style*="color:#e2e8f0"]{color:#0f172a!important}
 html.light [style*="color:#e2e8f0"]:not(button){color:#0f172a!important}
 html.light #login>div{background:#fff}
+html.light #login .mf-word{color:#0F2A44!important}html.light #login .mf-sub{color:#475569!important}
 html.light .ltw{background:#fff;border-color:#d5dce6}html.light .ltbl th{background:#f8fafc;color:#475569;border-color:#d5dce6}html.light .ltbl td{border-color:#e5e9f0}
 html.light .ltbl tbody tr:nth-child(even){background:#f8fafc}html.light .ltbl tbody tr:hover{background:#eef2f7}html.light .lsub{color:#64748b}
 html.light .bkcard,html.light .dcard,html.light .kpi,html.light .bcard,html.light .mvb{background:#fff;border-color:#d5dce6}
