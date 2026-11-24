@@ -87,7 +87,7 @@
       if (!Fotos.saved.has(id)) {
         Fotos.saved.add(id);
         if (v.length > 1000000) { toastErr('Una foto es demasiado grande y no se pudo guardar.'); return ''; }
-        fs.collection('eqn_fotos').doc(id).set({ d: v, at: Date.now(), by: user ? user.uid : '' }).catch(e => { Fotos.saved.delete(id); errorEscritura(e); });
+        fs.collection('eqn_fotos').doc(id).set(PO({ d: v, at: Date.now(), by: user ? user.uid : '' })).catch(e => { Fotos.saved.delete(id); errorEscritura(e); });
       }
       return 'fx:' + id;
     }
@@ -125,6 +125,8 @@
 
   // ---------- Conexión ----------
   function host() { try { return window.parent !== window && window.parent.firebase ? window.parent : null; } catch (e) { return null; } }
+  // Firestore (cargado en la ventana de Mantify) rechaza objetos creados dentro de este iframe: se copian a la ventana de Mantify.
+  function PO(o) { const H = host(); return H ? H.JSON.parse(JSON.stringify(o)) : o; }
   async function open() {
     const P = host();
     fb = P ? P.firebase : window.firebase;
@@ -155,7 +157,7 @@
     return new Promise((resolve, reject) => {
       const pending = new Set(Object.keys(STORES));
       Object.keys(STORES).forEach(store => {
-        fs.collection(COL(store)).onSnapshot({ includeMetadataChanges: false }, snap => {
+        fs.collection(COL(store)).onSnapshot(PO({ includeMetadataChanges: false }), snap => {
           snap.docChanges().forEach(ch => {
             const bid = ch.doc.id;
             if (ch.type === 'removed') {
@@ -206,7 +208,7 @@
   const FP = (id) => new fb.firestore.FieldPath('r', id);
   const DEL = () => fb.firestore.FieldValue.delete();
   function remoteSet(store, bid, entries) { // entries: {id: js}
-    return fs.collection(COL(store)).doc(bid).set({ r: entries, u: Date.now(), by: user.uid }, { merge: true }).catch(errorEscritura);
+    return fs.collection(COL(store)).doc(bid).set(PO({ r: entries, u: Date.now(), by: user.uid }), PO({ merge: true })).catch(errorEscritura);
   }
   function remoteDel(store, bid, id) {
     return fs.collection(COL(store)).doc(bid).update(FP(id), DEL(), 'u', Date.now()).catch(e => { if (e && e.code !== 'not-found') errorEscritura(e); });
