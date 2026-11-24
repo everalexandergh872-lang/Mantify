@@ -1,6 +1,6 @@
 // Prueba de reglas: npm i -D @firebase/rules-unit-testing@3 firebase@10 && npx firebase emulators:exec --only firestore --project demo-t "node tests/rules.test.mjs"
 import {initializeTestEnvironment,assertFails,assertSucceeds} from '@firebase/rules-unit-testing';
-import {readFileSync} from 'fs';import {doc,setDoc,updateDoc} from 'firebase/firestore';
+import {readFileSync} from 'fs';import {doc,setDoc,updateDoc,getDoc} from 'firebase/firestore';
 const env=await initializeTestEnvironment({projectId:'demo-t',firestore:{rules:readFileSync(new URL('../firestore.rules',import.meta.url),'utf8'),host:'127.0.0.1',port:8085}});
 await env.withSecurityRulesDisabled(async c=>{const d=c.firestore();
   await setDoc(doc(d,'users/tec'),{role:'tecnico',active:true});await setDoc(doc(d,'users/sup'),{role:'supervisor',active:true});
@@ -30,4 +30,7 @@ await t('técnico NO anula',assertFails(updateDoc(doc(db('tec'),'backlogs/b9'),{
 await t('supervisor sí anula',assertSucceeds(updateDoc(doc(db('sup'),'backlogs/b9'),{status:'ANULADO'})));
 await t('técnico NO crea backlog ya cerrado',assertFails(setDoc(doc(db('tec'),'backlogs/b10'),{status:'COMPLETADO'})));
 await t('técnico edita backlog abierto sin tocar closeUid',assertSucceeds(updateDoc(doc(db('tec'),'backlogs/b1'),{description:'x'})));
+await t('técnico lee el directorio del personal',assertSucceeds(getDoc(doc(db('tec'),'staff/sup'))));
+await t('técnico NO escribe en el directorio',assertFails(setDoc(doc(db('tec'),'staff/tec'),{uid:'tec',name:'X',role:'admin'})));
+await t('supervisor NO escribe en el directorio',assertFails(setDoc(doc(db('sup'),'staff/sup'),{uid:'sup',name:'X',role:'admin'})));
 console.log(ok.join('\n'));await env.cleanup();
