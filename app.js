@@ -2128,7 +2128,9 @@ async function createUsers(){
   try{secAuth()}catch(e){log(false,'No se pudo iniciar el registro: '+authMsg(e));go.disabled=false;go.style.opacity='1';return}
   const made=[],taken=new Set(usersList.map(u=>u.username).filter(Boolean)),seen=new Set(usersList.map(u=>nk(u.name)));
   for(const ln of lines){
-    const parts=ln.split(';').map(x=>(x||'').trim()),name=parts[0];let position='',role='';
+    let parts=ln.split(/[;\t]/).map(x=>(x||'').trim());
+    if(parts.length===1){const w=parts[0].split(/\s+/),r=normRole(w[w.length-1]);if(w.length>1&&r)parts=[w.slice(0,-1).join(' '),w[w.length-1]]} // "Juan Diaz tecnico" sin punto y coma
+    const name=parts[0];let position='',role='';
     if(!name)continue;
     if(parts.length>=3){position=parts[1];role=parts[2]?normRole(parts[2]):roleFromPos(position);if(parts[2]&&!role){log(false,name+': perfil no válido (usa tecnico, supervisor o admin)');continue}}
     else if(parts.length===2){role=normRole(parts[1]);if(role)position=POS_DEF[role];else{position=parts[1];role=roleFromPos(position)}}
