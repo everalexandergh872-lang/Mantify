@@ -373,6 +373,7 @@
     const d = EQ.DEFAULT_CONFIG;
     Object.keys(d).forEach(k => { if (c[k] === undefined) c[k] = JSON.parse(JSON.stringify(d[k])); });
     Object.keys(d.umbrales).forEach(k => { if (c.umbrales[k] === undefined) c.umbrales[k] = d.umbrales[k]; });
+    if (c.formato && String(c.formato.codigo || '').trim().toUpperCase() === 'F-MT-18-TM') c.formato.codigo = '';
     if ((c.version || 1) < 2) {
       d.familias.forEach(f => { if (!c.familias.includes(f)) c.familias.splice(Math.max(0, c.familias.length - 1), 0, f); });
       Object.keys(d.plantillasEngrase).forEach(f => { if (!c.plantillasEngrase[f]) c.plantillasEngrase[f] = JSON.parse(JSON.stringify(d.plantillasEngrase[f])); });

@@ -1,4 +1,4 @@
-/* PROGRAMA DE ENGRASE EG/EP – lógica del formato F-MT-18-TM
+/* PROGRAMA DE ENGRASE EG/EP – lógica del programa mensual
    Programa mensual · Control diario · Cumplimiento · Prioridad (días sin engrase) */
 (function () {
   const U = EQ.U, S = EQ.S, C = EQ.C;
@@ -24,10 +24,10 @@
         <span class="spacer"></span>
         <button class="btn btn-sm btn-outline" id="pgAddEq" title="Agregar al programa de este mes un equipo que no figura">+ Agregar equipo</button>
         <button class="btn btn-sm btn-outline" id="pgGen">${guardado ? '↻ Regenerar desde planes' : '💾 Guardar programa'}</button>
-        <button class="btn btn-sm btn-orange" id="pgImp">⭱ Importar Excel F-MT-18-TM</button>
-        <button class="btn btn-sm" id="pgExp">⭳ Exportar Excel F-MT-18-TM</button>
+        <button class="btn btn-sm btn-orange" id="pgImp">⭱ Importar Excel del programa</button>
+        <button class="btn btn-sm" id="pgExp">⭳ Exportar Excel del programa</button>
         <button class="btn btn-sm btn-outline" id="pgPdf">PDF</button></div>
-      ${!filas.length ? `<div class="card">${U.emptyState('📅', 'No hay equipos en el programa', 'Importe el maestro (o el Excel F-MT-18-TM). Solo entran equipos MOVILIZADOS cuya familia no esté excluida (camionetas, buses, grupos electrógenos, motosoldadoras); puede forzarlo en la ficha del equipo.')}</div>` : `
+      ${!filas.length ? `<div class="card">${U.emptyState('📅', 'No hay equipos en el programa', 'Importe el maestro (o el Excel del programa de engrase). Solo entran equipos MOVILIZADOS cuya familia no esté excluida (camionetas, buses, grupos electrógenos, motosoldadoras); puede forzarlo en la ficha del equipo.')}</div>` : `
       ${!guardado ? '<div class="info-box mb">Programa generado automáticamente con el plan de cada equipo. Se guarda al editar una celda o con "Guardar programa".</div>' : ''}
       ${excl.length ? `<div class="warn-box mb"><b>Quitados del programa de ${nombreMes(s.mes)} (${excl.length}):</b> ${excl.map(e => `<span class="chip" style="display:inline-flex;margin:2px">${U.esc(e.codigo)} <button data-rest="${e.id}" title="Volver a incluir en este mes">↺</button></span>`).join(' ')}</div>` : ''}
       <div class="card"><h3 style="justify-content:center">PROGRAMA DE ENGRASE MENSUAL DE ${nombreMes(s.mes)}</h3>
@@ -445,12 +445,12 @@
     const body = filas.map(f => { const cu = C.cumplimientoEq(mes, f.eq, f.dias, mes === C.mesDe(U.today()) ? U.today() : null); return [f.item, f.eq.codigo, f.eq.placa || '', f.eq.descripcion || ''].concat(dias.map(d => { const ej = C.diarioEn(f.eq.id, d); return ej ? (f.dias[d] ? 'OK' : '+') + ej.tipo : (f.dias[d] || ''); })).concat([Object.values(f.dias).filter(x => x === 'EG').length, Object.values(f.dias).filter(x => x === 'EP').length, cu.eje, cu.pct === null ? '' : Math.round(cu.pct) + '%']); });
     const doc = new window.jspdf.jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a3' });
     const cfg = C.cfg().formato || {};
-    doc.setFontSize(12); doc.text(cfg.empresa || 'PROGRAMA DE ENGRASE', 10, 12); doc.setFontSize(9); doc.text(`CÓDIGO: ${cfg.codigo || 'F-MT-18-TM'} · VERSIÓN: ${cfg.version || '01'}`, 410, 12, { align: 'right' });
+    doc.setFontSize(12); doc.text(cfg.empresa || 'PROGRAMA DE ENGRASE', 10, 12); doc.setFontSize(9); doc.text(`${cfg.codigo ? 'CÓDIGO: ' + cfg.codigo + ' · ' : ''}VERSIÓN: ${cfg.version || '01'}`, 410, 12, { align: 'right' });
     doc.setFontSize(13); doc.text(`PROGRAMA DE ENGRASE MENSUAL DE ${nombreMes(mes)}`, 210, 20, { align: 'center' });
     doc.autoTable({ startY: 25, head: [head], body, theme: 'grid', styles: { fontSize: 6, cellPadding: 0.8, halign: 'center' }, columnStyles: { 3: { halign: 'left', cellWidth: 35 } }, headStyles: { fillColor: [15, 39, 66] },
       didParseCell: h => { if (h.section === 'body' && h.column.index >= 4 && h.column.index < 4 + dias.length) { const v = String(h.cell.raw || ''); if (v.startsWith('OK') || v.startsWith('+')) h.cell.styles.fillColor = [227, 245, 234]; else if (v && dias[h.column.index - 4] < U.today()) h.cell.styles.fillColor = [253, 230, 230]; else if (v) h.cell.styles.fillColor = [229, 239, 252]; } } });
     doc.setFontSize(7); doc.text(`LEYENDA: EP = ${C.tipoEng('EP').nombre} PROGR. · EG = ${C.tipoEng('EG').nombre} PROGR. · OK = ejecutado · + = ejecutado sin programa. Generado ${U.fdatetime(new Date().toISOString())}`, 10, doc.lastAutoTable.finalY + 6);
-    doc.save(`F-MT-18-TM_Programa_Engrase_${mes}.pdf`);
+    doc.save(`${cfg.codigo ? cfg.codigo + '_' : ''}Programa_Engrase_${mes}.pdf`);
   };
 
   EQ.EngProg = P;
