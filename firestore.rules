@@ -107,6 +107,12 @@ service cloud.firestore {
       allow update: if isStaff() && request.resource.data.n is int && request.resource.data.n > resource.data.n;
     }
 
+    // Directorio del personal (nombre, cargo y perfil) para asignar OT: lo lee todo el personal; solo el planner lo mantiene.
+    match /staff/{id} {
+      allow read: if isStaff();
+      allow write: if isAdmin();
+    }
+
     // Intervenciones (reporte de mantenimiento): todos registran y cierran paradas; supervisor/planner editan cualquiera; solo el planner borra.
     match /stops/{id} {
       allow read: if isStaff();

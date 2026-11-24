@@ -22,6 +22,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js" integrity="sha384-TnlRYaR4JYz/lpaGuaiU61PjNberSA4vjLjtF+oRC/IkohkJqnWxw5EmDSOt1vA1" crossorigin="anonymous"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-functions-compat.js" integrity="sha384-3IYu+dnH2y9gX1s6p9F4D55XbEmZBfJ3D1Ylh8J6bfdqnJCOmDVSRTq1yhJsBY1H" crossorigin="anonymous"></script>
 <link rel="stylesheet" href="styles.css">
+<script>try{if(localStorage.getItem('theme')==='light'){document.documentElement.classList.add('light');document.querySelector('meta[name=theme-color]').setAttribute('content','#ffffff')}}catch(e){}</script>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen font-sans">
 
@@ -103,6 +104,7 @@
 <div id="modal" class="fixed inset-0 z-50 bg-black/70 hidden items-end sm:items-center justify-center p-2" onclick="if(event.target===this)hide()"></div>
 
 <script src="backlog.js"></script>
+<script src="formatos.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
