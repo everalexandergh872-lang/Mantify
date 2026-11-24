@@ -56,7 +56,7 @@ const monEnd=m=>{const [y,mo]=m.split('-').map(Number);return fmtISO(new Date(y,
 /* ---------- Menú lateral (laptop) y buscador ---------- */
 const SIDE=[['General',[['dash','📊','Dashboard']]],
   ['Backlogs',[['back:list','🔧','Backlogs'],['back:mis','📋','Mis OT'],['back:board','🗂️','Tablero'],['back:req','📦','Repuestos y servicios'],['back:ot','📄','Órdenes de trabajo'],['back:fal','⚠️','Fallas recurrentes']]],
-  ['Mantenimiento',[['pm','🗓️','Preventivos'],['gr','🛢️','Engrase'],['tr','🛞','Neumáticos'],['rep','📝','Reporte de paradas']]],
+  ['Mantenimiento',[['pm','🗓️','Preventivos'],['gr','🛢️','Engrase y Neumáticos'],['rep','📝','Reporte de paradas']]],
   ['Gestión',[['fleet','🚜','Equipos'],['sup','🛡️','Supervisor'],['adm','⚙️','Admin']]]];
 function renderSide(){
   const s=$('side');if(!s||!me)return;
@@ -70,7 +70,7 @@ function renderSide(){
   <div class="side-foot"><button type="button" class="side-i" onclick="themeToggle()" style="margin-bottom:.4rem"><span class="side-ic">${isLight()?'🌙':'☀️'}</span><span class="side-l">${isLight()?'Fondo oscuro':'Fondo blanco'}</span></button>${$('sync')?$('sync').innerHTML:''}</div>`;
   otNotify();
 }
-function sideGo(k){const [a,b]=k.split(':');if(a==='back'){bkGo(b)}else tab(a)}
+function sideGo(k){const [a,b]=k.split(':');if(a==='back'){bkGo(b)}else{if(a==='gr')eqnRoute='dashboard';tab(a)}}
 function bkGo(sub,st){bkSub=sub||'list';if(st!=null){bkF.st=st;bkF.venc=false}if(cur!=='back')tab('back');else render()}
 function gSearch(v){
   v=(v||'').trim();if(!v)return;const q=v.toLowerCase(),e=fleet.find(x=>String(x.code).toLowerCase()===q);

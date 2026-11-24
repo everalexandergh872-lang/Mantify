@@ -31,7 +31,7 @@ function eqnTab(t){
   const on=t==='gr'||t==='tr',h=document.getElementById('eqn-host');if(!h)return;
   h.classList.toggle('hidden',!on);document.querySelector('main').classList.toggle('eqn-wide',on);
   if(!on)return;
-  const route=t==='tr'?'neumaticos':'engrase';
+  const route=eqnRoute||'dashboard';
   eqnShow(route);
 }
 function eqnShow(route,code){
@@ -47,7 +47,7 @@ function eqnShow(route,code){
 }
 // abre una vista del módulo (opcionalmente con un equipo) desde cualquier parte de Mantify
 function eqnOpen(route,code){
-  const t=route==='neumaticos'?'tr':'gr';
+  const t='gr';eqnRoute=route;
   if(cur!==t)tab(t);
   eqnShow(route,code);
 }

@@ -118,6 +118,7 @@ function del(col,id){
 
 /* ---------- Navegación ---------- */
 function tab(t){
+  if(t==='tr'){eqnRoute='neumaticos';t='gr'} // Engrase y Neumáticos es un solo apartado
   if($('t-'+t).style.display==='none')t='dash';
   cur=t;
   for(const k of['dash','back','pm','gr','tr','rep','fleet','sup','adm']){
