@@ -92,7 +92,7 @@
       const m = M(); if (!m) return;
       const f = (m.fleet || []).find(x => x.id === eq.fleetId) || (m.fleet || []).find(x => String(x.code).toUpperCase() === String(eq.codigo).toUpperCase());
       if (!f || !(Number(h.valor) > (Number(f.hours) || 0))) return;
-      host().firebase.firestore().collection('fleet').doc(f.id).update({ hours: Number(h.valor), updatedAt: Date.now(), updatedBy: (B.me() || {}).name || '' }).catch(e => console.warn('Horómetro en Mantify', e));
+      host().firebase.firestore().collection('fleet').doc(f.id).update(host().JSON.parse(JSON.stringify({ hours: Number(h.valor), updatedAt: Date.now(), updatedBy: (B.me() || {}).name || '' }))).catch(e => console.warn('Horómetro en Mantify', e));
     } catch (e) { console.warn(e); }
   };
 
