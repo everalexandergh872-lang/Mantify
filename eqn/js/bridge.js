@@ -210,6 +210,19 @@
         out.tr[code] = { pos: pos.length, mounted };
       }
     });
+    // Indicadores del Dashboard del módulo, para el Dashboard principal de Mantify
+    try {
+      const k = C.kpis(), al = C.alertas().filter(a => !a.atendida);
+      out.kpi = {
+        cumplimientoProg: k.cumplimientoProg, progMes: k.progMes, ejecMes: k.ejecMes, egMes: k.egMes, epMes: k.epMes,
+        progHoy: k.progHoy, pendHoy: k.pendHoy, excedidos: k.excedidos, equiposPrograma: k.equiposPrograma,
+        consumoMesKg: k.consumoMesKg, puntos: k.puntos, rojo: k.rojo, amarillo: k.amarillo,
+        neumInstalados: k.neumInstalados, neumOperativos: k.neumOperativos, neumObservacion: k.neumObservacion, neumCriticos: k.neumCriticos,
+        presionFuera: k.presionFuera, desgProm: k.desgProm, proxReemplazo: k.proxReemplazo, neumTotal: k.neumTotal, costoNeum: k.costoNeum,
+        equiposCriticos: k.equiposCriticos, alertas: al.length, alertasCriticas: al.filter(a => a.prioridad === 'critica').length, moneda: C.cfg().monedaNeum || 'S/'
+      };
+      out.top = C.prioridadEquipos(al).slice(0, 5).map(x => ({ code: x.eq.codigo, score: Math.round(x.score), motivos: [...x.motivos].slice(0, 3) }));
+    } catch (e) { console.warn(e); }
     return out;
   };
   let sumT = null;

@@ -414,9 +414,27 @@ function dashBk(){
    ${ccard('⏳','Antigüedad de abiertos','Días desde la detección',svgCols(ageB))}
    ${ccard('⏰','Vencidos más antiguos','Atender primero',oldest.length?oldest.map(b=>{const e=eqOf(b.fleetId);return `<button type="button" class="oldr" onclick="bkDetail('${b.id}')"><span class="min-w-0"><b class="mono">${esc(e.code)}</b> <span class="text-slate-400">· ${esc(b.component)}</span><small class="mono">${esc(bkNo(b))} · ${fmtD(b.observationDate)}</small></span>${bkPrBadge(b.criticality)}<b class="text-red-400 nw">${bkAge(b)} d</b></button>`}).join(''):'<p class="text-sm text-slate-500">Sin vencidos. ✅</p>',`<button onclick="bkF.venc=true;bkF.st='';bkGo('list')" class="text-sm text-amber-400">Ver todos →</button>`)}</div>`;
 }
+/* ---------- Dashboard de Engrase y Neumáticos (indicadores del módulo eqn/) ---------- */
+function dashEqn(){
+  const S=window.EQN_SUM,K=S&&S.kpi,n=v=>v==null||isNaN(v)?'—':Math.round(v).toLocaleString('es-PE'),p=v=>v==null||isNaN(v)?'—':Math.round(v)+'%';
+  const head=`<div class="flex justify-between items-center gap-2" style="margin-top:.75rem"><h3 class="font-semibold text-slate-300">🛢️ Engrase y Neumáticos</h3><button type="button" onclick="eqnOpen('dashboard')" class="btn bg-slate-700 !py-1 text-xs">Abrir panel completo ›</button></div>`;
+  if(!K)return head+`<div class="bg-slate-800 border border-slate-700 rounded-xl p-4 text-sm text-slate-400">${typeof eqnErr!=='undefined'&&eqnErr?'⚠️ '+esc(eqnErr):'Cargando indicadores de engrase y neumáticos…'}</div>`;
+  const cp=K.cumplimientoProg,cc=cp==null?'#94a3b8':cp>=90?'#34d399':cp>=75?'#fbbf24':'#f87171';
+  const top=(S.top||[]).length?`<div class="bg-slate-800 border border-slate-700 rounded-xl p-4 space-y-2"><h4 class="font-semibold text-sm">🚨 Equipos que requieren atención</h4>${S.top.map(t=>`<button type="button" onclick="eqnOpen('alertas','${esc(t.code)}')" class="w-full text-left flex justify-between gap-2 text-sm py-1 border-b border-slate-700"><b class="text-amber-400">${esc(t.code)}</b><span class="text-slate-400 text-xs truncate">${esc((t.motivos||[]).join(' · '))}</span></button>`).join('')}</div>`:'';
+  return head+`<div class="kgrid">
+    ${kpi('Cumplimiento del programa',p(cp),`${n(K.ejecMes)} de ${n(K.progMes)} engrases del mes`,cc,'📅',"eqnOpen('engrase')")}
+    ${kpi('Engrases para hoy',n(K.pendHoy),`pendientes de ${n(K.progHoy)} programados`,'#fbbf24','🛢️',"eqnOpen('engrase')")}
+    ${kpi('Días sin engrase excedidos',n(K.excedidos),`de ${n(K.equiposPrograma)} equipos en programa`,'#ef4444','⏱️',"eqnOpen('engrase')")}
+    ${kpi('Grasa consumida (mes)',(K.consumoMesKg==null?'—':(+K.consumoMesKg).toFixed(1))+' kg',`${n(K.egMes)} EG · ${n(K.epMes)} EP`,'#38bdf8','⚖️',"eqnOpen('engrase')")}
+    ${kpi('Neumáticos críticos',n(K.neumCriticos),`${n(K.neumObservacion)} en observación · ${n(K.neumInstalados)} instalados`,'#fb923c','🛞',"eqnOpen('neumaticos')")}
+    ${kpi('Próximos reemplazos',n(K.proxReemplazo),`desgaste promedio ${p(K.desgProm)}`,'#f472b6','🔄',"eqnOpen('neumaticos')")}
+    ${kpi('Presión fuera de rango',n(K.presionFuera),'neumáticos en la última medición','#a78bfa','🎯',"eqnOpen('neumaticos')")}
+    ${kpi('Alertas abiertas',n(K.alertas),`${n(K.alertasCriticas)} críticas · ${n(K.equiposCriticos)} equipos críticos`,'#f87171','⚠️',"eqnOpen('alertas')")}
+  </div>${top}`;
+}
 function dashOther(){
   return `<h3 class="font-semibold text-slate-300" style="margin-top:.75rem">🧰 Otros controles</h3>
-  <div class="kgrid">${kpi('Preventivos vencidos',pms.filter(pmOver).length,pms.filter(p=>p.status==='PROGRAMADO'&&!pmOver(p)).length+' programados','#ef4444','🗓️',"tab('pm')")}${kpi('Por validar',backlogs.filter(b=>b.status==='PENDIENTE_VALIDACION').length+pms.filter(p=>p.status==='PENDIENTE_VALIDACION').length,'Backlogs y preventivos','#c084fc','🛡️',"tab('sup')")}${kpi('Engrase vencido',grCount('VENCIDO'),grCount('PROXIMO')+' por vencer','#fbbf24','🛢️',"tab('gr')")}${kpi('Neumáticos a cambiar',trCount('CAMBIO'),trCount('ALERTA')+' en alerta','#fb923c','🛞',"tab('tr')")}</div>
+  <div class="kgrid">${kpi('Preventivos vencidos',pms.filter(pmOver).length,pms.filter(p=>p.status==='PROGRAMADO'&&!pmOver(p)).length+' programados','#ef4444','🗓️',"tab('pm')")}${kpi('Por validar',backlogs.filter(b=>b.status==='PENDIENTE_VALIDACION').length+pms.filter(p=>p.status==='PENDIENTE_VALIDACION').length,'Backlogs y preventivos','#c084fc','🛡️',"tab('sup')")}</div>${dashEqn()}
   <div class="dgrid3">${pmUpcomingHtml()}${grDueHtml()}${trDueHtml()}</div><div class="dgrid2">${dashRep()}${dashValidar()}</div>`;
 }
 
