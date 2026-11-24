@@ -796,15 +796,6 @@ const addDays=(s,n)=>{const d=day(s);d.setDate(d.getDate()+n);return fmtISO(d)};
 const eqnSumOf=(k,e)=>{const S=window.EQN_SUM;return S&&e&&e.code?S[k][String(e.code).toUpperCase()]:null};
 const grLogs=fid=>{const s=eqnSumOf('gr',fleet.find(x=>x.id===fid));return s?(s.last||[]).map(x=>({date:x.date,hours:x.hours,by:x.by,tipo:x.tipo})):[]};
 function grStatus(e){const s=eqnSumOf('gr',e);return s?{k:s.k,lines:(s.lines||[]).map(x=>esc(x))}:{k:window.EQN_SUM?'SINREG':'SINREG',lines:window.EQN_SUM?[]:['Cargando el módulo de engrase…']}}
-function grStatusOld(e){
-  const pl=gpl.find(x=>x.fleetId===e.id),last=grLogs(e.id)[0],cur=Number(e.hours)||0;
-  if(!pl)return{k:'SINPLAN',last};
-  if(!last)return{k:'SINREG',pl};
-  const fh=Number(pl.freqHours)||0,fd=Number(pl.freqDays)||0;let remH=null,remD=null,pct=0,k='AL_DIA';
-  if(fh){remH=Number(last.hours)+fh-cur;pct=Math.max(pct,(cur-Number(last.hours))/fh*100);if(remH<0)k='VENCIDO';else if(remH<=fh*.2)k='PROXIMO'}
-  if(fd){remD=daysTo(addDays(last.date,fd));pct=Math.max(pct,(fd-remD)/fd*100);if(remD<0)k='VENCIDO';else if(remD<=Math.max(2,Math.round(fd*.2))&&k==='AL_DIA')k='PROXIMO'}
-  return{k,pl,last,remH,remD,pct:Math.max(0,Math.min(100,Math.round(pct)))};
-}
 function grLines(g){
   if(g.lines)return g.lines;const o=[];if(!g.pl||!g.last)return o;
   if(g.remH!=null)o.push(g.remH<0?`Vencido por ${fmtH(Math.round(-g.remH*10)/10)} h`:`Próximo a las ${fmtH(Number(g.last.hours)+Number(g.pl.freqHours))} h (faltan ${fmtH(Math.round(g.remH*10)/10)} h)`);
@@ -819,121 +810,10 @@ function grDueHtml(){
   ${l.map(({e,g})=>`<div class="flex justify-between items-center gap-2 text-sm border-t border-slate-700" style="padding-top:.5rem"><div class="min-w-0"><b class="text-amber-400">${esc(e.code)}</b> <span class="text-slate-300">${esc(e.brand)} ${esc(e.model)}</span></div>${grBadge(g.k)}</div>`).join('')||'<p class="text-slate-500 text-sm">Todos los equipos con plan están al día.</p>'}</div>`;
 }
 
-/* ---------- Lista ---------- */
-function renderGrOld(){
-  const s=($('qgr').value||'').toLowerCase(),st=$('fgr').value,ord={VENCIDO:0,PROXIMO:1,SINREG:2,AL_DIA:3,SINPLAN:4};
-  const l=fleetIn('gr').map(e=>({e,g:grStatus(e)})).filter(x=>(!st||x.g.k===st)&&[x.e.code,x.e.brand,x.e.model,x.e.category].some(v=>String(v||'').toLowerCase().includes(s)))
-    .sort((a,b)=>ord[a.g.k]-ord[b.g.k]||String(a.e.code).localeCompare(String(b.e.code)));
-  $('list-gr').innerHTML=l.map(({e,g})=>{const n=grLogs(e.id).length;
-    return `<div class="bg-slate-800 border border-slate-700 rounded-xl p-4">
-    <div class="flex justify-between items-start gap-2"><div class="min-w-0"><span class="font-bold text-amber-400 text-sm">${esc(e.code)}</span><p class="text-xs text-slate-400 truncate">${esc(e.brand)} ${esc(e.model)} · ${esc(e.category)}</p></div>${grBadge(g.k)}</div>
-    <p class="text-xs text-slate-400 mt-2">Horómetro actual: <b class="text-slate-200">${fmtH(e.hours)}</b>${g.pl?` · Cada ${[g.pl.freqHours?fmtH(g.pl.freqHours)+' h':'',g.pl.freqDays?g.pl.freqDays+' días':''].filter(Boolean).join(' / ')}`:''}</p>
-    ${g.last?`<p class="text-xs text-slate-400">Último: <b class="text-slate-200">${fmtD(g.last.date)}</b> a las ${fmtH(g.last.hours)} · ${esc(g.last.tech)}</p>`:''}
-    ${g.k==='SINPLAN'?'<p class="text-xs text-slate-500 mt-1">Aún no tiene plan de engrase.'+(isSup()?' Usa ⚙️ Plan para configurarlo.':' Pídele al supervisor o planner que lo configure.')+'</p>':''}
-    ${g.k==='SINREG'?'<p class="text-xs text-blue-400 mt-1">Aún no hay registros. Registra el primer engrase.</p>':''}
-    ${grLines(g).map(x=>`<p class="text-xs font-semibold ${g.k==='VENCIDO'?'text-red-400':g.k==='PROXIMO'?'text-amber-400':'text-slate-400'}">${esc(x)}</p>`).join('')}
-    ${g.pl&&g.last?`<div class="bg-slate-900 h-2 rounded-full overflow-hidden mt-2"><div class="${GR_BAR[g.k]} h-full" style="width:${g.pct}%"></div></div>`:''}
-    <div class="flex gap-1 justify-end mt-3 flex-wrap"><button onclick="openGrease('${e.id}')" class="btn bg-emerald-500/20 text-emerald-400 !py-1">🛢️ Engrasar</button><button onclick="openGrHist('${e.id}')" class="btn bg-slate-700 !py-1">📜 Historial${n?' ('+n+')':''}</button>${sup(`<button onclick="openGrPlan('${e.id}')" class="btn bg-slate-700 !py-1">⚙️ Plan</button>`)}${adm(`<button onclick="modOff('${e.id}','gr')" class="btn bg-red-500/20 text-red-400 !py-1" title="Quitar de Engrase">🚫</button>`)}</div></div>`}).join('')||'<p class="text-slate-500 text-sm">No hay equipos que coincidan.</p>';
-}
-
-/* ---------- Plan de engrase (supervisor / planner) ---------- */
-function openGrPlan(fid){
-  if(!isSup())return;const e=fleet.find(x=>x.id===fid);if(!e)return;const pl=gpl.find(x=>x.fleetId===fid),fr=defGrFreq(e.category);
-  show(`<h3 class="font-bold">⚙️ Plan de engrase</h3><p class="text-xs text-slate-400 mb-3">${esc(e.code)} · ${esc(e.brand)} ${esc(e.model)} (${esc(e.category)})</p>
-  <form onsubmit="saveGrPlan(event,'${fid}')" class="space-y-3">
-    <p class="text-xs text-slate-400">Define cada cuánto se engrasa. Puedes usar horas, días o ambos (vence lo que ocurra primero).</p>
-    <div class="g2">${field('freqHours','Cada (horas / km)',pl?pl.freqHours||'':(fr.h||''),'min="0" step="any" inputmode="decimal"','number')}${field('freqDays','Cada (días)',pl?pl.freqDays||'':(fr.d||''),'min="0" step="1" inputmode="numeric"','number')}</div>
-    <label class="block text-xs text-slate-400 font-semibold">Tipo de grasa<input class="inp mt-1 font-normal" name="grease" list="gr-types" value="${esc(pl?pl.grease:GR_GREASE[0])}"><datalist id="gr-types">${GR_GREASE.map(x=>`<option value="${esc(x)}">`).join('')}</datalist></label>
-    <label class="block text-xs text-slate-400 font-semibold">Puntos de engrase (uno por línea)<textarea maxlength="5000" name="points" rows="9" class="inp mt-1 font-normal">${esc((pl&&pl.points&&pl.points.length?pl.points:defGrPts(e.category)).join('\n'))}</textarea></label>
-    <p id="gr-err" class="text-xs text-red-400 hidden"></p>${btns()}</form>`,'36rem');
-}
-function saveGrPlan(ev,fid){
-  ev.preventDefault();const f=Object.fromEntries(new FormData(ev.target)),fh=Number(f.freqHours)||0,fd=Number(f.freqDays)||0;
-  const points=(f.points||'').split('\n').map(x=>x.replace(/^\s*(?:[-*•]|\d+[.)])\s*/,'').trim()).filter(Boolean),er=$('gr-err');
-  if(!fh&&!fd){er.textContent='Indica la frecuencia en horas, en días o en ambos.';er.classList.remove('hidden');return}
-  if(!points.length){er.textContent='Agrega al menos un punto de engrase.';er.classList.remove('hidden');return}
-  put('greasePlans',{id:'GP-'+fid,fleetId:fid,freqHours:fh,freqDays:fd,grease:(f.grease||'').trim(),points});hide();
-}
-
-/* ---------- Registrar engrase ---------- */
-function grPtsHtml(fid){
-  const e=fleet.find(x=>x.id===fid)||{},pl=gpl.find(x=>x.fleetId===fid),pts=pl&&pl.points&&pl.points.length?pl.points:defGrPts(e.category);
-  return pts.map((d,i)=>`<label class="flex gap-2 items-start text-sm bg-slate-900/50 border border-slate-700 rounded-lg" style="padding:.6rem .7rem;align-items:center"><input type="checkbox" data-d="${esc(d)}" style="width:22px;height:22px;flex-shrink:0;accent-color:#10b981"><span>${esc(d)}</span></label>`).join('');
-}
-function grPick(fid){
-  const e=fleet.find(x=>x.id===fid)||{},pl=gpl.find(x=>x.fleetId===fid),f=document.querySelector('#modal form');
-  $('gr-pts').innerHTML=grPtsHtml(fid);f.hours.value=e.hours??'';f.grease.value=pl&&pl.grease?pl.grease:GR_GREASE[0];
-}
-function openGrease(fid){
-  const gf=fleetIn('gr',fid);if(!gf.length){note(fleet.length?'Ningún equipo está habilitado en Engrase (usa 🧩 Equipos).':'Primero registra un equipo en la pestaña Flota.');return}
-  const id=fid||gf[0].id,e=fleet.find(x=>x.id===id),pl=gpl.find(x=>x.fleetId===id);
-  show(`<h3 class="font-bold text-emerald-400">🛢️ Registrar engrase</h3><p class="text-xs text-slate-400 mb-3">Marca solo los puntos que engrasaste.</p>
-  <form onsubmit="saveGrease(event)" class="space-y-3">
-    ${sel('fleetId','Equipo *',gf.map(f=>[f.id,`${f.code} - ${f.brand} ${f.model}`]),id)}
-    <div class="g2">${field('date','Fecha *',today(),`required max="${today()}"`,'date')}${field('hours','Horómetro / odómetro *',e.hours??'','required min="0" step="any" inputmode="decimal"','number')}</div>
-    ${field('tech','Técnico *',techVal(''),'required'+techRo())}
-    <div><div class="flex justify-between items-center mb-1"><p class="text-xs text-amber-400 font-semibold">Puntos engrasados *</p><button type="button" onclick="document.querySelectorAll('#gr-pts input').forEach(i=>i.checked=true)" class="btn bg-slate-700 !py-1">Marcar todos</button></div><div id="gr-pts" class="space-y-2">${grPtsHtml(id)}</div></div>
-    <label class="block text-xs text-slate-400 font-semibold">Tipo de grasa<input class="inp mt-1 font-normal" name="grease" list="gr-types2" value="${esc(pl&&pl.grease?pl.grease:GR_GREASE[0])}"><datalist id="gr-types2">${GR_GREASE.map(x=>`<option value="${esc(x)}">`).join('')}</datalist></label>
-    <div class="g2">${field('qty','Cantidad usada','','min="0" step="any" inputmode="decimal" placeholder="Ej. 0.5"','number')}${sel('unit','Unidad',['kg','g','bombazos','L'],'kg')}</div>
-    <label class="block text-xs text-slate-400 font-semibold">Observaciones <span class="font-normal">(obligatorio si dejaste puntos sin engrasar)</span><textarea maxlength="5000" name="notes" rows="2" class="inp mt-1 font-normal"></textarea></label>
-    <p id="gr-err" class="text-xs text-red-400 hidden"></p>${btns('hide()','Guardar engrase','bg-emerald-500')}</form>`,'36rem');
-  document.querySelector('#modal select[name=fleetId]').onchange=function(){grPick(this.value)};
-}
-function saveGrease(ev){
-  ev.preventDefault();const f=Object.fromEntries(new FormData(ev.target)),er=$('gr-err'),bad=m=>{er.textContent=m;er.classList.remove('hidden');er.scrollIntoView({block:'center'})};
-  const e=fleet.find(x=>x.id===f.fleetId);if(!e)return;
-  const points=[...document.querySelectorAll('#gr-pts input')].map(i=>({d:i.dataset.d,ok:i.checked})),done=points.filter(x=>x.ok).length,hrs=Number(f.hours),last=grLogs(e.id)[0];
-  if(!done){bad('Marca al menos un punto engrasado.');return}
-  if(done<points.length&&!(f.notes||'').trim()){bad(`Dejaste ${points.length-done} punto(s) sin engrasar. Explica el motivo en Observaciones.`);return}
-  if(last&&hrs<Number(last.hours)){bad(`El horómetro (${fmtH(hrs)}) es menor que el del último engrase (${fmtH(last.hours)}). Revísalo.`);return}
-  put('grease',{id:'GR-'+Date.now().toString().slice(-8),fleetId:e.id,date:f.date,hours:hrs,tech:f.tech.trim(),techUid:me.uid,grease:(f.grease||'').trim(),qty:f.qty===''?'':Number(f.qty),unit:f.unit,points,done,total:points.length,notes:(f.notes||'').trim(),ts:Date.now()});
-  if(hrs>(Number(e.hours)||0))put('fleet',{...e,hours:hrs});
-  note(`Engrase de ${e.code} registrado (${done}/${points.length} puntos).`);
-}
-
-/* ---------- Historial ---------- */
-function openGrHist(fid){
-  const e=fleet.find(x=>x.id===fid);if(!e)return;const logs=grLogs(fid),g=grStatus(e);
-  show(`<div class="flex justify-between items-start"><div><h3 class="font-bold">📜 Historial de engrase</h3><p class="text-xs text-slate-400">${esc(e.code)} · ${esc(e.brand)} ${esc(e.model)}</p></div><button type="button" onclick="hide()" class="text-slate-400 text-xl">✕</button></div>
-  <div class="my-2">${grBadge(g.k)} ${grLines(g).map(x=>`<span class="text-xs text-slate-400"> · ${esc(x)}</span>`).join('')}</div>
-  <div class="space-y-2">${logs.slice(0,40).map(r=>{const miss=(r.points||[]).filter(p=>!p.ok);
-    return `<div class="bg-slate-900/50 border border-slate-700 rounded-lg p-3 text-xs space-y-1"><div class="flex justify-between gap-2"><b class="text-slate-200">${fmtD(r.date)} · ${fmtH(r.hours)}</b><span class="${miss.length?'text-amber-400':'text-emerald-400'} font-semibold">${r.done}/${r.total} puntos</span></div>
-    <p class="text-slate-400">${esc(r.tech)}${r.grease?' · '+esc(r.grease):''}${r.qty!==''&&r.qty!=null?' · '+esc(r.qty)+' '+esc(r.unit):''}</p>
-    ${miss.length?`<p class="text-amber-400">Sin engrasar: ${miss.map(p=>esc(p.d)).join(', ')}</p>`:''}${r.notes?`<p class="text-slate-300">${esc(r.notes)}</p>`:''}
-    ${adm(`<div style="text-align:right"><button onclick="delGr('${r.id}','${fid}')" class="btn bg-red-500/20 !py-1">🗑️</button></div>`)}</div>`}).join('')||'<p class="text-slate-500 text-sm">Sin registros.</p>'}</div>
-  <div class="flex justify-end gap-2 mt-4 flex-wrap"><button onclick="makePdfGr('${fid}')" class="btn bg-slate-700">📄 PDF</button><button onclick="openGrease('${fid}')" class="btn bg-emerald-500 text-slate-950">🛢️ Engrasar</button></div>`,'36rem');
-}
-function delGr(id,fid){if(!isAdmin())return;ask('¿Eliminar este registro de engrase?',()=>{del('grease',id);setTimeout(()=>openGrHist(fid),50)})}
-
-/* ---------- PDF ---------- */
-function makePdfGr(fid){
-  const e=fleet.find(x=>x.id===fid);if(!e)return;const J=window.jspdf&&window.jspdf.jsPDF;
-  if(!J){note('No se pudo cargar el generador de PDF. Revisa tu conexión a internet y recarga la página.');return}
-  const doc=new J({unit:'mm',format:'a4'}),W=210,M=15,logs=grLogs(fid),g=grStatus(e),pl=gpl.find(x=>x.fleetId===fid);let y=0;
-  const pt=s=>String(s==null?'':s).replace(/[^\x20-\x7E -ÿ\n]/g,''),need=h=>{if(y+h>280){doc.addPage();y=M+4}};
-  doc.setFillColor(15,23,42);doc.rect(0,0,W,28,'F');doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(17);doc.text('CONTROL DE ENGRASE',M,13);
-  doc.setFont('helvetica','normal');doc.setFontSize(10);doc.text('Historial por equipo',M,20);doc.setFontSize(9);doc.text('Emitido: '+fmtD(today()),W-M,13,{align:'right'});doc.text(pt(e.code),W-M,20,{align:'right'});y=37;
-  const sec=t=>{need(14);doc.setFillColor(241,245,249);doc.rect(M,y-5,W-2*M,7.5,'F');doc.setTextColor(180,83,9);doc.setFont('helvetica','bold');doc.setFontSize(10);doc.text(t,M+2,y);y+=8;doc.setTextColor(30,41,59)};
-  const row=(l,v)=>{const t=doc.splitTextToSize(pt(v===''||v==null?'-':v),W-2*M-52);need(t.length*5+2);doc.setFont('helvetica','bold');doc.setFontSize(9.5);doc.text(l,M+2,y);doc.setFont('helvetica','normal');doc.text(t,M+52,y);y+=t.length*5+1.5};
-  sec('DATOS DEL EQUIPO');row('Codigo:',e.code);row('Equipo:',(e.brand||'')+' '+(e.model||''));row('Categoria:',e.category);row('Nº de serie:',e.serialNumber);row('Horometro actual:',fmtH(e.hours));
-  y+=2;sec('PLAN DE ENGRASE');
-  if(pl){row('Frecuencia:',[pl.freqHours?fmtH(pl.freqHours)+' h':'',pl.freqDays?pl.freqDays+' dias':''].filter(Boolean).join(' / '));row('Tipo de grasa:',pl.grease);row('Puntos:',(pl.points||[]).map((x,i)=>(i+1)+'. '+x).join('\n'));row('Estado:',GR_L[g.k]);grLines(g).forEach(x=>row('',x))}
-  else row('Plan:','Sin plan configurado');
-  y+=2;sec(`REGISTROS (${logs.length})`);
-  const ws=[22,24,36,34,16,48],hd=['Fecha','Horometro','Tecnico','Grasa / cantidad','Puntos','Observaciones'];
-  need(14);doc.setFillColor(226,232,240);doc.rect(M,y-4.5,W-2*M,6.5,'F');doc.setFont('helvetica','bold');doc.setFontSize(8.5);let x=M;hd.forEach((h,i)=>{doc.text(h,x+1.5,y);x+=ws[i]});y+=6;doc.setFont('helvetica','normal');
-  logs.slice(0,80).forEach(r=>{const miss=(r.points||[]).filter(p=>!p.ok).map(p=>p.d),obs=(miss.length?'Sin engrasar: '+miss.join(', ')+'. ':'')+(r.notes||'');
-    const cells=[fmtD(r.date),fmtH(r.hours),r.tech,(r.grease||'')+(r.qty!==''&&r.qty!=null?' - '+r.qty+' '+r.unit:''),r.done+'/'+r.total,obs].map((c,i)=>doc.splitTextToSize(pt(c),ws[i]-3)),n=Math.max(...cells.map(c=>c.length));
-    need(n*4+3);let xx=M;cells.forEach((c,i)=>{doc.text(c,xx+1.5,y);xx+=ws[i]});const ly=y+(n-1)*4+2;doc.setDrawColor(226,232,240);doc.line(M,ly,W-M,ly);y=ly+4.5});
-  const n=doc.getNumberOfPages();for(let q=1;q<=n;q++){doc.setPage(q);doc.setFontSize(8);doc.setTextColor(100,116,139);doc.text('Control de engrase '+pt(e.code)+'  |  Pagina '+q+' de '+n,W/2,290,{align:'center'})}
-  fileOut(doc.output('blob'),'Engrase_'+String(e.code||'equipo').replace(/[^A-Za-z0-9_-]/g,'')+'_'+today()+'.pdf','📄 Historial de engrase listo');
-}
-
 /* =====================================================================
    CONTROL DE NEUMÁTICOS (cocadas, posiciones, parámetros de cambio)
    ===================================================================== */
 let trs=[],trp=[],trSub='pos',trFid='',trWarn=false;
-const TR_CAT=['Volquete','Cisterna de Agua','Camión Minero','Cargador Frontal','Motoniveladora','Minibús','Camioneta','Luminaria','Excavadora','Tractor de Oruga','Perforadora','Grupo Electrógeno'];
 const TR_OTR=['Camión Minero','Cargador Frontal','Motoniveladora'],TR_ROAD=['Volquete','Cisterna de Agua'];
 const TR_LAY={
  'Volquete':'DEL1-I | DEL1-D\nDEL2-I | DEL2-D\nT1-IE T1-II | T1-DI T1-DE\nT2-IE T2-II | T2-DI T2-DE',
@@ -948,7 +828,6 @@ const TR_COL={CAMBIO:'#ef4444',ALERTA:'#f59e0b',SINMED:'#3b82f6',OK:'#10b981',LI
 const TR_ST={CAMBIO:'bg-red-500/10 text-red-400 border-red-500/30',ALERTA:'bg-amber-500/10 text-amber-400 border-amber-500/30',SINMED:'bg-blue-500/10 text-blue-400 border-blue-500/30',OK:'bg-emerald-500/10 text-emerald-400 border-emerald-500/30',STOCK:'bg-slate-900 text-slate-300 border-slate-700',RECAPADO:'bdg-v',DESCARTADO:'bg-slate-900 text-slate-500 border-slate-700'};
 const TR_L={CAMBIO:'CAMBIAR',ALERTA:'ALERTA',SINMED:'MEDIR',OK:'OK',STOCK:'EN STOCK',RECAPADO:'EN RECAPADO',DESCARTADO:'DESCARTADO'};
 const trBadge=k=>`<span class="bdg ${TR_ST[k]||''}">${TR_L[k]||esc(k)}</span>`;
-const TR_REASON=['Desgaste (cocada mínima)','Desgaste irregular','Daño / corte','Reventón','Separación de banda','Rotación a otro equipo','Otro'];
 const num=(v,b)=>(v===''||v==null||isNaN(Number(v)))?b:Number(v);
 
 /* ---------- Parámetros y posiciones ---------- */
@@ -963,30 +842,10 @@ function trParamE(e){
   if(has(c.min))o.min=Number(c.min);if(has(c.alert))o.alert=Number(c.alert);if(has(c.cocadaNew))o.cocadaNew=Number(c.cocadaNew);
   o.size=String(c.size||'');o.own=has(c.min)||has(c.alert);return o;
 }
-const TR_PRESETS={
- '4x2':{n:'4x2 · 4 neumáticos + repuesto',t:'DEL-I | DEL-D\nTRA-I | TRA-D\nREP'},
- '6x4':{n:'6x4 · 10 neumáticos',t:'DEL-I | DEL-D\nT1-IE T1-II | T1-DI T1-DE\nT2-IE T2-II | T2-DI T2-DE'},
- '8x4':{n:'8x4 · 12 neumáticos (2 ejes direccionales + 2 de tracción)',t:'DEL1-I | DEL1-D\nDEL2-I | DEL2-D\nT1-IE T1-II | T1-DI T1-DE\nT2-IE T2-II | T2-DI T2-DE'},
- '8x4R':{n:'8x4 + repuesto · 13 neumáticos',t:'DEL1-I | DEL1-D\nDEL2-I | DEL2-D\nT1-IE T1-II | T1-DI T1-DE\nT2-IE T2-II | T2-DI T2-DE\nREP'},
- 'OTR2':{n:'2 ejes · 6 neumáticos (camión minero)',t:'DEL-I | DEL-D\nTRA-IE TRA-II | TRA-DI TRA-DE'}};
-const parseLayout=txt=>(txt||'').split('\n').map(l=>l.trim()).filter(Boolean).map(l=>{const sep=l.includes('|'),[a,b]=l.split('|'),sp=x=>(x||'').trim().split(/\s+/).filter(Boolean);return{L:sp(a),R:sp(b),sep}});
 const trCfg=fid=>trp.find(x=>x.fleetId===fid&&String(x.id).startsWith('TC-'));
-const trLayoutE=e=>{const c=trCfg(e.id);return parseLayout(c&&c.layout!=null?c.layout:trParam(e.category).layout)};
-const trPositions=e=>trLayoutE(e).flatMap(r=>[...r.L,...r.R]);
-const trCatPositions=cat=>parseLayout(trParam(cat).layout).flatMap(r=>[...r.L,...r.R]);
-const trCfgName=e=>{const c=trCfg(e.id);return c&&c.layout!=null?((TR_PRESETS[c.preset]||{}).n||'Personalizada'):'Según la categoría ('+e.category+')'};
 const trSort=(a,b)=>(a.d||'').localeCompare(b.d||'')||(Number(a.h)||0)-(Number(b.h)||0)||(a.ts||0)-(b.ts||0);
-function trRecalc(t){
-  const rs=[...(t.reads||[])].sort(trSort).slice(-150),l=rs[rs.length-1],lh=[...rs].reverse().find(x=>x.h!=null&&x.h!=='');
-  t.reads=rs;
-  if(l){t.lastCocada=l.c;t.lastDiff=l.diff!=null?l.diff:null;t.lastReadDate=l.d;if(lh)t.lastReadHours=lh.h;if(l.psi!=null&&l.psi!=='')t.lastPsi=l.psi}
-  else{t.lastCocada=t.mountCocada??'';t.lastDiff=null;t.lastReadDate=t.mountDate||''}
-  return t;
-}
 const trMounted=fid=>{const s=eqnSumOf('tr',fleet.find(x=>x.id===fid));return s?s.mounted.map(m=>({_eqn:1,pos:m.pos,code:m.code,_k:m.k,_c:m.c,fleetId:fid})):[]};
 const eqnPos=e=>{const s=eqnSumOf('tr',e);return s?Array.from({length:s.pos},(_,i)=>i):[]};
-const trAt=(fid,pos)=>trs.find(t=>t.status==='MONTADO'&&t.fleetId===fid&&t.pos===pos);
-
 /* ---------- Estado, desgaste y proyección ---------- */
 function trRun(t){const e=fleet.find(x=>x.id===t.fleetId);return(Number(t.hoursRun)||0)+(t.status==='MONTADO'&&e?Math.max(0,(Number(e.hours)||0)-(Number(t.mountHours)||0)):0)}
 function trCph(t){const h=trRun(t),c=(Number(t.cost)||0)+(Number(t.retreadCost)||0);return h>0&&c>0?c/h:null}
@@ -1015,358 +874,7 @@ function trDueHtml(){
   ${l.map(({t,h})=>`<div class="flex justify-between items-center gap-2 text-sm border-t border-slate-700" style="padding-top:.5rem"><div class="min-w-0"><b class="text-amber-400">${esc(h.e.code||'-')}</b> <span class="text-slate-300">${esc(t.pos)} · ${esc(t.code)}</span>${h.c!=null?` <span class="text-slate-400">${h.c} mm</span>`:''}</div>${trBadge(h.k)}</div>`).join('')||'<p class="text-slate-500 text-sm">Sin neumáticos en alerta.</p>'}</div>`;
 }
 
-/* ---------- Pestaña ---------- */
-function trGo(k){trSub=k;renderTr()}
-function renderTrOld(){
-  if(trSub==='par'&&!isSup())trSub='pos';
-  const items=[['pos','🛞 Posiciones'],['fec','📅 Por fecha'],['inv','📦 Inventario'],['alr','⚠️ Alertas'],...(isSup()?[['par','⚙️ Parámetros']]:[])];
-  $('tr-bar').innerHTML=items.map(([k,l])=>`<button onclick="trGo('${k}')" class="btn ${trSub===k?'bg-amber-500 text-slate-950':'bg-slate-700'} !py-1" style="white-space:nowrap">${l}</button>`).join('')+adm(`<button onclick="openModEq('tr')" class="btn bg-slate-700 !py-1" style="white-space:nowrap;margin-left:auto">🧩 Equipos</button>`);
-  $('tr-filter').style.display=trSub==='inv'?'':'none';
-  $('tr-body').innerHTML=trSub==='inv'?trInv():trSub==='alr'?trAlr():trSub==='par'?trPar():trSub==='fec'?trFec():trPos();
-}
-
-/* ---------- Posiciones (diagrama por equipo) ---------- */
-const trFleet=()=>fleetIn('tr');
-const trPick=()=>{const L=trFleet();if(!L.length)return null;if(!L.some(e=>e.id===trFid))trFid=L[0].id;return fleet.find(x=>x.id===trFid)};
-const trNoEq=()=>'<p class="text-slate-500 text-sm">'+(fleet.length?'Ningún equipo está habilitado en Neumáticos.'+(isAdmin()?' Usa "🧩 Equipos" para agregarlos.':''):'Primero registra equipos en la pestaña Flota.')+'</p>';
-const trEqSel=()=>`<select class="inp" onchange="trFid=this.value;renderTr()">${trFleet().map(x=>`<option value="${x.id}" ${x.id===trFid?'selected':''}>${esc(x.code)} - ${esc(x.brand)} ${esc(x.model)}</option>`).join('')}</select>`;
-function trPos(){
-  if(!trPick())return trNoEq();
-  const e=fleet.find(x=>x.id===trFid),P=trParamE(e),lay=trLayoutE(e),mt=trMounted(e.id),poss=trPositions(e);
-  if(!poss.length)return `<div class="bg-slate-800 border border-slate-700 rounded-xl p-3 space-y-3">${trEqSel()}<p class="text-sm text-slate-400">Este equipo (${esc(e.category)}) no tiene posiciones de neumáticos definidas.</p><div class="flex gap-2 flex-wrap">${sup(`<button onclick="openTrCfg('${e.id}')" class="btn bg-amber-500 text-slate-950">⚙️ Configurar neumáticos</button>`)||'<p class="text-xs text-slate-500">Pídele al supervisor o planner que lo configure.</p>'}${adm(`<button onclick="modOff('${e.id}','tr')" class="btn bg-red-500/20 text-red-400">🚫 Quitar de Neumáticos</button>`)}</div></div>`;
-  const cell=pos=>{const t=trAt(e.id,pos);
-    if(!t)return `<button onclick="openFreePos('${e.id}','${esc(pos)}')" style="flex:1 1 0;min-width:0;max-width:96px;min-height:78px;border:2px dashed ${TR_COL.LIBRE};border-radius:.6rem;background:#0f172a;color:#94a3b8;padding:4px;font-size:10px;text-align:center"><div>${esc(pos)}</div><div style="font-size:20px;line-height:1.4">＋</div><div>libre</div></button>`;
-    const h=trHealth(t),col=TR_COL[h.k];
-    return `<button onclick="openPosMenu('${t.id}')" style="flex:1 1 0;min-width:0;max-width:96px;min-height:78px;border:2px solid ${col};border-radius:.6rem;background:#0f172a;padding:4px;text-align:center"><div style="font-size:10px;color:#94a3b8">${esc(pos)}</div><div style="font-size:19px;font-weight:800;line-height:1.2;color:${col}">${h.c!=null?h.c:'—'}<span style="font-size:10px;font-weight:600"> mm</span></div><div style="font-size:9px;color:#94a3b8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t.code)}</div></button>`};
-  const rows=lay.map(r=>`<div style="display:flex;gap:6px;justify-content:${r.sep?'stretch':'center'}">${r.sep?`<div style="display:flex;gap:6px;flex:1;justify-content:flex-end">${r.L.map(cell).join('')}</div><div style="width:16px;border-left:2px solid #334155;border-right:2px solid #334155;margin:0 2px;opacity:.5"></div><div style="display:flex;gap:6px;flex:1">${r.R.map(cell).join('')}</div>`:r.L.map(cell).join('')}</div>`).join('');
-  const cnt={CAMBIO:0,ALERTA:0,SINMED:0};mt.forEach(t=>{const k=trHealth(t).k;if(cnt[k]!=null)cnt[k]++});
-  return `<div class="bg-slate-800 border border-slate-700 rounded-xl p-3 space-y-3">${trEqSel()}
-    <p class="text-xs text-slate-400">${esc(e.category)} · Configuración: <b class="text-slate-200">${esc(trCfgName(e))}</b> · Horómetro/odómetro: <b class="text-slate-200">${fmtH(e.hours)}</b> ${P.unit} · Montados: <b class="text-slate-200">${mt.length}/${poss.length}</b> · Cambio ≤ <b class="text-red-400">${P.min} mm</b> · Alerta ≤ <b class="text-amber-400">${P.alert} mm</b>${P.own?' <span class="text-emerald-400">(propios del equipo)</span>':''}</p>
-    <p class="text-xs text-slate-400">Medida de neumático: <b class="text-slate-200">${P.size?esc(P.size):'sin definir'}</b>${P.cocadaNew!==''?` · Cocada nueva: <b class="text-slate-200">${P.cocadaNew} mm</b>`:''}${!P.size&&isSup()?` · <button onclick="openTrCfg('${e.id}')" class="lnk">definir</button>`:''}</p>
-    <div class="flex gap-2 flex-wrap">${cnt.CAMBIO?`<span class="bdg ${TR_ST.CAMBIO}">${cnt.CAMBIO} para cambiar</span>`:''}${cnt.ALERTA?`<span class="bdg ${TR_ST.ALERTA}">${cnt.ALERTA} en alerta</span>`:''}${cnt.SINMED?`<span class="bdg ${TR_ST.SINMED}">${cnt.SINMED} por medir</span>`:''}</div>
-    <div style="display:grid;gap:8px;padding:.5rem 0">${rows}</div>
-    <div class="flex gap-2 flex-wrap"><button onclick="openMeasure('${e.id}')" class="btn bg-emerald-500/20 text-emerald-400">📏 Nueva medición</button><button onclick="trGo('fec')" class="btn bg-slate-700">📅 Ver por fecha</button><button onclick="makePdfTr('${e.id}')" class="btn bg-slate-700">📄 Hoja de medición</button>${sup(`<button onclick="openTrCfg('${e.id}')" class="btn bg-slate-700">⚙️ Configuración</button>`)}${adm(`<button onclick="modOff('${e.id}','tr')" class="btn bg-red-500/20 text-red-400">🚫 Quitar de Neumáticos</button>`)}</div></div>`;
-}
-/* ---------- Por fecha: mediciones de un equipo ordenadas por fecha ---------- */
-function trSessions(fid){
-  const m={};
-  trs.forEach(t=>(t.reads||[]).forEach(r=>{const f=r.fid||t.fleetId;if(r.ev||f!==fid)return;const k=r.sid||(f+'|'+r.d);const o=m[k]||(m[k]={sid:k,d:r.d,h:r.h,by:r.by,rows:{}});o.rows[r.pos||t.pos]={t,r};if(o.h==null&&r.h!=null)o.h=r.h}));
-  return Object.values(m).sort((a,b)=>(b.d||'').localeCompare(a.d||'')||(Number(b.h)||0)-(Number(a.h)||0));
-}
-const trDShort=d=>d?d.slice(8)+'/'+d.slice(5,7):'–';
-const trCol=(c,P)=>c<=P.min?TR_COL.CAMBIO:c<=P.alert?TR_COL.ALERTA:TR_COL.OK;
-function trFec(){
-  if(!trPick())return trNoEq();
-  const e=fleet.find(x=>x.id===trFid),P=trParamE(e),poss=trPositions(e),ss=trSessions(e.id),cols=ss.slice(0,6);
-  const head=`<div class="bg-slate-800 border border-slate-700 rounded-xl p-3 space-y-3">${trEqSel()}<div class="flex gap-2 flex-wrap"><button onclick="openMeasure('${e.id}')" class="btn bg-emerald-500/20 text-emerald-400">➕ Nueva medición (fecha libre)</button><button onclick="makePdfTr('${e.id}')" class="btn bg-slate-700">📄 Hoja</button></div>
-    <p class="text-xs text-slate-400">${esc(e.category)} · ${esc(trCfgName(e))} · ${poss.length} neumáticos${P.size?' · Medida '+esc(P.size):''} · Cambio ≤ <b class="text-red-400">${P.min}</b> · Alerta ≤ <b class="text-amber-400">${P.alert}</b> mm</p></div>`;
-  if(!poss.length)return head+'<p class="text-slate-500 text-sm">Este equipo no tiene posiciones de neumáticos definidas (usa ⚙️ Configuración en Posiciones).</p>';
-  if(!ss.length)return head+'<p class="text-slate-500 text-sm">Aún no hay mediciones de este equipo. Usa "Nueva medición".</p>';
-  const th='padding:6px 8px;text-align:center;border-bottom:1px solid #334155;white-space:nowrap',td='padding:6px 8px;text-align:center;border-bottom:1px solid #1e293b;font-weight:700',stk='position:sticky;left:0;background:#1e293b;z-index:1;text-align:left;border-right:1px solid #334155';
-  const table=`<div class="bg-slate-800 border border-slate-700 rounded-xl p-3"><p class="text-xs text-slate-400 mb-2">Cocada mínima (mm) por posición — últimas ${cols.length} medición(es), la más reciente primero.</p><div style="overflow-x:auto"><table style="border-collapse:collapse;font-size:12px;min-width:100%">
-    <thead><tr><th style="${th};${stk}">Pos.</th>${cols.map(c=>`<th style="${th}"><div>${trDShort(c.d)}</div><div style="font-weight:400;color:#94a3b8;font-size:10px">${c.h!=null?fmtH(c.h):'s/h'}</div></th>`).join('')}</tr></thead><tbody>
-    ${poss.map(pos=>{const cur=trAt(e.id,pos);return `<tr><td style="${td};${stk}">${esc(pos)}<div style="font-weight:400;color:#94a3b8;font-size:10px">${cur?esc(cur.code):'libre'}</div></td>${cols.map(c=>{const x=c.rows[pos];return x?`<td style="${td};color:${trCol(x.r.c,P)}">${x.r.c}${x.t.id!==(cur&&cur.id)?`<div style="font-weight:400;color:#94a3b8;font-size:9px">${esc(x.t.code)}</div>`:''}</td>`:`<td style="${td};color:#475569">–</td>`}).join('')}</tr>`}).join('')}</tbody></table></div></div>`;
-  const list=ss.map(c=>{const vs=Object.values(c.rows).map(x=>x.r),mn=Math.min(...vs.map(r=>r.c)),n=vs.length,al=vs.filter(r=>r.c<=P.alert).length;
-    return `<div class="bg-slate-800 border border-slate-700 rounded-xl p-3 flex justify-between items-center gap-2"><div class="min-w-0"><b class="text-slate-200">${fmtD(c.d)}</b> <span class="text-xs text-slate-400">· ${c.h!=null?fmtH(c.h)+' '+P.unit:'sin horómetro'}</span><p class="text-xs text-slate-400">${n} de ${poss.length} neumáticos · mínima <b style="color:${trCol(mn,P)}">${mn} mm</b>${al?` · <span class="text-amber-400">${al} en alerta/cambio</span>`:''} · ${esc(c.by||'')}</p></div>
-    <div class="flex gap-1"><button onclick="openSession('${esc(c.sid)}','${e.id}')" class="btn bg-slate-700 !py-1">👁️</button>${adm(`<button onclick="delSession('${esc(c.sid)}','${e.id}')" class="btn bg-red-500/20 !py-1">🗑️</button>`)}</div></div>`}).join('');
-  return head+table+`<h4 class="text-xs text-slate-400 uppercase">Historial de mediciones (${ss.length})</h4><div class="grid gap-2 md:grid-cols-2">${list}</div>`;
-}
-function openSession(sid,fid){
-  const e=fleet.find(x=>x.id===fid),ss=trSessions(fid).find(x=>x.sid===sid);if(!e||!ss)return;const P=trParamE(e),poss=trPositions(e);
-  const keys=[...poss.filter(p=>ss.rows[p]),...Object.keys(ss.rows).filter(p=>!poss.includes(p))];
-  show(`<div class="flex justify-between items-start"><div><h3 class="font-bold">📅 Medición del ${fmtD(ss.d)}</h3><p class="text-xs text-slate-400">${esc(e.code)} · ${ss.h!=null?fmtH(ss.h)+' '+P.unit:'sin horómetro'} · ${esc(ss.by||'')}</p></div><button type="button" onclick="hide()" class="text-slate-400 text-xl">✕</button></div>
-  <div class="space-y-2 mt-3">${keys.map(pos=>{const{t,r}=ss.rows[pos],rs=[...(t.reads||[])].sort(trSort),i=rs.indexOf(r),pv=i>0?rs[i-1]:null,dl=pv?Math.round((r.c-pv.c)*10)/10:null;
-    return `<div class="bg-slate-900/50 border border-slate-700 rounded-lg p-3 text-xs"><div class="flex justify-between gap-2"><b class="text-amber-400 text-sm">${esc(pos)} <span class="text-slate-300">· ${esc(t.code)}</span></b><b style="color:${trCol(r.c,P)};font-size:15px">${r.c} mm</b></div>
-    <p class="text-slate-400 mt-1">Medidas: ${(r.v||[r.i,r.m,r.e]).map(x=>x==null?'–':x).join(' / ')}${r.psi!=null&&r.psi!==''?' · '+r.psi+' psi':''}${dl!=null?` · <span style="color:${dl<0?'#f59e0b':'#94a3b8'}">${dl>0?'+':''}${dl} mm vs. anterior</span>`:''}</p>${r.note?`<p class="text-slate-300 mt-1">${esc(r.note)}</p>`:''}</div>`}).join('')}</div>
-  <div class="flex justify-end gap-2 mt-4"><button onclick="hide()" class="btn bg-slate-700">Cerrar</button></div>`,'36rem');
-}
-function delSession(sid,fid){
-  if(!isAdmin())return;
-  ask('¿Eliminar esta medición completa? Se quitarán sus lecturas de cada neumático.',()=>{
-    trs.forEach(t=>{if((t.reads||[]).some(r=>!r.ev&&(r.sid||((r.fid||t.fleetId)+'|'+r.d))===sid&&(r.fid||t.fleetId)===fid))put('tires',trRecalc({...t,reads:t.reads.filter(r=>r.ev||(r.sid||((r.fid||t.fleetId)+'|'+r.d))!==sid||(r.fid||t.fleetId)!==fid)}))})});
-}
-/* ---------- Configuración de neumáticos por equipo (4x2, 6x4, 8x4...) ---------- */
-function openTrCfg(fid){
-  if(!isSup())return;const e=fleet.find(x=>x.id===fid);if(!e)return;const c=trCfg(fid),cur=c&&c.layout!=null?c.layout:trParam(e.category).layout,pre=c&&c.layout!=null?(c.preset||'CUSTOM'):'';
-  show(`<h3 class="font-bold">⚙️ Neumáticos de ${esc(e.code)}</h3><p class="text-xs text-slate-400 mb-3">${esc(e.brand)} ${esc(e.model)} · ${esc(e.category)}</p><form onsubmit="saveTrCfg(event,'${fid}')" class="space-y-3">
-    <label class="block text-xs text-slate-400 font-semibold">Configuración de ejes<select class="inp mt-1 font-normal" name="preset" onchange="trPre(this,'${fid}')"><option value="">Según la categoría (${esc(e.category)})</option>${Object.keys(TR_PRESETS).map(k=>`<option value="${k}" ${pre===k?'selected':''}>${esc(TR_PRESETS[k].n)}</option>`).join('')}<option value="CUSTOM" ${pre==='CUSTOM'?'selected':''}>Personalizada…</option></select></label>
-    <label class="block text-xs text-slate-400 font-semibold">Posiciones <span class="font-normal">(una fila por eje; | separa izquierda y derecha; E=exterior, I=interior)</span><textarea maxlength="5000" name="layout" rows="7" class="inp mt-1 font-normal" style="font-family:monospace;font-size:13px" spellcheck="false" oninput="this.form.preset.value='CUSTOM'">${esc(cur)}</textarea></label>
-    <div class="bg-slate-900/50 border border-slate-700 rounded-lg p-3 space-y-3"><p class="text-xs text-amber-400 font-semibold">Medidas propias de este equipo <span class="text-slate-400 font-normal">(texto y números libres; en blanco = según la categoría)</span></p>
-    ${field('size','Medida del neumático',c&&c.size||'','placeholder="Ej. 11R22.5 · 24.00R35 · Del. 385/65R22.5 / Tra. 12R24.5" list="tr-sizes"')}<datalist id="tr-sizes">${[...new Set(trs.map(t=>t.size).concat(trp.map(x=>x.size)).filter(Boolean))].map(x=>`<option value="${esc(x)}">`).join('')}</datalist>
-    <div class="g2">${field('cocadaNew','Cocada nueva (mm)',c&&c.cocadaNew!=null?c.cocadaNew:'','min="0" step="0.1" inputmode="decimal" placeholder="Ej. 22"','number')}<span></span></div>
-    <div class="g2">${field('min','Cocada de CAMBIO (mm)',c&&c.min!=null?c.min:'',`min="0" step="0.1" inputmode="decimal" placeholder="Categoría: ${trParam(e.category).min}"`,'number')}${field('alert','Cocada de ALERTA (mm)',c&&c.alert!=null?c.alert:'',`min="0" step="0.1" inputmode="decimal" placeholder="Categoría: ${trParam(e.category).alert}"`,'number')}</div></div>
-    <p id="tr-err" class="text-xs text-red-400 hidden"></p>${btns()}</form>`,'36rem');
-}
-function trPre(sel,fid){const e=fleet.find(x=>x.id===fid),ta=sel.form.layout;if(sel.value==='')ta.value=trParam(e.category).layout;else if(TR_PRESETS[sel.value])ta.value=TR_PRESETS[sel.value].t}
-function saveTrCfg(ev,fid){
-  ev.preventDefault();const f=Object.fromEntries(new FormData(ev.target)),er=$('tr-err'),bad=m=>{er.textContent=m;er.classList.remove('hidden')};
-  const lay=(f.layout||'').split('\n').map(l=>l.trim()).filter(Boolean),flat=lay.flatMap(l=>l.replace('|',' ').split(/\s+/).filter(Boolean));
-  if(new Set(flat).size!==flat.length){bad('Hay posiciones repetidas.');return}
-  if(f.preset!==''&&!flat.length){bad('Define al menos una posición.');return}
-  const used=trMounted(fid).filter(t=>!flat.includes(t.pos));
-  if(f.preset!==''&&used.length){bad('No puedes quitar posiciones ocupadas: '+used.map(t=>t.pos).join(', ')+'. Desmonta o mueve esos neumáticos primero.');return}
-  const n=v=>v===''||v==null?'':Number(v),B=trParam((fleet.find(x=>x.id===fid)||{}).category),mn=n(f.min)===''?B.min:n(f.min),al=n(f.alert)===''?B.alert:n(f.alert);
-  if(al<=mn){bad(`La cocada de alerta (${al} mm) debe ser mayor que la de cambio (${mn} mm).`);return}
-  put('tireParams',{id:'TC-'+fid,fleetId:fid,preset:f.preset==='CUSTOM'?'CUSTOM':f.preset,layout:f.preset===''?null:lay.join('\n'),size:(f.size||'').trim(),cocadaNew:n(f.cocadaNew),min:n(f.min),alert:n(f.alert)});hide();
-}
-function openPosMenu(tid){
-  const t=trs.find(x=>x.id===tid);if(!t)return;const h=trHealth(t);
-  show(`<div class="flex justify-between items-start"><div><h3 class="font-bold">${esc(t.pos)} · ${esc(t.code)}</h3><p class="text-xs text-slate-400">${esc(t.brand)} ${esc(t.design)} ${esc(t.size)}</p></div>${trBadge(h.k)}</div>
-  <p class="text-sm mt-2">Cocada: <b style="color:${TR_COL[h.k]}">${h.c!=null?h.c+' mm':'sin medir'}</b>${h.proj?` · Cambio estimado en ~<b>${fmtH(h.proj.rem)}</b> ${h.P.unit}`:''}</p>
-  ${h.flags.map(f=>`<p class="text-xs text-amber-400">⚠️ ${esc(f)}</p>`).join('')}
-  <div class="grid gap-2 mt-3"><button onclick="openMeasure('${t.fleetId}','${t.id}')" class="btn bg-emerald-500/20 text-emerald-400">📏 Medir cocada</button>
-  <button onclick="openMove('${t.id}')" class="btn bg-slate-700">🔄 Rotar / mover de posición</button>
-  <button onclick="openDismount('${t.id}')" class="btn bg-red-500/20 text-red-400">⬇️ Desmontar</button>
-  <button onclick="openTireDetail('${t.id}')" class="btn bg-slate-700">📋 Ver ficha e historial</button><button onclick="hide()" class="btn bg-slate-800 border border-slate-600">Cerrar</button></div>`);
-}
-
-/* ---------- Inventario ---------- */
-function trInv(){
-  const s=($('qtr').value||'').toLowerCase(),st=$('ftr').value,ord={MONTADO:0,STOCK:1,RECAPADO:2,DESCARTADO:3};
-  const l=trs.filter(t=>(!st||t.status===st)&&[t.code,t.brand,t.design,t.size].some(v=>String(v||'').toLowerCase().includes(s))).sort((a,b)=>ord[a.status]-ord[b.status]||String(a.code).localeCompare(String(b.code)));
-  return `<div class="grid gap-3 md:grid-cols-2 lg:grid-cols-3">${l.map(t=>{const h=trHealth(t),e=fleet.find(x=>x.id===t.fleetId),cph=trCph(t);
-    return `<div class="bg-slate-800 border border-slate-700 rounded-xl p-4"><div class="flex justify-between items-start gap-2"><div class="min-w-0"><span class="font-bold text-amber-400 text-sm">${esc(t.code)}</span><p class="text-xs text-slate-400 truncate">${esc(t.brand)} ${esc(t.design)} · ${esc(t.size)}</p></div><div style="text-align:right">${t.status==='MONTADO'?trBadge(h.k):trBadge(t.status)}</div></div>
-    <p class="text-xs text-slate-400 mt-2">${t.status==='MONTADO'&&e?`En <b class="text-slate-200">${esc(e.code)}</b> · posición <b class="text-slate-200">${esc(t.pos)}</b>`:esc(TR_L[t.status]||t.status)}${t.type==='RECAPADO'?' · Recapado':''}</p>
-    <p class="text-xs text-slate-400">Cocada nueva: ${esc(t.cocadaInit)} mm${h.c!=null?` · Actual: <b class="text-slate-200">${h.c} mm</b>`:''}${h.pct!=null?` (${h.pct}% usado)`:''}</p>
-    <p class="text-xs text-slate-400">Recorrido: ${fmtH(Math.round(trRun(t)))}${cph?` · <b class="text-slate-200">$${cph.toFixed(2)}</b>/h`:''}</p>
-    <div class="flex gap-1 justify-end mt-3 flex-wrap">${t.status==='STOCK'?`<button onclick="openMount('','','${t.id}')" class="btn bg-emerald-500/20 text-emerald-400 !py-1">⬆️ Montar</button>`:''}${t.status==='RECAPADO'?`<button onclick="openRetread('${t.id}')" class="btn bg-emerald-500/20 text-emerald-400 !py-1">♻️ Recibir</button>`:''}<button onclick="openTireDetail('${t.id}')" class="btn bg-slate-700 !py-1">📋 Ficha</button>${sup(`<button onclick="openTire('${t.id}')" class="btn bg-slate-700 !py-1">✏️</button>`)}</div></div>`}).join('')||'<p class="text-slate-500 text-sm">Sin neumáticos registrados. Usa "+ Neumático".</p>'}</div>`;
-}
-function openTire(id){
-  const t=trs.find(x=>x.id===id)||{};if(id&&!isSup())return;
-  show(`<h3 class="font-bold mb-3">${id?'Editar':'Registrar'} neumático</h3><form onsubmit="saveTire(event,'${id||''}')" class="space-y-3">
-    <div class="g2">${field('code','N° de serie / código *',t.code,'required placeholder="Ej. N-0001"')}${field('size','Medida *',t.size,'required placeholder="Ej. 11R22.5 / 24.00R35"')}</div>
-    <div class="g2">${field('brand','Marca *',t.brand,'required')}${field('design','Diseño / modelo',t.design)}</div>
-    <div class="g2">${sel('type','Tipo',[['NUEVO','Nuevo'],['RECAPADO','Recapado']],t.type||'NUEVO')}${field('cocadaInit','Cocada nueva (mm) *',t.cocadaInit??'','required min="1" step="0.1" inputmode="decimal"','number')}</div>
-    <div class="g2">${field('cost','Costo ($)',t.cost??'','min="0" step="0.01" inputmode="decimal"','number')}${field('buyDate','Fecha de compra',t.buyDate||today(),'','date')}</div>
-    <label class="block text-xs text-slate-400 font-semibold">Notas<textarea maxlength="5000" name="notes" rows="2" class="inp mt-1 font-normal">${esc(t.notes)}</textarea></label>
-    <p id="tr-err" class="text-xs text-red-400 hidden"></p>${btns()}</form>`);
-}
-function saveTire(ev,id){
-  ev.preventDefault();const f=Object.fromEntries(new FormData(ev.target)),er=$('tr-err'),code=f.code.trim().toUpperCase();
-  if(trs.some(x=>x.id!==id&&String(x.code).toUpperCase()===code)){er.textContent='Ya existe un neumático con ese código.';er.classList.remove('hidden');return}
-  const old=trs.find(x=>x.id===id)||{status:'STOCK',reads:[],events:[],hoursRun:0};
-  put('tires',{...old,id:id||uid('N'),code,size:f.size.trim(),brand:f.brand.trim(),design:(f.design||'').trim(),type:f.type,cocadaInit:Number(f.cocadaInit),cost:f.cost===''?0:Number(f.cost),buyDate:f.buyDate,notes:(f.notes||'').trim()});hide();
-}
-
-/* ---------- Medición de cocadas ---------- */
-function trAddPt(btn){const g=btn.closest('.mrow').querySelector('.mpts'),n=g.children.length+1;g.insertAdjacentHTML('beforeend',`<label class="block text-[10px] text-slate-400">P${n}<input class="inp" data-k="v" type="number" min="0" step="0.1" inputmode="decimal" style="padding:.5rem .4rem"></label>`)}
-function openFreePos(fid,pos){
-  const e=fleet.find(x=>x.id===fid);if(!e)return;const st=trs.filter(t=>t.status==='STOCK').length,P=trParamE(e);
-  show(`<div class="flex justify-between items-start"><div><h3 class="font-bold">${esc(pos)} · libre</h3><p class="text-xs text-slate-400">${esc(e.code)}${P.size?' · Medida '+esc(P.size):''}</p></div><button type="button" onclick="hide()" class="text-slate-400 text-xl">✕</button></div>
-  <div class="grid gap-2 mt-3"><button onclick="openMeasure('${fid}','','${esc(pos)}')" class="btn bg-emerald-500/20 text-emerald-400">📏 Registrar cocada aquí (sin pasar por inventario)</button>
-  <button onclick="${st?`openMount('${fid}','${esc(pos)}')`:"note('No hay neumáticos en stock. Regístralo primero en 📦 Inventario (+ Neumático).')"}" class="btn bg-slate-700">⬆️ Montar desde stock${st?' ('+st+')':''}</button><button onclick="hide()" class="btn bg-slate-800 border border-slate-600">Cerrar</button></div>`,'26rem');
-}
-const trPtsHtml=()=>['Int.','Cen.','Ext.'].map(lb=>`<label class="block text-[10px] text-slate-400">${lb}<input class="inp" data-k="v" type="number" min="0" step="0.1" inputmode="decimal" style="padding:.5rem .4rem"></label>`).join('');
-function openMeasure(fid,onlyTid,onlyPos){
-  const e=fleet.find(x=>x.id===fid);if(!e)return;trWarn=false;const poss=trPositions(e);
-  let l=trMounted(fid).sort((a,b)=>poss.indexOf(a.pos)-poss.indexOf(b.pos));if(onlyTid)l=l.filter(t=>t.id===onlyTid);
-  const fr=onlyTid?[]:poss.filter(p=>!trAt(fid,p)&&(!onlyPos||p===onlyPos));if(onlyPos)l=l.filter(t=>t.pos===onlyPos);
-  if(!l.length&&!fr.length){note(poss.length?'No hay posiciones para medir.':'Este equipo no tiene posiciones de neumáticos. Defínelas en ⚙️ Configuración (Neumáticos › Posiciones).');return}
-  const ord=[...l.map(t=>({p:t.pos,t})),...fr.map(p=>({p}))].sort((a,b)=>(poss.indexOf(a.p)+1||999)-(poss.indexOf(b.p)+1||999));
-  const P=trParamE(e);
-  show(`<h3 class="font-bold text-emerald-400">📏 Medición de cocadas</h3><p class="text-xs text-slate-400 mb-1">${esc(e.code)} · ${esc(e.brand)} ${esc(e.model)} · ${esc(trCfgName(e))} · ${trMounted(fid).length} de ${poss.length} neumáticos registrados</p>
-  <p class="text-xs text-slate-400 mb-3">Cambio ≤ ${P.min} mm · Alerta ≤ ${P.alert} mm${P.size?' · Medida '+esc(P.size):''}</p>
-  <form onsubmit="saveMeasure(event,'${fid}')" class="space-y-3">
-    <div class="g2">${field('date','Fecha de la medición *',today(),`required max="${today()}"`,'date')}${field('hours',`Horómetro / odómetro (${P.unit})`,e.hours??'','min="0" step="any" inputmode="decimal"','number')}</div>
-    ${field('by','Técnico *',techVal(''),'required'+techRo())}
-    <p class="text-xs text-slate-400">Medición libre: elige cualquier fecha, mide solo los neumáticos que quieras (deja en blanco los demás) y toma las medidas que necesites por neumático (usa "+ punto" para más de 3). Si registras una fecha pasada y no la sabes, deja el horómetro vacío.</p>
-    ${fr.length?`<p class="text-xs text-blue-400">Las posiciones <b>libres</b> también se pueden medir: si cargas una cocada, el neumático se registra solo (código opcional; medida ${P.size?esc(P.size):'según lo que escribas'}).</p>`:''}
-    ${ord.map(({p,t})=>`<div class="mrow bg-slate-900/50 border ${t?'border-slate-700':'border-blue-500/40'} rounded-lg p-3 space-y-2" ${t?`data-tid="${t.id}"`:`data-pos="${esc(p)}"`}>${t?`<div class="flex justify-between"><b class="text-amber-400 text-sm">${esc(t.pos)} <span class="text-slate-300">· ${esc(t.code)}</span></b><span class="text-xs text-slate-400">Última: ${t.lastCocada!=null&&t.lastCocada!==''?t.lastCocada+' mm':'—'}</span></div>`:`<div class="flex justify-between items-center gap-2"><b class="text-amber-400 text-sm">${esc(p)} <span class="text-blue-400 text-xs font-normal">· libre (nuevo registro)</span></b></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.4rem"><label class="block text-[10px] text-slate-400">N° / código (opcional)<input class="inp" data-k="code" type="text" maxlength="40" placeholder="${esc(e.code+'-'+p)}" style="padding:.5rem .4rem"></label><label class="block text-[10px] text-slate-400">Medida<input class="inp" data-k="size" type="text" maxlength="60" value="${esc(P.size)}" placeholder="Ej. 11R22.5" style="padding:.5rem .4rem"></label></div>`}
-      <div class="mpts" style="display:grid;grid-template-columns:repeat(3,1fr);gap:.4rem">${trPtsHtml()}</div>
-      <div style="display:grid;grid-template-columns:4.2rem 1fr auto;gap:.4rem;align-items:end"><label class="block text-[10px] text-slate-400">psi<input class="inp" data-k="p" type="number" min="0" inputmode="decimal" style="padding:.5rem .4rem"></label><label class="block text-[10px] text-slate-400">Observación<input class="inp" data-k="n" type="text" style="padding:.5rem .4rem"></label><button type="button" onclick="trAddPt(this)" class="btn bg-slate-700 !py-1">+ punto</button></div></div>`).join('')}
-    <p id="tr-err" class="text-xs text-red-400 hidden"></p>${btns('hide()','Guardar medición','bg-emerald-500')}</form>`,'36rem');
-}
-function saveMeasure(ev,fid){
-  ev.preventDefault();const f=Object.fromEntries(new FormData(ev.target)),er=$('tr-err'),bad=m=>{er.textContent=m;er.classList.remove('hidden');er.scrollIntoView({block:'center'})},e=fleet.find(x=>x.id===fid);if(!e)return;
-  const P=trParamE(e),hrs=f.hours===''?(f.date===today()?(Number(e.hours)||0):null):Number(f.hours),out=[],warn=[],sid='S'+Date.now().toString(36);
-  const made=new Set(trs.map(x=>String(x.code).toUpperCase())),newT=[];
-  for(const row of document.querySelectorAll('.mrow')){
-    let t=trs.find(x=>x.id===row.dataset.tid);const fp=row.dataset.pos;
-    if(!t&&fp==null)continue;
-    if(!t){const vv=[...row.querySelectorAll('[data-k=v]')].map(i=>i.value).filter(x=>x!=='');if(!vv.length)continue;
-      if(trAt(fid,fp)){bad(`${fp}: esa posición ya fue ocupada por otro registro. Cierra y vuelve a abrir la medición.`);return}
-      let code=(row.querySelector('[data-k=code]').value||'').trim().toUpperCase();
-      if(code&&made.has(code)){bad(`${fp}: ya existe un neumático con el código ${code}.`);return}
-      if(!code){const b0=String(e.code+'-'+fp).toUpperCase();code=b0;let k=2;while(made.has(code))code=b0+'-'+(k++)}
-      made.add(code);const mx=Math.max(...vv.map(Number)),ci=P.cocadaNew!==''?Math.max(Number(P.cocadaNew),mx):mx,mh=hrs!=null?hrs:(Number(e.hours)||0);
-      t={id:uid('N'),code,size:(row.querySelector('[data-k=size]').value||'').trim(),brand:'',design:'',type:'NUEVO',cocadaInit:ci,cost:0,buyDate:'',notes:'Registrado desde medición libre',status:'MONTADO',fleetId:fid,pos:fp,mountDate:f.date,mountHours:mh,mountCocada:Math.min(...vv.map(Number)),moveHours:mh,hoursRun:0,reads:[],events:[{ty:'MONTAJE',d:f.date,h:mh,fid,pos:fp,c:Math.min(...vv.map(Number)),by:f.by.trim(),ts:Date.now()}],isNew:true};
-      newT.push(t)}
-    const vals=[...row.querySelectorAll('[data-k=v]')].map(i=>i.value).filter(x=>x!=='').map(Number),ps=row.querySelector('[data-k=p]').value,note=row.querySelector('[data-k=n]').value.trim();
-    if(!vals.length&&ps===''&&!note)continue;
-    if(!vals.length){bad(`${t.pos}: ingresa al menos una medida de cocada (mm).`);return}
-    if(vals.some(x=>x<0||x>500)){bad(`${t.pos}: una medida no es válida (debe estar entre 0 y 500 mm).`);return}
-    if(!t.isNew&&Number(t.cocadaInit)&&vals.some(x=>x>Number(t.cocadaInit)+5))warn.push(`${t.pos}: ${Math.max(...vals)} mm supera la cocada nueva registrada (${t.cocadaInit} mm)`);
-    const c=Math.min(...vals),diff=vals.length>1?Math.round((Math.max(...vals)-c)*10)/10:null,prev=[...(t.reads||[])].sort(trSort).filter(r=>(r.d||'')<=f.date).pop();
-    if(prev&&c>Number(prev.c)+1.5)warn.push(`${t.pos}: ${c} mm es mayor que la medición anterior (${prev.c} mm)`);
-    if(prev&&hrs!=null&&prev.h!=null&&prev.h!==''&&hrs<Number(prev.h))warn.push(`${t.pos}: el horómetro (${fmtH(hrs)}) es menor que el de la medición anterior (${fmtH(prev.h)})`);
-    out.push({t,r:{sid,fid,pos:t.pos,d:f.date,h:hrs,v:vals,i:vals[0]??null,m:vals[1]??null,e:vals[2]??null,c,diff,psi:ps===''?null:Number(ps),by:f.by.trim(),note,ts:Date.now()}});
-  }
-  if(!out.length){bad('No ingresaste ninguna medida.');return}
-  if(warn.length&&!trWarn){trWarn=true;bad('Revisa: '+warn.join('; ')+'. Si son correctas, presiona Guardar otra vez.');return}
-  out.forEach(({t,r})=>{const o={...t,reads:[...(t.reads||[]),r]};delete o.isNew;put('tires',trRecalc(o))});
-  if(hrs!=null&&hrs>(Number(e.hours)||0))put('fleet',{...e,hours:hrs});
-  const nc=out.filter(x=>x.r.c<=P.min).length;trFid=fid;
-  note(`Se registraron ${out.length} medición(es) del ${fmtD(f.date)}.${newT.length?` Se crearon ${newT.length} neumático(s) nuevos: ${newT.map(x=>x.code).join(', ')} (puedes completar marca y costo en 📦 Inventario).`:''}${nc?` ⚠️ ${nc} neumático(s) en cocada de cambio (≤ ${P.min} mm).`:''}`);
-}
-
-/* ---------- Montar / desmontar / rotar ---------- */
-const trEvt=(t,o)=>[...(t.events||[]),{...o,by:me.name,ts:Date.now()}].slice(-40);
-function openMount(fid,pos,tid){
-  const stock=trs.filter(t=>t.status==='STOCK');
-  if(!stock.length){note('No hay neumáticos en stock. Regístralo primero en 📦 Inventario (+ Neumático).');return}
-  const eqs=fleetIn('tr').filter(e=>trPositions(e).length);if(!eqs.length){note('Ningún equipo habilitado en Neumáticos tiene posiciones definidas.');return}
-  const f0=fid||eqs[0].id,e=fleet.find(x=>x.id===f0)||eqs[0];
-  show(`<h3 class="font-bold text-emerald-400">⬆️ Montar neumático</h3><form onsubmit="saveMount(event)" class="space-y-3 mt-2">
-    ${sel('fleetId','Equipo *',eqs.map(x=>[x.id,`${x.code} - ${x.brand} ${x.model}`]),e.id)}
-    <label class="block text-xs text-slate-400 font-semibold">Posición *<select class="inp mt-1 font-normal" name="pos"></select></label><p id="tr-msz" class="text-xs text-slate-400"></p>
-    ${sel('tireId','Neumático (en stock) *',stock.map(t=>[t.id,`${t.code} · ${t.brand} ${t.size}${t.lastCocada!==''&&t.lastCocada!=null?' · '+t.lastCocada+' mm':''}`]),tid||stock[0].id)}
-    <div class="g2">${field('date','Fecha *',today(),`required max="${today()}"`,'date')}${field('hours','Horómetro / odómetro *',e.hours??'','required min="0" step="any" inputmode="decimal"','number')}</div>
-    ${field('cocada','Cocada al montar (mm) *','','required min="0" step="0.1" inputmode="decimal"','number')}${field('by','Técnico *',techVal(''),'required'+techRo())}
-    <p id="tr-err" class="text-xs text-red-400 hidden"></p>${btns('hide()','Montar','bg-emerald-500')}</form>`);
-  const F=document.querySelector('#modal form'),fillPos=()=>{const ee=fleet.find(x=>x.id===F.fleetId.value),ps=trPositions(ee).filter(p=>!trAt(ee.id,p));F.pos.innerHTML=ps.map(p=>`<option ${p===pos?'selected':''}>${esc(p)}</option>`).join('')||'<option value="">(sin posiciones libres)</option>';F.hours.value=ee.hours??'';fillS()};
-  const fillS=()=>{const ee=fleet.find(x=>x.id===F.fleetId.value),t=trs.find(x=>x.id===F.tireId.value),sz=ee?trParamE(ee).size:'',m=$('tr-msz');if(!m)return;
-    m.innerHTML=sz?`Medida del equipo: <b class="text-slate-200">${esc(sz)}</b>${t&&t.size&&!sz.toUpperCase().replace(/\s/g,'').includes(String(t.size).toUpperCase().replace(/\s/g,''))?` · <span class="text-amber-400">⚠️ el neumático es ${esc(t.size)}</span>`:''}`:''};
-  const fillC=()=>{const t=trs.find(x=>x.id===F.tireId.value);F.cocada.value=t?(t.lastCocada!==''&&t.lastCocada!=null?t.lastCocada:t.cocadaInit):'';fillS()};
-  F.fleetId.onchange=fillPos;F.tireId.onchange=fillC;fillPos();fillC();
-}
-function saveMount(ev){
-  ev.preventDefault();const f=Object.fromEntries(new FormData(ev.target)),er=$('tr-err'),t=trs.find(x=>x.id===f.tireId),e=fleet.find(x=>x.id===f.fleetId);if(!t||!e)return;
-  if(!f.pos){er.textContent='Este equipo no tiene posiciones libres.';er.classList.remove('hidden');return}
-  if(trAt(e.id,f.pos)){er.textContent='Esa posición ya está ocupada.';er.classList.remove('hidden');return}
-  const hrs=Number(f.hours),c=Number(f.cocada);
-  put('tires',trRecalc({...t,status:'MONTADO',fleetId:e.id,pos:f.pos,mountDate:f.date,mountHours:hrs,mountCocada:c,moveHours:hrs,reads:[...(t.reads||[]),{ev:'M',fid:e.id,pos:f.pos,d:f.date,h:hrs,v:[c],c,by:f.by.trim(),ts:Date.now()}],events:trEvt(t,{ty:'MONTAJE',d:f.date,h:hrs,fid:e.id,pos:f.pos,c})}));
-  if(hrs>(Number(e.hours)||0))put('fleet',{...e,hours:hrs});
-  trFid=e.id;hide();trSub='pos';if(cur==='tr')renderTr();
-}
-function openDismount(tid){
-  const t=trs.find(x=>x.id===tid);if(!t)return;const e=fleet.find(x=>x.id===t.fleetId)||{},P=trParamE(e);
-  show(`<h3 class="font-bold text-red-400">⬇️ Desmontar neumático</h3><p class="text-xs text-slate-400 mb-3">${esc(t.code)} · ${esc(e.code)} · ${esc(t.pos)}</p><form onsubmit="saveDismount(event,'${tid}')" class="space-y-3">
-    <div class="g2">${field('date','Fecha *',today(),`required max="${today()}"`,'date')}${field('hours',`Horómetro / odómetro (${P.unit}) *`,e.hours??'','required min="0" step="any" inputmode="decimal"','number')}</div>
-    ${field('cocada','Cocada final (mm) *',t.lastCocada??'','required min="0" step="0.1" inputmode="decimal"','number')}
-    ${sel('reason','Motivo del retiro *',TR_REASON,TR_REASON[0])}${sel('dest','Destino *',[['STOCK','Regresa a stock (reutilizable)'],['RECAPADO','Enviar a recapado'],['DESCARTADO','Descartar (baja)']],'STOCK')}
-    ${field('by','Técnico *',techVal(''),'required'+techRo())}<label class="block text-xs text-slate-400 font-semibold">Observaciones<textarea maxlength="5000" name="notes" rows="2" class="inp mt-1 font-normal"></textarea></label>${btns('hide()','Desmontar','bg-red-500')}</form>`);
-}
-function saveDismount(ev,tid){
-  ev.preventDefault();const f=Object.fromEntries(new FormData(ev.target)),t=trs.find(x=>x.id===tid);if(!t)return;const e=fleet.find(x=>x.id===t.fleetId),hrs=Number(f.hours);
-  put('tires',{...t,reads:[...(t.reads||[]),{ev:'D',fid:t.fleetId,pos:t.pos,d:f.date,h:hrs,v:[Number(f.cocada)],c:Number(f.cocada),by:f.by.trim(),ts:Date.now()}].slice(-150),status:f.dest,hoursRun:(Number(t.hoursRun)||0)+Math.max(0,hrs-(Number(t.mountHours)||0)),lastCocada:Number(f.cocada),removedDate:f.date,removedReason:f.reason,
-    events:trEvt(t,{ty:'DESMONTAJE',d:f.date,h:hrs,fid:t.fleetId,pos:t.pos,c:Number(f.cocada),reason:f.reason,dest:f.dest,notes:(f.notes||'').trim()}),fleetId:'',pos:'',mountDate:'',mountHours:'',mountCocada:'',moveHours:'',lastDiff:null,lastReadDate:'',lastReadHours:''});
-  if(e&&hrs>(Number(e.hours)||0))put('fleet',{...e,hours:hrs});hide();
-}
-function openMove(tid){
-  const t=trs.find(x=>x.id===tid);if(!t)return;const e=fleet.find(x=>x.id===t.fleetId);if(!e)return;
-  const ps=trPositions(e).filter(p=>p!==t.pos);
-  show(`<h3 class="font-bold">🔄 Rotar / mover</h3><p class="text-xs text-slate-400 mb-3">${esc(t.code)} · ahora en ${esc(t.pos)} (${esc(e.code)}). Si la posición destino está ocupada, los neumáticos se intercambian.</p>
-  <form onsubmit="saveMove(event,'${tid}')" class="space-y-3"><label class="block text-xs text-slate-400 font-semibold">Nueva posición *<select class="inp mt-1 font-normal" name="pos">${ps.map(p=>{const o=trAt(e.id,p);return `<option value="${esc(p)}">${esc(p)}${o?' (intercambia con '+esc(o.code)+')':' (libre)'}</option>`}).join('')}</select></label>
-  <div class="g2">${field('date','Fecha *',today(),`required max="${today()}"`,'date')}${field('hours','Horómetro / odómetro *',e.hours??'','required min="0" step="any" inputmode="decimal"','number')}</div>${btns('hide()','Mover')}</form>`);
-}
-function saveMove(ev,tid){
-  ev.preventDefault();const f=Object.fromEntries(new FormData(ev.target)),t=trs.find(x=>x.id===tid);if(!t)return;const o=trAt(t.fleetId,f.pos),hrs=Number(f.hours),old=t.pos;
-  put('tires',{...t,pos:f.pos,moveHours:hrs,events:trEvt(t,{ty:'ROTACION',d:f.date,h:hrs,fid:t.fleetId,pos:f.pos,from:old})});
-  if(o)put('tires',{...o,pos:old,moveHours:hrs,events:trEvt(o,{ty:'ROTACION',d:f.date,h:hrs,fid:o.fleetId,pos:old,from:f.pos})});hide();
-}
-function openRetread(tid){
-  const t=trs.find(x=>x.id===tid);if(!t)return;
-  show(`<h3 class="font-bold text-emerald-400">♻️ Recibir recapado</h3><p class="text-xs text-slate-400 mb-3">${esc(t.code)} · vuelve a stock con banda nueva.</p><form onsubmit="saveRetread(event,'${tid}')" class="space-y-3">
-  ${field('cocadaInit','Cocada tras recapado (mm) *','','required min="1" step="0.1" inputmode="decimal"','number')}${field('retreadCost','Costo del recapado ($)','','min="0" step="0.01" inputmode="decimal"','number')}${field('date','Fecha *',today(),'required','date')}${btns('hide()','Recibir','bg-emerald-500')}</form>`);
-}
-function saveRetread(ev,tid){
-  ev.preventDefault();const f=Object.fromEntries(new FormData(ev.target)),t=trs.find(x=>x.id===tid);if(!t)return;
-  put('tires',{...t,status:'STOCK',type:'RECAPADO',retreads:(Number(t.retreads)||0)+1,cocadaInit:Number(f.cocadaInit),lastCocada:Number(f.cocadaInit),retreadCost:(Number(t.retreadCost)||0)+(Number(f.retreadCost)||0),events:trEvt(t,{ty:'RECAPADO',d:f.date,c:Number(f.cocadaInit),cost:Number(f.retreadCost)||0})});hide();
-}
-
-/* ---------- Ficha e historial ---------- */
-function trChart(t,P){
-  const b=(t.mountHours!==''&&t.mountHours!=null&&t.mountCocada!==''&&t.mountCocada!=null)?{h:Number(t.mountHours),c:Number(t.mountCocada)}:null,pts=[];
-  (t.reads||[]).filter(r=>r.h!=null&&r.h!==''&&(!b||Number(r.h)>=b.h)).forEach(r=>pts.push({h:Number(r.h),c:Number(r.c)}));if(b&&!pts.some(p=>p.h===b.h&&p.c===b.c))pts.unshift(b);pts.sort((a,b2)=>a.h-b2.h);
-  if(pts.length<2)return '<p class="text-xs text-slate-500">Con 2 o más mediciones verás aquí la curva de desgaste.</p>';
-  const W=320,H=140,pl=30,pr=8,pt=8,pb=20,x0=Math.min(...pts.map(p=>p.h)),x1=Math.max(...pts.map(p=>p.h)),ym=Math.max(...pts.map(p=>p.c),P.alert)*1.08;
-  const X=h=>pl+((h-x0)/((x1-x0)||1))*(W-pl-pr),Y=c=>pt+(1-c/ym)*(H-pt-pb);
-  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;background:#0f172a;border-radius:.5rem"><line x1="${pl}" x2="${W-pr}" y1="${Y(P.min)}" y2="${Y(P.min)}" stroke="#ef4444" stroke-dasharray="4 3"/><text x="${pl+2}" y="${Y(P.min)-3}" fill="#ef4444" font-size="9">cambio ${P.min} mm</text>
-  <line x1="${pl}" x2="${W-pr}" y1="${Y(P.alert)}" y2="${Y(P.alert)}" stroke="#f59e0b" stroke-dasharray="4 3"/><text x="${pl+2}" y="${Y(P.alert)-3}" fill="#f59e0b" font-size="9">alerta ${P.alert} mm</text>
-  <polyline fill="none" stroke="#10b981" stroke-width="2" points="${pts.map(p=>X(p.h)+','+Y(p.c)).join(' ')}"/>${pts.map(p=>`<circle cx="${X(p.h)}" cy="${Y(p.c)}" r="3" fill="#10b981"/>`).join('')}
-  <text x="4" y="${pt+8}" fill="#94a3b8" font-size="9">${Math.round(ym)}</text><text x="4" y="${H-pb}" fill="#94a3b8" font-size="9">0</text><text x="${pl}" y="${H-4}" fill="#94a3b8" font-size="9">${fmtH(x0)}</text><text x="${W-pr}" y="${H-4}" fill="#94a3b8" font-size="9" text-anchor="end">${fmtH(x1)} ${P.unit}</text></svg>`;
-}
-function openTireDetail(id){
-  const t=trs.find(x=>x.id===id);if(!t)return;const h=trHealth(t),e=fleet.find(x=>x.id===t.fleetId),P=h.P||trParamE(e||{}),cph=trCph(t),box='bg-slate-900/50 border border-slate-700 rounded-lg p-3 text-xs';
-  const EV={MONTAJE:'⬆️ Montaje',DESMONTAJE:'⬇️ Desmontaje',ROTACION:'🔄 Rotación',RECAPADO:'♻️ Recapado'};
-  show(`<div class="flex justify-between items-start"><div><span class="text-xs font-bold text-amber-400">${esc(t.code)}</span><h3 class="text-lg font-bold">${esc(t.brand)} ${esc(t.design)}</h3><p class="text-xs text-slate-400">${esc(t.size)} · ${t.type==='RECAPADO'?'Recapado':'Nuevo'}${t.retreads?' ×'+t.retreads:''}</p></div><button type="button" onclick="hide()" class="text-slate-400 text-xl">✕</button></div>
-  <div class="grid grid-cols-2 gap-2 text-xs bg-slate-900 p-3 rounded-lg my-3"><div><span class="text-slate-400 block">Estado</span>${t.status==='MONTADO'?trBadge(h.k):trBadge(t.status)}</div><div><span class="text-slate-400 block">Ubicación</span>${t.status==='MONTADO'&&e?esc(e.code)+' · '+esc(t.pos):'—'}</div>
-  <div><span class="text-slate-400 block">Cocada nueva / actual</span>${esc(t.cocadaInit)} / ${h.c!=null?h.c+' mm':'—'}</div><div><span class="text-slate-400 block">Desgaste usado</span>${h.pct!=null?h.pct+'%':'—'}</div>
-  <div><span class="text-slate-400 block">Recorrido</span>${fmtH(Math.round(trRun(t)))} ${P.unit}</div><div><span class="text-slate-400 block">Costo por ${P.unit}</span>${cph?'$'+cph.toFixed(2):'—'}</div>
-  ${h.proj?`<div><span class="text-slate-400 block">Desgaste</span>${h.proj.per1000} mm / 1000 ${P.unit}</div><div><span class="text-slate-400 block">Cambio estimado</span>a las ${fmtH(h.proj.estH)} (faltan ~${fmtH(h.proj.rem)})</div>`:''}</div>
-  ${(h.flags||[]).map(f=>`<p class="text-xs text-amber-400 mb-1">⚠️ ${esc(f)}</p>`).join('')}
-  <h4 class="text-xs text-slate-400 uppercase mt-3 mb-1">Curva de desgaste (cocada mínima)</h4>${trChart(t,P)}
-  <h4 class="text-xs text-slate-400 uppercase mt-3 mb-1">Últimas mediciones</h4><div class="space-y-1">${[...(t.reads||[])].sort(trSort).reverse().slice(0,10).map(r=>`<div class="${box}"><b class="text-slate-200">${fmtD(r.d)}</b>${r.ev?` · ${r.ev==='M'?'⬆️ Montaje':'⬇️ Desmontaje'}`:''} · ${r.h!=null&&r.h!==''?fmtH(r.h)+' '+P.unit:'s/h'} · <b style="color:${r.c<=P.min?TR_COL.CAMBIO:r.c<=P.alert?TR_COL.ALERTA:TR_COL.OK}">${r.c} mm</b> <span class="text-slate-400">${r.ev?'':'('+(r.v||[r.i,r.m,r.e]).map(x=>x==null?'–':x).join(' / ')+')'}${r.psi!=null&&r.psi!==''?' · '+r.psi+' psi':''} · ${esc(r.by)}${(r.fid||t.fleetId)&&!r.ev?' · '+esc(((fleet.find(q=>q.id===(r.fid||t.fleetId)))||{}).code||''):''}</span>${r.note?`<p class="text-slate-300">${esc(r.note)}</p>`:''}</div>`).join('')||'<p class="text-xs text-slate-500">Sin mediciones.</p>'}</div>
-  <h4 class="text-xs text-slate-400 uppercase mt-3 mb-1">Movimientos</h4><div class="space-y-1">${[...(t.events||[])].reverse().slice(0,10).map(v=>{const q=fleet.find(x=>x.id===v.fid);return `<div class="${box}"><b class="text-slate-200">${EV[v.ty]||v.ty}</b> · ${fmtD(v.d)}${q?' · '+esc(q.code):''}${v.pos?' · '+esc(v.pos):''}${v.reason?' · '+esc(v.reason):''}${v.dest?' → '+esc(TR_L[v.dest]||v.dest):''} <span class="text-slate-400">· ${esc(v.by)}</span></div>`}).join('')||'<p class="text-xs text-slate-500">Sin movimientos.</p>'}</div>
-  ${t.notes?`<p class="text-xs text-slate-300 mt-3">${esc(t.notes)}</p>`:''}
-  <div class="flex justify-end gap-2 mt-4 flex-wrap">${adm(`<button onclick="delTire('${t.id}')" class="btn bg-red-500/20 text-red-400">🗑️ Eliminar</button>`)}${t.status==='MONTADO'?`<button onclick="openMeasure('${t.fleetId}','${t.id}')" class="btn bg-emerald-500 text-slate-950">📏 Medir</button>`:''}</div>`,'36rem');
-}
-function delTire(id){if(!isAdmin())return;ask('¿Eliminar este neumático y todo su historial?',()=>del('tires',id))}
-
-/* ---------- Alertas ---------- */
-function trAlr(){
-  const ord={CAMBIO:0,ALERTA:1,SINMED:2},l=trList().filter(x=>ord[x.h.k]!=null||x.h.flags.length).sort((a,b)=>(ord[a.h.k]??3)-(ord[b.h.k]??3));
-  const pr=trList().filter(x=>x.h.proj&&x.h.k!=='CAMBIO').sort((a,b)=>a.h.proj.rem-b.h.proj.rem).slice(0,8);
-  const card=({t,h})=>`<div class="bg-slate-800 border border-slate-700 rounded-xl p-3" style="border-left:4px solid ${TR_COL[h.k]}"><div class="flex justify-between items-start gap-2"><div class="min-w-0"><b class="text-amber-400">${esc(h.e.code||'-')}</b> <span class="text-slate-200">· ${esc(t.pos)}</span><p class="text-xs text-slate-400">${esc(t.code)} · ${esc(t.brand)} ${esc(t.size)}</p></div>${trBadge(h.k)}</div>
-    <p class="text-sm mt-1">Cocada: <b style="color:${TR_COL[h.k]}">${h.c!=null?h.c+' mm':'sin medir'}</b> <span class="text-xs text-slate-400">(cambio ≤ ${h.P.min} · alerta ≤ ${h.P.alert})</span></p>${h.flags.map(f=>`<p class="text-xs text-amber-400">⚠️ ${esc(f)}</p>`).join('')}
-    <div class="flex gap-1 justify-end mt-2 flex-wrap"><button onclick="openMeasure('${t.fleetId}','${t.id}')" class="btn bg-emerald-500/20 text-emerald-400 !py-1">📏 Medir</button><button onclick="openDismount('${t.id}')" class="btn bg-red-500/20 text-red-400 !py-1">⬇️ Desmontar</button></div></div>`;
-  return `<h4 class="text-xs text-slate-400 uppercase">Requieren acción (${l.length})</h4><div class="grid gap-3 md:grid-cols-2">${l.map(card).join('')||'<p class="text-slate-500 text-sm">Todos los neumáticos montados están dentro de los parámetros.</p>'}</div>
-  <h4 class="text-xs text-slate-400 uppercase" style="margin-top:.5rem">Próximos a cambio (según su ritmo de desgaste)</h4>
-  <div class="bg-slate-800 border border-slate-700 rounded-xl p-3 space-y-2">${pr.map(({t,h})=>`<div class="flex justify-between gap-2 text-sm"><span><b class="text-amber-400">${esc(h.e.code)}</b> ${esc(t.pos)} · ${esc(t.code)}</span><span class="text-slate-300 whitespace-nowrap">~${fmtH(h.proj.rem)} ${h.P.unit}</span></div>`).join('')||'<p class="text-slate-500 text-xs">Se calcula cuando un neumático tiene 2 o más mediciones con desgaste.</p>'}</div>`;
-}
-
-/* ---------- Parámetros de cambio ---------- */
-function trPar(){
-  return `<p class="text-xs text-slate-400">Define cuándo se alerta y cuándo se cambia cada tipo de equipo, y qué posiciones de neumático tiene. Los valores iniciales son <b>referenciales</b>: ajústalos a lo que indique tu fabricante y tu operación.</p>
-  <div class="grid gap-3 md:grid-cols-2">${TR_CAT.map(c=>{const P=trParam(c),n=trCatPositions(c).length;
-    return `<div class="bg-slate-800 border border-slate-700 rounded-xl p-4"><div class="flex justify-between items-start gap-2"><h4 class="font-bold">${esc(c)}</h4>${P.custom?'<span class="bdg bg-emerald-500/10 text-emerald-400 border-emerald-500/30">PERSONALIZADO</span>':'<span class="bdg bg-slate-900 text-slate-400 border-slate-700">REFERENCIAL</span>'}</div>
-    <p class="text-xs text-slate-400 mt-2">${n?n+' posiciones':'Sin neumáticos (no aplica)'} · Cambio ≤ <b class="text-red-400">${P.min} mm</b> · Alerta ≤ <b class="text-amber-400">${P.alert} mm</b></p>
-    <p class="text-xs text-slate-400">Desgaste irregular &gt; ${P.diff} mm · Medir cada ${P.readDays} días${P.rotate?` · Rotar cada ${P.rotate} ${P.unit}`:''}${P.psiMin||P.psiMax?` · Presión ${P.psiMin||'–'}–${P.psiMax||'–'} psi`:''}</p>
-    <div class="flex justify-end mt-3"><button onclick="openTrPar('${esc(c)}')" class="btn bg-slate-700 !py-1">⚙️ Configurar</button></div></div>`}).join('')}</div>`;
-}
-function openTrPar(cat){
-  if(!isSup())return;const P=trParam(cat);
-  show(`<h3 class="font-bold">⚙️ Parámetros · ${esc(cat)}</h3><form onsubmit="saveTrPar(event,'${esc(cat)}')" class="space-y-3 mt-2">
-    <div class="g2">${field('min','Cocada de CAMBIO (mm) *',P.min,'required min="0" step="0.1" inputmode="decimal"','number')}${field('alert','Cocada de ALERTA (mm) *',P.alert,'required min="0" step="0.1" inputmode="decimal"','number')}</div>
-    <div class="g2">${field('diff','Desgaste irregular máx. (mm)',P.diff,'min="0" step="0.1" inputmode="decimal"','number')}${field('readDays','Medir cada (días)',P.readDays,'min="1" step="1" inputmode="numeric"','number')}</div>
-    <div class="g2">${field('psiMin','Presión mínima (psi)',P.psiMin||'','min="0" inputmode="decimal"','number')}${field('psiMax','Presión máxima (psi)',P.psiMax||'','min="0" inputmode="decimal"','number')}</div>
-    <div class="g2">${field('rotate','Rotar cada (horas / km)',P.rotate||'','min="0" inputmode="decimal"','number')}${sel('unit','Unidad del horómetro',[['h','Horas'],['km','Kilómetros']],P.unit)}</div>
-    <label class="block text-xs text-slate-400 font-semibold">Posiciones de neumáticos <span class="font-normal">(una fila por eje; usa | para separar izquierda y derecha; I=izq. D=der. E=exterior, I=interior)</span><textarea maxlength="5000" name="layout" rows="6" class="inp mt-1 font-normal" style="font-family:monospace;font-size:13px" spellcheck="false">${esc(P.layout)}</textarea></label>
-    <p id="tr-err" class="text-xs text-red-400 hidden"></p><div class="flex gap-2 justify-between items-center flex-wrap">${P.custom?`<button type="button" onclick="resetTrPar('${esc(cat)}')" class="btn bg-slate-700 !py-1">Restaurar referenciales</button>`:'<span></span>'}</div>${btns()}</form>`,'36rem');
-}
-function saveTrPar(ev,cat){
-  ev.preventDefault();const f=Object.fromEntries(new FormData(ev.target)),er=$('tr-err');
-  if(Number(f.alert)<=Number(f.min)){er.textContent='La cocada de alerta debe ser mayor que la de cambio.';er.classList.remove('hidden');return}
-  const lay=(f.layout||'').split('\n').map(l=>l.trim()).filter(Boolean),flat=lay.flatMap(l=>l.replace('|',' ').split(/\s+/).filter(Boolean));
-  if(new Set(flat).size!==flat.length){er.textContent='Hay posiciones repetidas en el diseño.';er.classList.remove('hidden');return}
-  const used=trs.filter(t=>t.status==='MONTADO'&&(fleet.find(e=>e.id===t.fleetId)||{}).category===cat&&!trCfg(t.fleetId)&&!flat.includes(t.pos));
-  if(used.length){er.textContent='No puedes quitar posiciones ocupadas: '+used.map(t=>t.pos).join(', ')+'. Desmonta o mueve esos neumáticos primero.';er.classList.remove('hidden');return}
-  put('tireParams',{id:'TP-'+uname(cat),category:cat,min:Number(f.min),alert:Number(f.alert),diff:f.diff===''?'':Number(f.diff),readDays:f.readDays===''?'':Number(f.readDays),psiMin:f.psiMin===''?'':Number(f.psiMin),psiMax:f.psiMax===''?'':Number(f.psiMax),rotate:f.rotate===''?'':Number(f.rotate),unit:f.unit,layout:lay.join('\n')});hide();
-}
-function resetTrPar(cat){const d=trp.find(x=>x.category===cat);if(d&&isAdmin()){del('tireParams',d.id);hide()}else if(d)note('Solo el planner puede restaurar los valores referenciales.')}
-
 /* ---------- Hoja de medición (PDF) ---------- */
-function makePdfTr(fid){
-  const e=fleet.find(x=>x.id===fid);if(!e)return;const J=window.jspdf&&window.jspdf.jsPDF;
-  if(!J){note('No se pudo cargar el generador de PDF. Revisa tu conexión a internet y recarga la página.');return}
-  const doc=new J({unit:'mm',format:'a4',orientation:'landscape'}),W=297,M=12,P=trParamE(e),poss=trPositions(e);let y=0;
-  const pt=s=>String(s==null?'':s).replace(/[^\x20-\x7E -ÿ\n]/g,'');
-  doc.setFillColor(15,23,42);doc.rect(0,0,W,24,'F');doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(16);doc.text('HOJA DE MEDICION DE NEUMATICOS',M,11);
-  doc.setFont('helvetica','normal');doc.setFontSize(9.5);doc.text(pt(`${e.code} - ${e.brand} ${e.model} (${e.category})   |   Horometro/odometro actual: ${fmtH(e.hours)} ${P.unit}${P.size?'   |   Medida: '+P.size:''}   |   Cambio <= ${P.min} mm, Alerta <= ${P.alert} mm`),M,18);doc.text('Emitida: '+fmtD(today()),W-M,11,{align:'right'});
-  y=32;doc.setTextColor(30,41,59);doc.setFontSize(9);doc.text('Fecha: ____ / ____ / ________      Horometro / odometro: ______________      Tecnico: ______________________________',M,y);y+=8;
-  const ws=[18,30,40,16,16,18,24,22,12,12,12,12,12],hd=['Pos.','N° neumatico','Marca / medida','Cocada ant.','Estado','Medida h.','Ult. medicion','Cambio est.','Int.','Cen.','Ext.','psi','Obs.'];
-  const head=()=>{doc.setFillColor(226,232,240);doc.rect(M,y-4.5,W-2*M,7,'F');doc.setFont('helvetica','bold');doc.setFontSize(8);let x=M;hd.forEach((h,i)=>{doc.text(h,x+1,y);x+=ws[i]});y+=5;doc.setFont('helvetica','normal')};head();
-  const tot=ws.reduce((a,b)=>a+b,0);
-  poss.forEach(pos=>{if(y>190){doc.addPage();y=20;head()}const t=trAt(e.id,pos),h=t?trHealth(t):null;
-    const cells=[pos,t?t.code:'(libre)',t?`${t.brand} ${t.size}`:'',h&&h.c!=null?h.c+' mm':'',h?TR_L[h.k]:'',h&&t.lastReadDate?fmtD(t.lastReadDate):'',h&&h.proj?'a las '+fmtH(h.proj.estH):'','','','','','',''];
-    doc.setFontSize(8);let x=M;cells.forEach((c,i)=>{const s=doc.splitTextToSize(pt(c),ws[i]-2);doc.text(s[0]||'',x+1,y+3);if(i>=7){doc.setDrawColor(148,163,184);doc.rect(x+0.5,y-1,ws[i]-1,6.5)}x+=ws[i]});
-    doc.setDrawColor(226,232,240);doc.line(M,y+7,M+tot,y+7);y+=8});
-  y+=4;doc.setFontSize(8);doc.setTextColor(100,116,139);doc.text('Mide la banda en mm (interior, centro y exterior) y la presion en psi. Regla: cocada minima de las 3 medidas.',M,y);
-  const n=doc.getNumberOfPages();for(let q=1;q<=n;q++){doc.setPage(q);doc.setFontSize(8);doc.text('Neumaticos '+pt(e.code)+'  |  Pagina '+q+' de '+n,W/2,205,{align:'center'})}
-  fileOut(doc.output('blob'),'Neumaticos_'+String(e.code||'equipo').replace(/[^A-Za-z0-9_-]/g,'')+'_'+today()+'.pdf','📄 Hoja de medición lista');
-}
-
 /* ============ INICIO POR ROL, FICHA DE EQUIPO Y REGISTRO RÁPIDO ============ */
 const ROLE_N={admin:'Planner',supervisor:'Supervisor',tecnico:'Técnico'},CR_O={P1:0,P2:1,P3:2,P4:3};
 const dCard=(t,body,more)=>`<div class="bg-slate-800 border border-slate-700 rounded-xl p-4 space-y-2"><div class="flex justify-between items-center gap-2"><h3 class="font-semibold">${t}</h3>${more||''}</div>${body}</div>`;
@@ -1473,7 +981,9 @@ function openEquip(id,t){
      ${c('Backlogs abiertos','<b class="text-xl text-amber-400">'+op.length+'</b>',op.filter(b=>b.criticality==='P1').length+' de prioridad P1')}
      ${c('Próximo preventivo',nx?`<b class="text-blue-400">${fmtD(nx.scheduledDate)}</b>`:'<span class="text-slate-500">Sin programar</span>',nx?esc(nx.plan)+' · '+pmWhen(nx):'')}
      ${c('Engrase',grBadge(g.k),grLines(g)[0]||'')}
-     ${c('Neumáticos','<b class="text-xl">'+mt.length+'/'+poss.length+'</b> <span class="text-xs text-slate-400">montados</span>',(cnt.CAMBIO?cnt.CAMBIO+' para cambiar · ':'')+(cnt.ALERTA?cnt.ALERTA+' en alerta · ':'')+(cnt.SINMED?cnt.SINMED+' por medir':''))}</div>
+     ${c('Neumáticos','<b class="text-xl">'+mt.length+'/'+poss.length+'</b> <span class="text-xs text-slate-400">montados</span>',(cnt.CAMBIO?cnt.CAMBIO+' para cambiar · ':'')+(cnt.ALERTA?cnt.ALERTA+' en alerta · ':'')+(cnt.SINMED?cnt.SINMED+' por medir':''))}
+     ${(()=>{const r=relMet([id],addDays(today(),-89),today(),false),f=relMet([id],addDays(today(),-89),today(),true);return c('Confiabilidad (90 días)','<b class="text-xl '+(r.disp==null?'':r.disp>=90?'text-emerald-400':r.disp>=80?'text-amber-400':'text-red-400')+'">'+(r.disp==null?'—':r.disp+'%')+'</b> <span class="text-xs text-slate-400">disponible</span>',`MTBF ${f.mtbf==null?'—':f.mtbf+' h'} · MTTR ${f.mttr==null?'—':f.mttr+' h'} · ${r.n} parada(s)`)})()}
+     ${(()=>{const s=eqnSumOf('gr',e)||{},d0=addDays(today(),-365),bc=bks.filter(b=>b.status!=='ANULADO'&&(b.observationDate||'')>=d0).reduce((t,b)=>t+(Number(b.cost)||0),0),m=x=>Number(x||0).toLocaleString('es-PE',{minimumFractionDigits:2,maximumFractionDigits:2});return c('Costos (12 meses)','<span class="text-sm">Backlogs <b>$ '+m(bc)+'</b></span>',`Engrase ${esc(s.mon||'S/')} ${m(s.cost12)} (${s.n12||0} reg.) · Neumáticos ${esc(s.neuMon||'S/')} ${m(s.neuCost12)}`)})()}</div>
      <div class="flex gap-2 flex-wrap mt-3"><button onclick="hide();openBack();setTimeout(()=>{const s=document.querySelector('#modal select[name=fleetId]');if(s){s.value='${id}';s.onchange&&s.onchange()}},30)" class="btn bg-amber-500/20 text-amber-400">🔧 Nuevo backlog</button><button onclick="openStop('','start','${id}')" class="btn bg-slate-700">🛑 Iniciar parada</button><button onclick="openHours('${id}')" class="btn bg-slate-700">⏱️ Horómetro</button><button onclick="hide();eqnOpen('engrase','${esc(e.code)}')" class="btn bg-slate-700">🛢️ Engrase</button><button onclick="hide();eqnOpen('neumaticos','${esc(e.code)}')" class="btn bg-slate-700">📏 Medir</button></div>`;
   }else if(eqTab==='bk'){
     const l=[...bks].sort((a,b)=>bkOpen(b)-bkOpen(a)||(b.observationDate||'').localeCompare(a.observationDate||''));
@@ -1487,7 +997,7 @@ function openEquip(id,t){
   }else if(eqTab==='tr'){
     body=(poss.length?`<div class="${box}">Montados: <b>${mt.length}/${poss.length}</b></div>`+mt.map(x=>{const h=trHealth(x);return `<div class="${box} flex justify-between items-center mt-2"><span><b class="text-amber-400">${esc(x.pos)}</b> <span class="text-slate-300">${esc(x.code)}</span></span><b style="color:${TR_COL[h.k]}">${h.c!=null?h.c+' mm':'—'}</b></div>`}).join(''):dEmpty('Este equipo no tiene posiciones de neumáticos definidas.'))+`<div class="flex gap-2 flex-wrap mt-3"><button onclick="hide();eqnOpen('neumaticos','${esc(e.code)}')" class="btn bg-emerald-500/20 text-emerald-400">📏 Medir / inspeccionar</button><button onclick="hide();eqnOpen('neumaticos','${esc(e.code)}')" class="btn bg-slate-700">🛞 Ver diagrama</button></div>`;
   }else{
-    const ev=[...bks.map(b=>({d:b.observationDate,t:`🔧 Backlog ${esc(bkNo(b))}: ${esc(b.component)} — ${esc(STL[b.status]||b.status)}`})),...pmx.map(q=>({d:q.scheduledDate,t:`🗓️ Preventivo ${esc(q.plan)} — ${esc(PM_L[q.status]||q.status)}`})),...grLogs(id).map(x=>({d:x.date,t:`🛢️ Engrase ${esc(x.tipo||'')}${x.hours!=null&&x.hours!==''?' a '+fmtH(x.hours)+' h':''} · ${esc(x.by||'')}`})),...sps.filter(x=>x.fleetId===id).map(x=>({d:(x.fp||'').slice(0,10),t:`🔧 ${esc(x.motivo)} · ${esc(x.sistema||'')} — ${esc((x.desc||'').slice(0,90))}`}))].filter(x=>x.d).sort((a,b)=>b.d.localeCompare(a.d)).slice(0,40);
+    const ev=[...bks.map(b=>({d:b.observationDate,t:`🔧 Backlog ${esc(bkNo(b))}: ${esc(b.component)} — ${esc(STL[b.status]||b.status)}`})),...pmx.map(q=>({d:q.scheduledDate,t:`🗓️ Preventivo ${esc(q.plan)} — ${esc(PM_L[q.status]||q.status)}`})),...grLogs(id).map(x=>({d:x.date,t:`🛢️ Engrase ${esc(x.tipo||'')}${x.hours!=null&&x.hours!==''?' a '+fmtH(x.hours)+' h':''} · ${esc(x.by||'')}`})),...sps.filter(x=>x.fleetId===id).map(x=>({d:(x.fp||'').slice(0,10),t:`🛑 Parada ${esc(x.motivo)} · ${esc(x.sistema||'')}${x.t?' · '+esc(x.t)+' h':''} — ${esc((x.desc||'').slice(0,90))}`})),...((eqnSumOf('gr',e)||{}).neuEv||[]).map(x=>({d:x.date,t:`🛞 ${esc(x.t)}`}))].filter(x=>x.d).sort((a,b)=>b.d.localeCompare(a.d)).slice(0,40);
     body=ev.map(x=>`<div class="${box}"><span class="text-xs text-slate-400">${fmtD(x.d)}</span><p>${x.t}</p></div>`).join('<div style="height:.4rem"></div>')||dEmpty('Aún no hay actividad registrada.');
   }
   show(`<div class="flex justify-between items-start gap-2"><div class="min-w-0"><h3 class="font-bold text-lg"><span class="text-amber-400">${esc(e.code)}</span> · ${esc(e.brand)} ${esc(e.model)}</h3><p class="text-xs text-slate-400">${esc(e.category)} · S/N ${esc(e.serialNumber)} · ${fmtH(e.hours)} h · ${esc(e.location||'-')} · ${stOpen(id).length?'<b class="text-red-400">EN PARADA (mantenimiento)</b>':`<b class="${sc[e.status]||''}">${esc(String(e.status).replace('_',' '))}</b>`}</p></div><button type="button" onclick="hide()" class="text-slate-400 text-xl">✕</button></div>

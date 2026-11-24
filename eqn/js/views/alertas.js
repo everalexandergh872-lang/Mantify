@@ -47,14 +47,29 @@
       <div>${U.pill(a.prioridad, C.PRIO_LBL[a.prioridad])}</div>
       <div><div class="ttl">${U.esc(a.titulo)}</div><div class="det">${U.esc(a.modulo)} · ${U.esc(a.tipo)}${a.detalle ? ' · ' + U.esc(a.detalle) : ''}</div>
       ${a.atendida ? `<div class="det" style="color:var(--ok)">✓ ${U.fdatetime(a.atendida.fecha)} · ${U.esc(a.atendida.responsable || '')}: ${U.esc(a.atendida.accion)}</div>` : ''}</div>
-      <div class="act"><button class="btn btn-sm btn-outline" data-go="${i}">Ver</button>${a.atendida ? `<button class="btn btn-sm btn-outline" data-re="${U.esc(a.key)}">Reabrir</button>` : `<button class="btn btn-sm btn-ok" data-at="${i}">Atender</button>`}</div></div>`).join('') + (rows.length > 400 ? `<div class="muted">Mostrando 400 de ${rows.length}. Use los filtros.</div>` : '');
+      <div class="act"><button class="btn btn-sm btn-outline" data-go="${i}">Ver</button>${!a.atendida && bk() ? `<button class="btn btn-sm btn-orange" data-bk="${i}" title="Crear un backlog con esta alerta">＋ Backlog</button>` : ''}${a.atendida ? `<button class="btn btn-sm btn-outline" data-re="${U.esc(a.key)}">Reabrir</button>` : `<button class="btn btn-sm btn-ok" data-at="${i}">Atender</button>`}</div></div>`).join('') + (rows.length > 400 ? `<div class="muted">Mostrando 400 de ${rows.length}. Use los filtros.</div>` : '');
     list.addEventListener('click', async e => {
-      const g = e.target.closest('[data-go]'), at = e.target.closest('[data-at]'), re = e.target.closest('[data-re]');
+      const g = e.target.closest('[data-go]'), at = e.target.closest('[data-at]'), re = e.target.closest('[data-re]'), nb = e.target.closest('[data-bk]');
+      if (nb) aBacklog(rows[+nb.dataset.bk]);
       if (g) { const a = rows[+g.dataset.go]; ir(a); }
       if (at) atender(rows[+at.dataset.at]);
       if (re && await U.confirm('¿Reabrir la alerta?')) { await EQ.DB.del('alertasAtendidas', re.dataset.re); EQ.App.refresh(); }
     });
   };
+  // Crear backlog en Mantify a partir de una alerta
+  function bk() { try { const h = EQ.DB.host(); return h && typeof h.openBackPre === 'function' ? h : null; } catch (e) { return null; } }
+  function aBacklog(a) {
+    const h = bk(); if (!h) return;
+    const neu = a.modulo === 'Neumáticos', n = a.neumaticoId ? S.neumaticos.find(x => x.id === a.neumaticoId) : null;
+    h.openBackPre({
+      code: a.eq ? a.eq.codigo : '',
+      component: neu ? ('Neumático' + (n ? ' ' + n.codigo + (n.posicion ? ' (pos. ' + n.posicion + ')' : '') : '')) : (a.tipo || 'Engrase'),
+      system: neu ? 'Neumáticos y aros' : 'Sistema de lubricación',
+      description: `[Alerta ${C.PRIO_LBL[a.prioridad] || a.prioridad}] ${a.titulo}${a.detalle ? ' — ' + a.detalle : ''}`,
+      sintoma: a.tipo || '',
+      prio: { critica: 'P1', alta: 'P2', media: 'P3', baja: 'P4' }[a.prioridad] || 'P3'
+    });
+  }
   function ir(a) {
     const App = EQ.App;
     if (a.neumaticoId) { const n = S.neumaticos.find(x => x.id === a.neumaticoId); App.state.selPos = n && n.posicion; App.state.tab.neumaticos = 'diagrama'; App.go('neumaticos', { eqId: a.equipoId }); return; }

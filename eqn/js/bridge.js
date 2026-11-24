@@ -196,6 +196,18 @@
         g = { k, lines };
       }
       g.last = C.diarios(eq.id).slice(-8).reverse().map(d => ({ date: d.fecha, hours: d.horometro, by: d.tecnico || '', tipo: d.tipo }));
+      // costos y eventos de los últimos 12 meses, para la ficha del equipo en Mantify
+      try {
+        const desde = U.addDays(U.today(), -365), mb = C.cfg().moneda || 'S/';
+        const dd = C.diarios(eq.id).filter(d => d.fecha >= desde);
+        g.cost12 = Math.round(dd.reduce((s, d) => s + (C.costoDiario(d).costo || 0), 0) * 100) / 100; g.n12 = dd.length; g.mon = mb;
+        const mv = S.movimientos.filter(m => m.equipoId === eq.id && (m.fecha || '') >= desde);
+        g.neuCost12 = Math.round(mv.reduce((s, m) => s + (C.conv(m.costo, m.monedaCosto || C.monBase(), C.monNeum()) || 0), 0) * 100) / 100; g.neuMon = C.monNeum();
+        const nn = id => (S.neumaticos.find(x => x.id === id) || {}).codigo || '';
+        g.neuEv = mv.map(m => ({ date: (m.fecha || '').slice(0, 10), t: `${m.tipo} ${nn(m.neumaticoId)}${m.posNueva || m.posAnterior ? ' · pos. ' + (m.posNueva || m.posAnterior) : ''}${m.motivo ? ' — ' + m.motivo : ''}` }))
+          .concat([...new Set(S.inspecciones.filter(i => i.equipoId === eq.id && (i.fecha || '') >= desde).map(i => (i.fecha || '').slice(0, 10)))].map(f => ({ date: f, t: 'Medición de neumáticos' })))
+          .sort((a, b) => b.date.localeCompare(a.date)).slice(0, 25);
+      } catch (e) { }
       out.gr[code] = g;
       // Neumáticos
       if (C.neumAplica(eq)) {

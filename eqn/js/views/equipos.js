@@ -12,14 +12,16 @@
     const FIL = { todos: () => true, eng: e => C.engraseAplica(e), sinEng: e => !!e.sinEngrase, neu: e => C.neumAplica(e), sinNeu: e => !!e.sinNeumaticos, ninguno: e => !!e.sinEngrase && !!e.sinNeumaticos, inact: e => e.activo === false };
     const eqs = todos.filter(FIL[st.ver] || FIL.todos);
     const cnt = k => todos.filter(FIL[k]).length;
+    const enM = !!EQ.DB.host(); // dentro de Mantify: un solo maestro, el de Mantify → Equipos
     root.innerHTML = `
+      ${enM ? `<div class="info-box mb">Los equipos se crean, editan y eliminan en <b>Mantify → Equipos</b>, y llegan aquí solos. Aquí solo se configura lo propio de engrase y neumáticos (plan, puntos, programa, diagrama y parámetros).</div>` : ''}
       <div class="card mb">
         <h3>Maestro de equipos <span class="muted small" style="font-weight:normal">— fuente: aplicación Backlog (sincronización por código de equipo)</span></h3>
         <div class="flex">
-          <button class="btn btn-orange" id="bImpFile">⭱ Importar maestro del Backlog (JSON / Excel / CSV)</button>
+          ${enM ? '' : `<button class="btn btn-orange" id="bImpFile">⭱ Importar maestro del Backlog (JSON / Excel / CSV)</button>`}
           <button class="btn" id="bXl">⭱ Importar Excel del programa</button>
-          <button class="btn" id="bScan">🔍 Buscar Backlog en este navegador</button>
-          <button class="btn btn-outline" id="bNew">+ Equipo manual</button>
+          ${enM ? '' : `<button class="btn" id="bScan">🔍 Buscar Backlog en este navegador</button>
+          <button class="btn btn-outline" id="bNew">+ Equipo manual</button>`}
           <button class="btn btn-outline" id="bTplAll" title="Aplica la plantilla de engrase de su familia a cada equipo que aún no tiene puntos">⧉ Plantillas a equipos sin configuración</button>
           <span class="spacer"></span>
           <button class="btn btn-outline" id="bExpJ">⭳ Exportar maestro JSON</button>
@@ -39,14 +41,15 @@
       try { const src = await EQ.Backlog.parseFile(f); await EQ.Backlog.wizard(src, 'Backlog (' + f.name + ')', () => App.refresh()); }
       catch (e) { U.toast(e.message, 'bad'); }
     };
-    root.querySelector('#bImpFile').onclick = imp;
+    const q = id => root.querySelector(id) || {};
+    q('#bImpFile').onclick = imp;
     const b2 = root.querySelector('#bImpFile2'); if (b2) b2.onclick = imp;
-    root.querySelector('#bScan').onclick = async () => {
+    q('#bScan').onclick = async () => {
       const src = await EQ.Backlog.scanBrowser();
       if (!src.length) { U.modal({ title: 'Backlog no encontrado en este navegador', size: 'sm', body: '<p>No se encontró un maestro de equipos del Backlog en el almacenamiento de este navegador para este origen.</p><p class="muted small">Los navegadores aíslan los datos por origen (carpeta local o dominio). Exporte el maestro desde la app Backlog e impórtelo con el botón de archivo.</p>', buttons: [{ label: 'Entendido' }] }); return; }
       EQ.Backlog.wizard(src, 'Backlog (navegador)', () => App.refresh());
     };
-    root.querySelector('#bNew').onclick = () => V.formEquipo(null);
+    q('#bNew').onclick = () => V.formEquipo(null);
     root.querySelector('#bXl').onclick = () => EQ.XL.importarDialog();
     root.querySelector('#bExpJ').onclick = () => EQ.Backlog.exportMaestro();
     const bEl = root.querySelector('#bElim');
@@ -188,14 +191,15 @@
     const cfg = C.cfg();
     const isNew = !eq;
     eq = eq || { activo: true, unidad: 'h', sistemaLubricacion: 'Manual' };
-    const body = `<form class="form-grid" id="fEq">
-      ${U.field('codigo', 'Código de equipo', { value: eq.codigo, req: true, attrs: !isNew && eq.origen && eq.origen.startsWith('Backlog') ? 'readonly title="Código sincronizado con Backlog"' : '' })}
+    const ro = !isNew && eq.fleetId && EQ.DB.host() ? 'readonly title="Se edita en Mantify → Equipos"' : ''; // datos generales: un solo maestro
+    const body = `<form class="form-grid" id="fEq">${ro ? '<div class="info-box full">Código, marca, modelo, serie, placa y ubicación se editan en <b>Mantify → Equipos</b>.</div>' : ''}
+      ${U.field('codigo', 'Código de equipo', { value: eq.codigo, req: true, attrs: ro || (!isNew && eq.origen && eq.origen.startsWith('Backlog') ? 'readonly title="Código sincronizado con Backlog"' : '') })}
       ${U.field('descripcion', 'Descripción', { value: eq.descripcion, req: true })}
       ${U.field('familia', 'Familia', { type: 'select', options: cfg.familias, value: eq.familia, req: true })}
-      ${U.field('marca', 'Marca', { value: eq.marca })}
-      ${U.field('modelo', 'Modelo', { value: eq.modelo })}
-      ${U.field('serie', 'Serie', { value: eq.serie })}
-      ${U.field('placa', 'Placa', { value: eq.placa })}
+      ${U.field('marca', 'Marca', { value: eq.marca, attrs: ro })}
+      ${U.field('modelo', 'Modelo', { value: eq.modelo, attrs: ro })}
+      ${U.field('serie', 'Serie', { value: eq.serie, attrs: ro })}
+      ${U.field('placa', 'Placa', { value: eq.placa, attrs: ro })}
       ${U.field('estadoMov', 'Estado', { type: 'datalist', options: cfg.estadosMovilizacion || ['MOVILIZADO', 'DESMOVILIZADO'], value: eq.estadoMov || 'MOVILIZADO' })}
       ${U.field('propietario', 'Propietario', { value: eq.propietario })}
       ${U.field('clase', 'Clase', { type: 'datalist', options: ['EQUIPO MOV. TIERRA', 'VEHICULO TRANSP. PESADO', 'VEHICULO LIVIANO', 'EQUIPO MENOR'], value: eq.clase })}

@@ -181,6 +181,18 @@ function openBack(id){
   phxRender('bkf');bkReqRender();bkLimPrev();
   const s=document.querySelector('#modal select[name=fleetId]'),h=document.querySelector('#modal input[name=hoursAt]');if(s&&h&&!id)s.onchange=()=>{h.value=eqOf(s.value).hours??''};
 }
+// Abre "Nuevo backlog" con datos ya llenos (lo usan las alertas de Engrase y Neumáticos)
+function openBackPre(p){
+  p=p||{};
+  openBack();const F=document.querySelector('#modal form');if(!F)return;
+  const set=(n,v)=>{const el=F.querySelector(`[name="${n}"]`);if(el&&v!=null&&v!=='')el.value=v};
+  const e=fleet.find(x=>String(x.code).toUpperCase()===String(p.code||'').toUpperCase());
+  if(e){const s=F.querySelector('select[name=fleetId]');if(s&&[...s.options].some(o=>o.value===e.id)){s.value=e.id;if(s.onchange)s.onchange()}}
+  set('component',p.component);set('description',p.description);set('source',p.source||'Inspección del técnico');set('sintoma',p.sintoma);
+  if(p.system){const s=F.querySelector('select[name=system]');if(s&&[...s.options].some(o=>o.value===p.system||o.textContent===p.system))s.value=p.system}
+  if(p.prio){const r=F.querySelector(`input[name=criticality][value="${p.prio}"]`);if(r)r.checked=true}
+  bkLimPrev();
+}
 function bkLimPrev(){const f=document.querySelector('#modal form');if(!f||!$('bk-lim'))return;const pr=(f.querySelector('input[name=criticality]:checked')||{}).value||'MEDIA';$('bk-lim').textContent='Fecha límite: '+fmtD(addDays(f.observationDate.value||today(),PLAZO[pr]))}
 function bkReqAdd(t){bkReqT.push({id:uid('R'),type:t,num:'',desc:'',provider:'',reqDate:today(),estDate:'',st:'SOLICITADO'});bkReqRender()}
 function bkReqRender(){
@@ -414,6 +426,19 @@ function dashBk(){
    ${ccard('⏳','Antigüedad de abiertos','Días desde la detección',svgCols(ageB))}
    ${ccard('⏰','Vencidos más antiguos','Atender primero',oldest.length?oldest.map(b=>{const e=eqOf(b.fleetId);return `<button type="button" class="oldr" onclick="bkDetail('${b.id}')"><span class="min-w-0"><b class="mono">${esc(e.code)}</b> <span class="text-slate-400">· ${esc(b.component)}</span><small class="mono">${esc(bkNo(b))} · ${fmtD(b.observationDate)}</small></span>${bkPrBadge(b.criticality)}<b class="text-red-400 nw">${bkAge(b)} d</b></button>`}).join(''):'<p class="text-sm text-slate-500">Sin vencidos. ✅</p>',`<button onclick="bkF.venc=true;bkF.st='';bkGo('list')" class="text-sm text-amber-400">Ver todos →</button>`)}</div>`;
 }
+/* ---------- Confiabilidad: disponibilidad, MTBF y MTTR desde el Reporte de paradas ---------- */
+function relMet(fids,from,to,soloFallas){
+  const ids=new Set(fids),days=Math.max(1,dDiff(from,to)+1);
+  const st=sps.filter(s=>s.status!=='ABIERTA'&&ids.has(s.fleetId)&&(s.fp||'').slice(0,10)>=from&&(s.fp||'').slice(0,10)<=to&&(!soloFallas||s.motivo==='MCI'||s.motivo==='MCP'));
+  const hrs=st.reduce((t,s)=>t+(Number(s.t)||0),0),cal=ids.size*days*24,n=st.length;
+  return{n,hrs:Math.round(hrs*10)/10,disp:cal?Math.round((1-hrs/cal)*1000)/10:null,mttr:n?Math.round(hrs/n*10)/10:null,mtbf:n?Math.round((cal-hrs)/n*10)/10:null,days};
+}
+function dashRel(){
+  const to=today(),from=to.slice(0,8)+'01',a=relMet(fleet.map(e=>e.id),from,to,false),f=relMet(fleet.map(e=>e.id),from,to,true),v=x=>x==null?'—':x.toLocaleString('es-PE');
+  const dc=a.disp==null?'#94a3b8':a.disp>=90?'#34d399':a.disp>=80?'#fbbf24':'#f87171';
+  return `<div class="flex justify-between items-center gap-2" style="margin-top:.75rem"><h3 class="font-semibold text-slate-300">⚙️ Confiabilidad del mes</h3><button type="button" onclick="bkGo('fal')" class="btn bg-slate-700 !py-1 text-xs">Ver fallas recurrentes ›</button></div>
+  <div class="kgrid">${kpi('Disponibilidad',a.disp==null?'—':a.disp+'%',`${v(a.hrs)} h fuera de servicio · ${fleet.length} equipos`,dc,'✅',"bkGo('fal')")}${kpi('MTBF',f.mtbf==null?'—':v(f.mtbf)+' h','Tiempo medio entre fallas (MCI/MCP)','#38bdf8','📈',"bkGo('fal')")}${kpi('MTTR',f.mttr==null?'—':v(f.mttr)+' h','Tiempo medio de reparación','#fb923c','🛠️',"bkGo('fal')")}${kpi('Paradas cerradas',a.n,`${f.n} por falla (MCI/MCP)`,'#e2e8f0','🛑',"tab('rep')")}</div>`;
+}
 /* ---------- Dashboard de Engrase y Neumáticos (indicadores del módulo eqn/) ---------- */
 function dashEqn(){
   const S=window.EQN_SUM,K=S&&S.kpi,n=v=>v==null||isNaN(v)?'—':Math.round(v).toLocaleString('es-PE'),p=v=>v==null||isNaN(v)?'—':Math.round(v)+'%';
@@ -434,7 +459,7 @@ function dashEqn(){
 }
 function dashOther(){
   return `<h3 class="font-semibold text-slate-300" style="margin-top:.75rem">🧰 Otros controles</h3>
-  <div class="kgrid">${kpi('Preventivos vencidos',pms.filter(pmOver).length,pms.filter(p=>p.status==='PROGRAMADO'&&!pmOver(p)).length+' programados','#ef4444','🗓️',"tab('pm')")}${kpi('Por validar',backlogs.filter(b=>b.status==='PENDIENTE_VALIDACION').length+pms.filter(p=>p.status==='PENDIENTE_VALIDACION').length,'Backlogs y preventivos','#c084fc','🛡️',"tab('sup')")}</div>${dashEqn()}
+  <div class="kgrid">${kpi('Preventivos vencidos',pms.filter(pmOver).length,pms.filter(p=>p.status==='PROGRAMADO'&&!pmOver(p)).length+' programados','#ef4444','🗓️',"tab('pm')")}${kpi('Por validar',backlogs.filter(b=>b.status==='PENDIENTE_VALIDACION').length+pms.filter(p=>p.status==='PENDIENTE_VALIDACION').length,'Backlogs y preventivos','#c084fc','🛡️',"tab('sup')")}</div>${dashRel()}${dashEqn()}
   <div class="dgrid3">${pmUpcomingHtml()}${grDueHtml()}${trDueHtml()}</div><div class="dgrid2">${dashRep()}${dashValidar()}</div>`;
 }
 
