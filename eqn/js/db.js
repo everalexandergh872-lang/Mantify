@@ -130,7 +130,7 @@
   async function open() {
     const P = host();
     fb = P ? P.firebase : window.firebase;
-    if (!fb || !fb.apps || !fb.apps.length) throw new Error('Abre este módulo desde Mantify (Engrase o Neumáticos).');
+    if (!fb || !fb.apps || !fb.apps.length) throw new Error('Abre este módulo desde Mantify (Engrase y Neumáticos).');
     fs = fb.firestore();
     user = fb.auth().currentUser;
     if (!user) user = await new Promise(res => { const t = setTimeout(() => res(null), 15000); const un = fb.auth().onAuthStateChanged(u => { if (u) { clearTimeout(t); un(); res(u); } }); });

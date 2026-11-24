@@ -268,3 +268,25 @@ html.dark a{color:#93c5fd}
 @media (max-width:860px){#topbar{padding:0 10px;gap:8px}#globalSearch{width:140px}}
 html.dark .card h3,html.dark .kpi .val,html.dark .modal-head h2,html.dark .ficha div .v,html.dark .alert-item .ttl,html.dark .tl-item .tl-title,html.dark .answers .a .r{color:#f1f5f9}
 html.dark [style*="color:var(--navy)"]{color:#f1f5f9!important}
+
+/* ===== Dentro de Mantify: mismo aspecto que la app (pestañas arriba, colores y letra de Mantify) ===== */
+html.en-mantify{--orange:#f59e0b;--orange-2:#d97706;--radius:12px}
+html.en-mantify:not(.dark){--navy:#0F2A44;--navy-2:#16365a;--navy-3:#1e4573;--bg:#f1f5f9;--line:#d5dce6}
+html.en-mantify body{font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+html.en-mantify #app{flex-direction:column}
+html.en-mantify #sidebar{position:sticky;top:0;width:auto;transform:none!important;flex-direction:row;background:var(--card);color:var(--text);border-bottom:1px solid var(--line);z-index:30}
+html.en-mantify .brand,html.en-mantify .sidebar-foot,html.en-mantify #btnMenu{display:none!important}
+html.en-mantify #menu{flex-direction:row;padding:8px 12px;gap:6px;overflow-x:auto;scrollbar-width:thin}
+html.en-mantify #menu a{flex:0 0 auto;padding:7px 12px;border-radius:999px;color:var(--text-2);background:transparent;border:1px solid var(--line);font-size:13px;white-space:nowrap}
+html.en-mantify #menu a:hover{background:var(--line-2);color:var(--text)}
+html.en-mantify #menu a.active{background:var(--orange);border-color:var(--orange);color:#0f172a;box-shadow:none;font-weight:600}
+html.en-mantify #main{margin-left:0}
+html.en-mantify #topbar{position:static;height:auto;padding:10px 16px;background:transparent;border:0}
+html.en-mantify #topbar h1{font-size:20px;font-weight:700}
+html.en-mantify.dark #sidebar{background:#1e293b;border-color:#334155}
+html.en-mantify.dark #menu a{border-color:#334155;color:#cbd5e1}
+html.en-mantify.dark #menu a:hover{background:#334155;color:#fff}
+html.en-mantify.dark #menu a.active{color:#0f172a}
+html.en-mantify.dark #topbar{background:transparent}
+html.en-mantify .card,html.en-mantify .kpi{border-radius:12px}
+@media(max-width:640px){html.en-mantify #menu a{padding:6px 10px;font-size:12px}html.en-mantify #globalSearch{width:160px}}
