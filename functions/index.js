@@ -29,3 +29,19 @@ exports.resetPassword = onCall(async (req) => {
   await target.update({pass, passChangedAt: Date.now(), passChangedBy: caller.name || req.auth.uid});
   return {ok: true};
 });
+
+/* El planner elimina a una persona: borra su cuenta de Firebase Auth y su perfil.
+   Sus backlogs, cierres y firmas en las OT se conservan (guardan el nombre, no dependen de la cuenta). */
+exports.deleteUser = onCall(async (req) => {
+  if (!req.auth) throw new HttpsError('unauthenticated', 'Inicia sesión.');
+  const users = admin.firestore().collection('users');
+  const caller = (await users.doc(req.auth.uid).get()).data();
+  if (!caller || caller.role !== 'admin' || caller.active === false)
+    throw new HttpsError('permission-denied', 'Solo un planner activo puede eliminar personal.');
+  const {uid} = req.data || {};
+  if (typeof uid !== 'string' || !/^[\w-]{1,128}$/.test(uid)) throw new HttpsError('invalid-argument', 'Usuario no válido.');
+  if (uid === req.auth.uid) throw new HttpsError('failed-precondition', 'No puedes eliminarte a ti mismo.');
+  try { await admin.auth().deleteUser(uid); } catch (e) { if (e.code !== 'auth/user-not-found') throw e; }
+  await users.doc(uid).delete();
+  return {ok: true};
+});

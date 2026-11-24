@@ -60,8 +60,11 @@ service cloud.firestore {
     // Backlogs: todos crean y cierran; solo supervisor/planner pueden dejarlos COMPLETADO; solo el planner borra.
     match /backlogs/{id} {
       allow read: if isStaff();
-      allow create: if isStaff() && request.resource.data.status in ['PENDIENTE', 'EN_PROCESO'];
-      allow update: if isAdmin() || (isStaff() && resource.data.status != 'COMPLETADO' && closeUidOk() && validOk());
+      // estados abiertos del flujo de backlogs (+ los dos de la versión anterior)
+      allow create: if isStaff() && request.resource.data.status in ['REGISTRADO', 'PLANIFICADO', 'ESPERA_REPUESTOS', 'ESPERA_SERVICIO', 'PROGRAMADO', 'EN_EJECUCION', 'PENDIENTE', 'EN_PROCESO'];
+      // anular (o tocar uno anulado) solo supervisor/planner
+      allow update: if isAdmin() || (isStaff() && resource.data.status != 'COMPLETADO' && closeUidOk() && validOk()
+        && ((request.resource.data.status != 'ANULADO' && resource.data.get('status', '') != 'ANULADO') || isSup()));
       allow delete: if isAdmin();
     }
 

@@ -1,7 +1,7 @@
 /* Service worker: permite abrir la app sin señal y la mantiene actualizada.
    Cambia VERSION cada vez que publiques una nueva versión del index.html. */
-const VERSION='mantify-v21';
-const SHELL=['./','./index.html','./styles.css','./config.js','./app.js','./manifest.webmanifest','./img/icon-192.png','./img/icon-512.png','./img/apple-touch-icon.png','./img/svg/favicon.svg'];
+const VERSION='mantify-v23';
+const SHELL=['./','./index.html','./styles.css','./config.js','./backlog.js','./app.js','./manifest.webmanifest','./img/icon-192.png','./img/icon-512.png','./img/apple-touch-icon.png','./img/svg/favicon.svg'];
 const LIBS=['https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
  'https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js','https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js','https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js','https://www.gstatic.com/firebasejs/10.12.2/firebase-functions-compat.js'];
 self.addEventListener('install',e=>{
