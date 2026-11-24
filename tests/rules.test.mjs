@@ -1,6 +1,6 @@
 // Prueba de reglas: npm i -D @firebase/rules-unit-testing@3 firebase@10 && npx firebase emulators:exec --only firestore --project demo-t "node tests/rules.test.mjs"
 import {initializeTestEnvironment,assertFails,assertSucceeds} from '@firebase/rules-unit-testing';
-import {readFileSync} from 'fs';import {doc,setDoc,updateDoc,getDoc} from 'firebase/firestore';
+import {readFileSync} from 'fs';import {doc,setDoc,updateDoc,getDoc,deleteDoc} from 'firebase/firestore';
 const env=await initializeTestEnvironment({projectId:'demo-t',firestore:{rules:readFileSync(new URL('../firestore.rules',import.meta.url),'utf8'),host:'127.0.0.1',port:8085}});
 await env.withSecurityRulesDisabled(async c=>{const d=c.firestore();
   await setDoc(doc(d,'users/tec'),{role:'tecnico',active:true});await setDoc(doc(d,'users/sup'),{role:'supervisor',active:true});
@@ -33,4 +33,12 @@ await t('técnico edita backlog abierto sin tocar closeUid',assertSucceeds(updat
 await t('técnico lee el directorio del personal',assertSucceeds(getDoc(doc(db('tec'),'staff/sup'))));
 await t('técnico NO escribe en el directorio',assertFails(setDoc(doc(db('tec'),'staff/tec'),{uid:'tec',name:'X',role:'admin'})));
 await t('supervisor NO escribe en el directorio',assertFails(setDoc(doc(db('sup'),'staff/sup'),{uid:'sup',name:'X',role:'admin'})));
+await t('técnico registra en Engrase (cubeta)',assertSucceeds(setDoc(doc(db('tec'),'eqn_engrasesDiarios/m2026-11'),{r:{a:'{}'},u:1},{merge:true})));
+await t('técnico lee Neumáticos',assertSucceeds(getDoc(doc(db('tec'),'eqn_neumaticos/h1'))));
+await t('técnico guarda una foto',assertSucceeds(setDoc(doc(db('tec'),'eqn_fotos/f1'),{d:'data:image/jpeg;base64,AAA',at:1})));
+await t('técnico NO borra una cubeta',assertFails(deleteDoc(doc(db('tec'),'eqn_engrasesDiarios/m2026-11'))));
+await t('supervisor sí borra una cubeta',assertSucceeds(deleteDoc(doc(db('sup'),'eqn_engrasesDiarios/m2026-11'))));
+await t('supervisor NO borra la auditoría',assertFails(deleteDoc(doc(db('sup'),'eqn_auditoria/d2026-11-23'))));
+await t('sin perfil NO lee Engrase',assertFails(getDoc(doc(db('extraño'),'eqn_equipos/h1'))));
+await t('la regla del módulo NO abre otras colecciones',assertFails(deleteDoc(doc(db('sup'),'backlogs/b1'))));
 console.log(ok.join('\n'));await env.cleanup();

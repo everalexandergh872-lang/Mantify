@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<script>try{if(window.parent===window)location.replace('../')}catch(e){}</script>
+<title>Control de Engrase y Neumáticos · Planner de Equipos</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div id="app">
+  <aside id="sidebar">
+    <div class="brand">
+      <div class="brand-logo">EN</div>
+      <div>
+        <div class="brand-title">Engrase &amp; Neumáticos</div>
+        <div class="brand-sub">Planner de Equipos</div>
+      </div>
+    </div>
+    <nav id="menu">
+      <a href="#/dashboard" data-route="dashboard"><span class="ico">▦</span>Dashboard General</a>
+      <a href="#/engrase" data-route="engrase"><span class="ico">⛽</span>Control de Engrase</a>
+      <a href="#/neumaticos" data-route="neumaticos"><span class="ico">◎</span>Control de Neumáticos</a>
+      <a href="#/equipos" data-route="equipos"><span class="ico">🚜</span>Maestro de Equipos</a>
+      <a href="#/programacion" data-route="programacion"><span class="ico">📅</span>Programación</a>
+      <a href="#/alertas" data-route="alertas"><span class="ico">⚠</span>Alertas <span id="badgeAlertas" class="badge-menu"></span></a>
+      <a href="#/historial" data-route="historial"><span class="ico">🕘</span>Historial</a>
+      <a href="#/reportes" data-route="reportes"><span class="ico">📄</span>Reportes</a>
+      <a href="#/configuracion" data-route="configuracion"><span class="ico">⚙</span>Configuración</a>
+    </nav>
+    <div class="sidebar-foot">
+      <div id="dbStatus">Nube de Mantify</div>
+      <div id="clock"></div>
+    </div>
+  </aside>
+  <div id="main">
+    <header id="topbar">
+      <button id="btnMenu" class="btn-icon" title="Menú">☰</button>
+      <h1 id="viewTitle">Dashboard</h1>
+      <div class="topbar-right">
+        <input id="globalSearch" type="search" placeholder="Buscar equipo o neumático…" autocomplete="off">
+        <div id="searchResults" class="search-results hidden"></div>
+        <button class="btn btn-outline btn-sm" id="btnBackupQuick" title="Descargar copia de seguridad JSON">⭳ Respaldo</button>
+      </div>
+    </header>
+    <main id="view"></main>
+  </div>
+</div>
+<div id="modalRoot"></div>
+<div id="toastRoot"></div>
+
+<script src="libs/chart.umd.min.js"></script>
+<script src="libs/xlsx.full.min.js"></script>
+<script src="libs/jspdf.umd.min.js"></script>
+<script src="libs/jspdf.plugin.autotable.min.js"></script>
+<script src="js/config.js"></script>
+<script src="js/db.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/calc.js"></script>
+<script src="js/backlog.js"></script>
+<script src="js/views/dashboard.js"></script>
+<script src="js/views/engraseProg.js"></script>
+<script src="js/excelEngrase.js"></script>
+<script src="js/views/engrase.js"></script>
+<script src="js/views/neumaticos.js"></script>
+<script src="js/views/equipos.js"></script>
+<script src="js/views/programacion.js"></script>
+<script src="js/views/alertas.js"></script>
+<script src="js/views/historial.js"></script>
+<script src="js/views/reportes.js"></script>
+<script src="js/views/configuracion.js"></script>
+<script src="js/bridge.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

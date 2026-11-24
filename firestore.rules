@@ -113,6 +113,24 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Engrase y Neumáticos (módulo integrado, carpeta eqn/): los datos van agrupados en documentos "cubeta".
+    // Todo el personal lee y registra; borrar documentos completos solo supervisor/planner; la auditoría solo la borra el planner.
+    match /eqn_auditoria/{id} {
+      allow read: if isStaff();
+      allow create, update: if isStaff();
+      allow delete: if isAdmin();
+    }
+    match /eqn_fotos/{id} {
+      allow read: if isStaff();
+      allow create, update: if isStaff() && request.resource.data.d is string && request.resource.data.d.size() < 1048000;
+      allow delete: if isSup();
+    }
+    match /{col}/{id} {
+      allow read: if isStaff() && col in ['eqn_equipos', 'eqn_horometros', 'eqn_puntos', 'eqn_engrases', 'eqn_neumaticos', 'eqn_inspecciones', 'eqn_movimientos', 'eqn_alertasAtendidas', 'eqn_engrasesDiarios', 'eqn_programas', 'eqn_config', 'eqn_migracion'];
+      allow create, update: if isStaff() && col in ['eqn_equipos', 'eqn_horometros', 'eqn_puntos', 'eqn_engrases', 'eqn_neumaticos', 'eqn_inspecciones', 'eqn_movimientos', 'eqn_alertasAtendidas', 'eqn_engrasesDiarios', 'eqn_programas', 'eqn_config', 'eqn_migracion'];
+      allow delete: if isSup() && col in ['eqn_equipos', 'eqn_horometros', 'eqn_puntos', 'eqn_engrases', 'eqn_neumaticos', 'eqn_inspecciones', 'eqn_movimientos', 'eqn_alertasAtendidas', 'eqn_engrasesDiarios', 'eqn_programas', 'eqn_config', 'eqn_migracion'];
+    }
+
     // Intervenciones (reporte de mantenimiento): todos registran y cierran paradas; supervisor/planner editan cualquiera; solo el planner borra.
     match /stops/{id} {
       allow read: if isStaff();

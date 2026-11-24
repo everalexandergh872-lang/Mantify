@@ -462,3 +462,6 @@ html.light .rwr{border-color:#d5dce6}
 @media(max-width:1023px){html.light #nav::after{background:linear-gradient(90deg,transparent,#fff)}}
 @media(min-width:1024px){html.light #side{background:#ffffff;border-color:#e2e8f0}html.light .side-i{color:#334155}html.light .side-i:hover{background:#f1f5f9}html.light .side-i.on{color:#0f172a;background:rgba(245,158,11,.14)}html.light .side-brand span{color:#64748b}html.light .side-foot{border-color:#e2e8f0;color:#64748b}}
 .side-foot .side-i{display:flex;align-items:center;gap:.65rem;width:100%;text-align:left;padding:.45rem .5rem;border-radius:.6rem;font-size:13px}
+/* Engrase y Neumáticos (módulo integrado): ocupa todo el ancho disponible */
+main.eqn-wide{max-width:none}
+html.light #eqn-frame{border-color:#cbd5e1!important}
