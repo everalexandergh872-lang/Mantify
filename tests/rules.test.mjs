@@ -14,5 +14,9 @@ await t('supervisor NO valida su propio cierre',assertFails(updateDoc(doc(db('su
 await t('otro supervisor sí valida',assertSucceeds(updateDoc(doc(db('sup2'),'backlogs/b2'),{status:'COMPLETADO'})));
 await t('técnico NO completa',assertFails(updateDoc(doc(db('tec'),'backlogs/b1'),{status:'COMPLETADO'})));
 await t('técnico NO se hace admin',assertFails(updateDoc(doc(db('tec'),'users/tec'),{role:'admin'})));
+await t('técnico guarda su propia firma',assertSucceeds(updateDoc(doc(db('tec'),'users/tec'),{signature:'data:image/png;base64,AAA',signatureAt:1})));
+await t('técnico NO cambia la firma de otro',assertFails(updateDoc(doc(db('tec'),'users/sup'),{signature:'data:image/png;base64,AAA'})));
+await t('técnico NO cambia su rol junto con la firma',assertFails(updateDoc(doc(db('tec'),'users/tec'),{signature:'x',role:'admin'})));
+await t('técnico NO cambia su cargo',assertFails(updateDoc(doc(db('tec'),'users/tec'),{position:'Jefe de mantenimiento'})));
 await t('técnico edita backlog abierto sin tocar closeUid',assertSucceeds(updateDoc(doc(db('tec'),'backlogs/b1'),{description:'x'})));
 console.log(ok.join('\n'));await env.cleanup();

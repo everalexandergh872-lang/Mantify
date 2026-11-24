@@ -357,16 +357,16 @@ function openClose(id){
     <div class="g2">${field('closeDate','Fecha de cierre *',b.closeDate||today(),'required','date')}${field('closeTech','Técnico *',techVal(b.closeTech),'required'+techRo())}</div>
     ${field('closeHours','Horómetro / odómetro del equipo al cierre *',b.closeHours??eqOf(b.fleetId).hours??'','required min="0" step="any" inputmode="decimal"','number')}
     <label class="block text-xs text-slate-400 font-semibold">Notas de reparación<textarea maxlength="5000" name="closeNotes" rows="2" class="inp mt-1 font-normal">${esc(b.closeNotes)}</textarea></label>
-    ${photoBox('after','Evidencia de reparación (después)')}<div class="border border-slate-700 bg-slate-900/50 p-3 rounded-lg space-y-2"><div class="flex justify-between items-center"><p class="text-xs text-emerald-400 font-semibold">✍️ Firma del técnico *</p><button type="button" onclick="sigClear()" class="btn bg-slate-700 !py-1">Borrar firma</button></div><canvas id="sigc" style="width:100%;height:140px;background:#fff;border-radius:.5rem;touch-action:none;display:block"></canvas><p class="text-[11px] text-slate-500">Firma con el dedo o el mouse dentro del recuadro blanco.</p></div>
+    ${photoBox('after','Evidencia de reparación (después)')}${sigBox('Firma del técnico')}
     ${btns('hide()','Enviar a validación','bg-emerald-500')}</form>`);
-  pv('after');sigInit(b.closeSignature);
+  pv('after');sigInit(b.closeSignature||mySig());
 }
 function saveClose(ev,id){
   ev.preventDefault();const f=Object.fromEntries(new FormData(ev.target)),b=backlogs.find(x=>x.id===id);
   if(!sig.drawn){note('Falta la firma del técnico. Firma dentro del recuadro blanco antes de confirmar el cierre.');return}
   const hrs=Number(f.closeHours),eq=fleet.find(x=>x.id===b.fleetId);
   if(eq&&hrs>(Number(eq.hours)||0))put('fleet',{...eq,hours:hrs});
-  put('backlogs',{...b,...f,closeHours:hrs,status:'PENDIENTE_VALIDACION',photosAfter:tmp.after,closeSignature:sigData(),supName:'',supDate:'',supNotes:'',supSignature:''});note('Cierre registrado. El backlog quedó PENDIENTE POR VALIDACIÓN del supervisor.');
+  put('backlogs',{...b,...f,closeHours:hrs,status:'PENDIENTE_VALIDACION',photosAfter:tmp.after,closeSignature:sigData(),closePos:posOf(f.closeTech),supName:'',supDate:'',supNotes:'',supSignature:''});note('Cierre registrado. El backlog quedó PENDIENTE POR VALIDACIÓN del supervisor.');
 }
 function openDetail(id){
   const b=backlogs.find(x=>x.id===id);if(!b)return;const e=eqOf(b.fleetId),d=delay(b);
@@ -377,8 +377,8 @@ function openDetail(id){
   <div><span class="text-slate-400 block">Estado</span>${badge(STAT,b.status)}</div><div><span class="text-slate-400 block">Atraso</span>${d?d+' días':'Al día'}</div>
   <div><span class="text-slate-400 block">Costo est.</span>$${(b.cost||0).toLocaleString()}</div><div><span class="text-slate-400 block">Observado</span>${fmtD(b.observationDate)}</div><div><span class="text-slate-400 block">Programado</span>${fmtD(b.scheduledDate)}</div></div>
   <p class="text-sm bg-slate-900/50 p-3 rounded-lg border border-slate-700">${esc(b.description)}</p>
-  ${(b.status==='COMPLETADO'||b.status==='PENDIENTE_VALIDACION')?`<div class="bg-emerald-950/30 border border-emerald-500/30 p-3 rounded-lg text-xs mt-3"><b class="text-emerald-400">Cierre del técnico:</b> ${fmtD(b.closeDate)} · ${esc(b.closeTech)}${b.closeHours!=null&&b.closeHours!==''?` · Horómetro: <b>${esc(b.closeHours)}</b>`:''}${b.closeNotes?`<p class="mt-1 text-slate-300">${esc(b.closeNotes)}</p>`:''}</div>`:''}
-  ${b.supName?`<div class="bg-emerald-950/30 border border-emerald-500/30 p-3 rounded-lg text-xs mt-3"><b class="text-emerald-400">Validado por el supervisor:</b> ${esc(b.supName)} · ${fmtD(b.supDate)}${b.supNotes?`<p class="mt-1 text-slate-300">${esc(b.supNotes)}</p>`:''}</div>`:''}
+  ${(b.status==='COMPLETADO'||b.status==='PENDIENTE_VALIDACION')?`<div class="bg-emerald-950/30 border border-emerald-500/30 p-3 rounded-lg text-xs mt-3"><b class="text-emerald-400">Cierre del técnico:</b> ${fmtD(b.closeDate)} · ${esc(b.closeTech)}${b.closePos?' ('+esc(b.closePos)+')':''}${b.closeHours!=null&&b.closeHours!==''?` · Horómetro: <b>${esc(b.closeHours)}</b>`:''}${b.closeNotes?`<p class="mt-1 text-slate-300">${esc(b.closeNotes)}</p>`:''}</div>`:''}
+  ${b.supName?`<div class="bg-emerald-950/30 border border-emerald-500/30 p-3 rounded-lg text-xs mt-3"><b class="text-emerald-400">Validado por el supervisor:</b> ${esc(b.supName)}${b.supPos?' ('+esc(b.supPos)+')':''} · ${fmtD(b.supDate)}${b.supNotes?`<p class="mt-1 text-slate-300">${esc(b.supNotes)}</p>`:''}</div>`:''}
   ${(b.rejectNote&&b.status==='EN_PROCESO')?`<div class="bg-red-500/10 border border-red-500/30 p-3 rounded-lg text-xs mt-3"><b class="text-red-400">Devuelto por el supervisor${b.rejectBy?' ('+esc(b.rejectBy)+')':''}:</b><p class="mt-1 text-slate-300">${esc(b.rejectNote)}</p></div>`:''}
   <h4 class="text-xs text-slate-400 uppercase mt-3 mb-1">Antes</h4><div class="flex flex-wrap gap-2">${ph(b.photosBefore)}</div>
   <h4 class="text-xs text-slate-400 uppercase mt-3 mb-1">Después</h4><div class="flex flex-wrap gap-2">${ph(b.photosAfter)}</div>
@@ -388,22 +388,37 @@ function openDetail(id){
 }
 
 
-/* ---------- Firma digital ---------- */
-let sig={c:null,x:null,drawn:false,down:false};
+/* ---------- Firma digital (precargada desde el perfil del personal) ---------- */
+let sig={c:null,x:null,drawn:false,down:false,dirty:false,src:''};
+const mySig=()=>(me&&me.signature)||'';
+const sigBox=(l,opt)=>`<div class="border border-slate-700 bg-slate-900/50 p-3 rounded-lg space-y-2"><div class="flex justify-between items-center gap-2 flex-wrap"><p class="text-xs text-emerald-400 font-semibold">✍️ ${l}${opt?'':' *'}</p><div class="flex gap-1"><label class="btn bg-slate-700 !py-1" style="display:inline-flex;align-items:center;cursor:pointer">📷 Subir foto<input type="file" accept="image/*" onchange="sigUpload(this)" style="display:none"></label><button type="button" onclick="sigClear()" class="btn bg-slate-700 !py-1">Borrar</button></div></div><canvas id="sigc" style="width:100%;height:140px;background:#fff;border-radius:.5rem;touch-action:none;display:block"></canvas><p id="sig-hint" class="text-[11px] text-slate-500">Firma con el dedo o el mouse dentro del recuadro blanco, o sube una foto de la firma en papel blanco.</p></div>`;
+function sigFit(x,c,img){const k=Math.min(c.width/img.width,c.height/img.height),w=img.width*k,h=img.height*k;x.drawImage(img,(c.width-w)/2,(c.height-h)/2,w,h)}
 function sigInit(existing){
   const c=$('sigc');if(!c)return;
   c.width=c.clientWidth||320;c.height=c.clientHeight||140;
   const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);
   x.strokeStyle='#0f172a';x.lineWidth=2.5;x.lineCap='round';x.lineJoin='round';
-  sig={c,x,drawn:false,down:false};
-  if(existing){const i=new Image();i.onload=()=>{x.drawImage(i,0,0,c.width,c.height);sig.drawn=true};i.src=existing}
+  sig={c,x,drawn:false,down:false,dirty:false,src:existing||''};
+  if(existing){sig.drawn=true;const i=new Image();i.onload=()=>{if(sig.c===c&&!sig.dirty)sigFit(x,c,i)};i.src=existing;
+    const h=$('sig-hint');if(h){h.textContent='✔ Firma precargada del perfil. Para firmar de nuevo, toca el recuadro o usa Borrar.';h.className='text-[11px] text-emerald-400'}}
   const pos=e=>{const r=c.getBoundingClientRect();return [(e.clientX-r.left)*c.width/r.width,(e.clientY-r.top)*c.height/r.height]};
-  c.onpointerdown=e=>{e.preventDefault();try{c.setPointerCapture(e.pointerId)}catch(_){}sig.down=true;sig.drawn=true;const [a,b]=pos(e);x.beginPath();x.moveTo(a,b);x.lineTo(a+.1,b+.1);x.stroke();x.beginPath();x.moveTo(a,b)};
+  c.onpointerdown=e=>{e.preventDefault();try{c.setPointerCapture(e.pointerId)}catch(_){}
+    if(sig.src&&!sig.dirty){x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height)} // al volver a firmar se reemplaza la precargada
+    sig.down=true;sig.drawn=true;sig.dirty=true;sig.src='';const [a,b]=pos(e);x.beginPath();x.moveTo(a,b);x.lineTo(a+.1,b+.1);x.stroke();x.beginPath();x.moveTo(a,b)};
   c.onpointermove=e=>{if(!sig.down)return;e.preventDefault();const [a,b]=pos(e);x.lineTo(a,b);x.stroke();x.beginPath();x.moveTo(a,b)};
   c.onpointerup=c.onpointercancel=c.onpointerleave=()=>{sig.down=false};
 }
-function sigClear(){const{c,x}=sig;if(!c)return;x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);sig.drawn=false}
+function sigClear(){const{c,x}=sig;if(!c)return;x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);sig.drawn=false;sig.dirty=true;sig.src=''}
+function sigUpload(inp){
+  const f=inp.files[0];inp.value='';const{c,x}=sig;if(!f||!c)return;
+  const i=new Image();i.onload=()=>{URL.revokeObjectURL(i.src);x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);sigFit(x,c,i);
+    // limpia el fondo de la foto: lo claro pasa a blanco y el trazo a tinta oscura
+    try{const d=x.getImageData(0,0,c.width,c.height),p=d.data;for(let k=0;k<p.length;k+=4){const l=.299*p[k]+.587*p[k+1]+.114*p[k+2];if(l>150){p[k]=p[k+1]=p[k+2]=255}else{p[k]=15;p[k+1]=23;p[k+2]=42}p[k+3]=255}x.putImageData(d,0,0)}catch(_){}
+    sig.drawn=true;sig.dirty=true;sig.src='';const h=$('sig-hint');if(h){h.textContent='Foto cargada. Si no se ve bien, bórrala y firma a mano.';h.className='text-[11px] text-slate-400'}};
+  i.onerror=()=>note('No se pudo leer la imagen de la firma.');i.src=URL.createObjectURL(f);
+}
 function sigData(){
+  if(!sig.dirty&&sig.src)return sig.src; // firma precargada: se guarda exactamente la del perfil
   const c=sig.c,o=document.createElement('canvas');o.width=400;o.height=Math.round(400*c.height/c.width);
   o.getContext('2d').drawImage(c,0,0,o.width,o.height);return o.toDataURL('image/png');
 }
@@ -458,11 +473,12 @@ function makePdf(id){
   photos('FOTOS DEL HALLAZGO (ANTES)',b.photosBefore);photos('EVIDENCIA DE REPARACION (DESPUES)',b.photosAfter);
   y+=4;need(52);sec('FIRMAS');y+=2;
   const bw=(W-2*M-10)/2,top=y;
-  [['Tecnico responsable',done?b.closeTech:'',b.closeSignature],['Supervisor / Aprobacion',b.supName||'',b.supSignature]].forEach(([lab,nom,img],i)=>{
+  [['Tecnico responsable',done?b.closeTech:'',b.closeSignature,done?b.closePos:''],['Supervisor / Aprobacion',b.supName||'',b.supSignature,b.supName?b.supPos:'']].forEach(([lab,nom,img,cg],i)=>{
     const x=M+i*(bw+10);doc.setDrawColor(148,163,184);doc.rect(x,top,bw,30);
     if(img){try{doc.addImage(img,'PNG',x+3,top+2,bw-6,Math.min(26,(bw-6)*0.35))}catch(_){}}
     doc.line(x+4,top+34,x+bw-4,top+34);doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(30,41,59);doc.text(lab,x+bw/2,top+39,{align:'center'});
     doc.setFont('helvetica','normal');doc.text(nom||'Nombre y firma',x+bw/2,top+44,{align:'center'});
+    if(cg){doc.setFontSize(8);doc.setTextColor(100,116,139);doc.text(String(cg),x+bw/2,top+48.5,{align:'center'})}
   });
   const n=doc.getNumberOfPages();for(let p=1;p<=n;p++){doc.setPage(p);doc.setFontSize(8);doc.setTextColor(100,116,139);doc.text(ot+'  |  Pagina '+p+' de '+n,W/2,290,{align:'center'})}
   fileOut(doc.output('blob'),ot+'_'+String(e.code||'equipo').replace(/[^A-Za-z0-9_-]/g,'')+'.pdf','📄 Orden de trabajo lista');
@@ -502,12 +518,12 @@ function openValidate(id){
   <form id="supf" onsubmit="return false" class="space-y-3 mt-4 pt-3 border-t border-slate-700"><p class="text-sm text-amber-400 font-semibold">Validación del supervisor</p>
     <div class="g2">${field('supName','Supervisor *',me.name,'required readonly')}${field('supDate','Fecha de validación *',today(),'required','date')}</div>
     <label class="block text-xs text-slate-400 font-semibold">Observaciones del supervisor <span class="font-normal">(obligatorio si devuelves el trabajo)</span><textarea maxlength="5000" name="supNotes" rows="2" class="inp mt-1 font-normal"></textarea></label>
-    <div class="border border-slate-700 bg-slate-900/50 p-3 rounded-lg space-y-2"><div class="flex justify-between items-center"><p class="text-xs text-emerald-400 font-semibold">✍️ Firma del supervisor *</p><button type="button" onclick="sigClear()" class="btn bg-slate-700 !py-1">Borrar firma</button></div><canvas id="sigc" style="width:100%;height:140px;background:#fff;border-radius:.5rem;touch-action:none;display:block"></canvas><p class="text-[11px] text-slate-500">Firma con el dedo o el mouse. Solo se necesita para aprobar.</p></div>
+    ${sigBox('Firma del supervisor (solo para aprobar)')}
     <p id="supmsg" class="text-xs text-red-400 hidden"></p>
     <div class="flex justify-end gap-2 pt-3 border-t border-slate-700" style="position:sticky;bottom:-1rem;background:#1e293b;padding-bottom:1rem;margin-top:.75rem;z-index:5">
       <button type="button" onclick="decide('${b.id}','no')" class="btn bg-red-500/20 text-red-400">↩️ Devolver</button>
       <button type="button" onclick="decide('${b.id}','ok')" class="btn bg-emerald-500 text-slate-950">✅ Aprobar y cerrar</button></div></form>`);
-  sigInit();
+  sigInit(mySig());
 }
 function supErr(m){const p=$('supmsg');p.textContent=m;p.classList.remove('hidden');p.scrollIntoView({block:'center'})}
 function decide(id,how){
@@ -516,7 +532,7 @@ function decide(id,how){
   const name=me.name,notes=(f.supNotes||'').trim();try{sessionStorage.setItem('supName',name)}catch(_){}
   if(how==='ok'){
     if(!sig.drawn){supErr('Falta la firma del supervisor para aprobar y cerrar el backlog.');return}
-    put('backlogs',{...b,status:'COMPLETADO',supName:name,supDate:f.supDate,supNotes:notes,supSignature:sigData(),rejectNote:'',rejectBy:'',rejectDate:''});hide();
+    put('backlogs',{...b,status:'COMPLETADO',supName:name,supPos:me.position||'',supDate:f.supDate,supNotes:notes,supSignature:sigData(),rejectNote:'',rejectBy:'',rejectDate:''});hide();
   }else{
     if(!notes){supErr('Escribe en Observaciones el motivo por el que devuelves el trabajo al técnico.');return}
     put('backlogs',{...b,status:'EN_PROCESO',rejectNote:notes,rejectBy:name,rejectDate:f.supDate,closeSignature:'',closeDate:'',supName:'',supDate:'',supNotes:'',supSignature:''});hide();
@@ -606,7 +622,6 @@ function delPm(id){if(!isAdmin())return;ask('¿Eliminar este mantenimiento preve
 
 /* ---------- Cierre de la OT (técnico) ---------- */
 let pmT={acts:[],parts:[],crew:[]};
-const sigBox=l=>`<div class="border border-slate-700 bg-slate-900/50 p-3 rounded-lg space-y-2"><div class="flex justify-between items-center"><p class="text-xs text-emerald-400 font-semibold">✍️ ${l} *</p><button type="button" onclick="sigClear()" class="btn bg-slate-700 !py-1">Borrar firma</button></div><canvas id="sigc" style="width:100%;height:140px;background:#fff;border-radius:.5rem;touch-action:none;display:block"></canvas><p class="text-[11px] text-slate-500">Firma con el dedo o el mouse dentro del recuadro blanco.</p></div>`;
 function pmRender(kind){
   const el=$('pm-'+kind);if(!el)return;
   if(kind==='acts')el.innerHTML=pmT.acts.map((a,i)=>`<div class="bg-slate-900/50 border border-slate-700 rounded-lg p-3 space-y-2">
@@ -645,7 +660,7 @@ function openClosePm(id){
     <div>${H('6. Firma')}${sigBox('Firma del técnico')}</div>
     <p id="pmerr" class="text-xs text-red-400 hidden"></p>
     ${btns('hide()','Enviar a validación','bg-emerald-500')}</form>`,'40rem');
-  pmRender('acts');pmRender('parts');pmRender('crew');pv('before');pv('after');sigInit();
+  pmRender('acts');pmRender('parts');pmRender('crew');pv('before');pv('after');sigInit(mySig());
 }
 function savePmClose(ev,id){
   ev.preventDefault();const p=pms.find(x=>x.id===id);if(!p)return;const f=Object.fromEntries(new FormData(ev.target));
@@ -662,7 +677,7 @@ function savePmClose(ev,id){
   if(eq&&hrs>(Number(eq.hours)||0))put('fleet',{...eq,hours:hrs});
   put('preventive',{...p,execDate:f.execDate,startTime:f.startTime,endTime:f.endTime,durationH:Math.round(mins/60*100)/100,closeHours:hrs,closeTech:f.closeTech.trim(),
     acts:acts.map(a=>({d:a.d.trim(),res:a.res,note:a.note.trim(),extra:!!a.extra})),parts,crew,closeNotes:(f.closeNotes||'').trim(),recommendations:(f.recommendations||'').trim(),
-    photosBefore:tmp.before,photosAfter:tmp.after,closeSignature:sigData(),status:'PENDIENTE_VALIDACION',supName:'',supDate:'',supNotes:'',supSignature:''});
+    photosBefore:tmp.before,photosAfter:tmp.after,closeSignature:sigData(),closePos:posOf(f.closeTech),status:'PENDIENTE_VALIDACION',supName:'',supDate:'',supNotes:'',supSignature:''});
   note('Cierre de la OT registrado. Quedó PENDIENTE POR VALIDACIÓN del supervisor.');
 }
 
@@ -673,7 +688,7 @@ function pmBodyHtml(p){
   const acts=p.acts&&p.acts.length?p.acts:(p.plannedActs||[]).map(d=>({d,res:'',note:''})),a=actStats(p.acts),hh=(p.crew||[]).reduce((t,r)=>t+(Number(r.h)||0),0);
   return `${p.execDate?`${H('Ejecución')}<div class="grid grid-cols-2 gap-2 text-xs bg-slate-900 p-3 rounded-lg border border-slate-700">
     <div><span class="text-slate-400 block">Fecha</span>${fmtD(p.execDate)}</div><div><span class="text-slate-400 block">Horario</span>${esc(p.startTime)} – ${esc(p.endTime)} (${esc(p.durationH)} h)</div>
-    <div><span class="text-slate-400 block">Horómetro al cierre</span>${fmtH(p.closeHours)}</div><div><span class="text-slate-400 block">Técnico</span>${esc(p.closeTech)}</div></div>`:''}
+    <div><span class="text-slate-400 block">Horómetro al cierre</span>${fmtH(p.closeHours)}</div><div><span class="text-slate-400 block">Técnico</span>${esc(p.closeTech)}${p.closePos?'<br><span class="text-slate-400">'+esc(p.closePos)+'</span>':''}</div></div>`:''}
   ${H(`Actividades${p.acts?` (${RES_ICO.OK} ${a.OK} · ${RES_ICO.OBS} ${a.OBS} · ${RES_ICO.NA} ${a.NA})`:' programadas'}`)}<div class="space-y-2">${acts.map((x,i)=>`<div class="${box}"><p class="text-sm"><b class="text-amber-400">${i+1}.</b> ${esc(x.d)}</p><p class="text-xs ${x.res==='OBS'?'text-amber-400':'text-slate-400'}">${x.res?RES_ICO[x.res]+' '+RES_LAB[x.res]:'Pendiente de ejecutar'}${x.note?' · '+esc(x.note):''}</p></div>`).join('')||'<p class="text-xs text-slate-500">Sin actividades.</p>'}</div>
   ${(p.parts&&p.parts.length)?`${H('Repuestos e insumos')}<div class="space-y-2">${p.parts.map(r=>`<div class="${box} text-sm flex justify-between gap-2"><span>${esc(r.d)}</span><b class="whitespace-nowrap">${esc(r.qty)} ${esc(r.unit)}</b></div>`).join('')}</div>`:''}
   ${(p.crew&&p.crew.length)?`${H(`Personal (${hh} h-h)`)}<div class="space-y-2">${p.crew.map(r=>`<div class="${box} text-sm flex justify-between gap-2"><span>${esc(r.n)}</span><b>${esc(r.h)} h</b></div>`).join('')}</div>`:''}
@@ -681,7 +696,7 @@ function pmBodyHtml(p){
   ${p.recommendations?`${H('Recomendaciones / trabajos pendientes')}<p class="text-sm ${box}">${esc(p.recommendations)}</p>`:''}
   ${p.acts?`${H('Fotos antes')}<div class="flex flex-wrap gap-2">${ph(p.photosBefore)}</div>${H('Fotos después')}<div class="flex flex-wrap gap-2">${ph(p.photosAfter)}</div>`:''}
   ${p.closeSignature?`${H('Firma del técnico')}<img src="${esc(p.closeSignature)}" style="height:5rem" class="bg-white rounded">`:''}
-  ${p.supName?`<div class="bg-emerald-950/30 border border-emerald-500/30 p-3 rounded-lg text-xs mt-3"><b class="text-emerald-400">Validado por el supervisor:</b> ${esc(p.supName)} · ${fmtD(p.supDate)}${p.supNotes?`<p class="mt-1 text-slate-300">${esc(p.supNotes)}</p>`:''}</div>`:''}
+  ${p.supName?`<div class="bg-emerald-950/30 border border-emerald-500/30 p-3 rounded-lg text-xs mt-3"><b class="text-emerald-400">Validado por el supervisor:</b> ${esc(p.supName)}${p.supPos?' ('+esc(p.supPos)+')':''} · ${fmtD(p.supDate)}${p.supNotes?`<p class="mt-1 text-slate-300">${esc(p.supNotes)}</p>`:''}</div>`:''}
   ${p.supSignature?`${H('Firma del supervisor')}<img src="${esc(p.supSignature)}" style="height:5rem" class="bg-white rounded">`:''}
   ${(p.rejectNote&&p.status==='PROGRAMADO')?`<div class="bg-red-500/10 border border-red-500/30 p-3 rounded-lg text-xs mt-3"><b class="text-red-400">Devuelto por el supervisor${p.rejectBy?' ('+esc(p.rejectBy)+')':''}:</b><p class="mt-1 text-slate-300">${esc(p.rejectNote)}</p></div>`:''}`;
 }
@@ -715,7 +730,7 @@ function openValidatePm(id){
     <div class="flex justify-end gap-2 pt-3 border-t border-slate-700" style="position:sticky;bottom:-1rem;background:#1e293b;padding-bottom:1rem;margin-top:.75rem;z-index:5">
       <button type="button" onclick="decidePm('${p.id}','no')" class="btn bg-red-500/20 text-red-400">↩️ Devolver</button>
       <button type="button" onclick="decidePm('${p.id}','ok')" class="btn bg-emerald-500 text-slate-950">✅ Aprobar y cerrar</button></div></form>`,'40rem');
-  sigInit();
+  sigInit(mySig());
 }
 function decidePm(id,how){
   const form=$('supf');if(!form||!supOk)return;if(!form.reportValidity())return;
@@ -723,7 +738,7 @@ function decidePm(id,how){
   const name=me.name,notes=(f.supNotes||'').trim();try{sessionStorage.setItem('supName',name)}catch(_){}
   if(how==='ok'){
     if(!sig.drawn){supErr('Falta la firma del supervisor para aprobar y cerrar la OT.');return}
-    put('preventive',{...p,status:'COMPLETADO',supName:name,supDate:f.supDate,supNotes:notes,supSignature:sigData(),rejectNote:'',rejectBy:'',rejectDate:''});hide();
+    put('preventive',{...p,status:'COMPLETADO',supName:name,supPos:me.position||'',supDate:f.supDate,supNotes:notes,supSignature:sigData(),rejectNote:'',rejectBy:'',rejectDate:''});hide();
   }else{
     if(!notes){supErr('Escribe en Observaciones el motivo por el que devuelves la OT al técnico.');return}
     put('preventive',{...p,status:'PROGRAMADO',rejectNote:notes,rejectBy:name,rejectDate:f.supDate,closeSignature:'',supName:'',supDate:'',supNotes:'',supSignature:''});hide();
@@ -839,11 +854,12 @@ function makePdfPm(id){
   if(p.rejectNote&&p.status==='PROGRAMADO'){y+=1;sec('OT DEVUELTA POR EL SUPERVISOR');row('Supervisor:',p.rejectBy);row('Fecha:',fmtD(p.rejectDate));para(p.rejectNote)}
   y+=4;need(52);sec('FIRMAS');y+=2;
   const bw=(W-2*M-10)/2,top=y;
-  [['Tecnico responsable',done?p.closeTech:'',p.closeSignature],['Supervisor / Aprobacion',p.supName||'',p.supSignature]].forEach(([lab,nom,img],i)=>{
+  [['Tecnico responsable',done?p.closeTech:'',p.closeSignature,done?p.closePos:''],['Supervisor / Aprobacion',p.supName||'',p.supSignature,p.supName?p.supPos:'']].forEach(([lab,nom,img,cg],i)=>{
     const x=M+i*(bw+10);doc.setDrawColor(148,163,184);doc.rect(x,top,bw,30);
     if(img){try{doc.addImage(img,'PNG',x+3,top+2,bw-6,Math.min(26,(bw-6)*0.35))}catch(_){}}
     doc.line(x+4,top+34,x+bw-4,top+34);doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(30,41,59);doc.text(lab,x+bw/2,top+39,{align:'center'});
     doc.setFont('helvetica','normal');doc.text(pt(nom)||'Nombre y firma',x+bw/2,top+44,{align:'center'});
+    if(cg){doc.setFontSize(8);doc.setTextColor(100,116,139);doc.text(pt(cg),x+bw/2,top+48.5,{align:'center'})}
   });
   const n=doc.getNumberOfPages();for(let q=1;q<=n;q++){doc.setPage(q);doc.setFontSize(8);doc.setTextColor(100,116,139);doc.text(ot+'  |  Pagina '+q+' de '+n,W/2,290,{align:'center'})}
   fileOut(doc.output('blob'),ot+'_'+String(e.code||'equipo').replace(/[^A-Za-z0-9_-]/g,'')+'.pdf','📄 Orden de trabajo lista');
@@ -1845,10 +1861,15 @@ function makePdfRep(d){
 /* =====================================================================
    SESIÓN, ROLES Y PANEL DE ADMINISTRACIÓN (Planner)
    ===================================================================== */
-const ROLE_L={admin:'Planner (administrador)',supervisor:'Supervisor',tecnico:'Técnico'};
+const ROLE_L={admin:'Planner / Administrador (control total)',supervisor:'Supervisor / Jefe (valida y programa)',tecnico:'Técnico / personal de campo'};
+const PERFIL_D={tecnico:'Registra backlogs, engrases y neumáticos, y cierra trabajos con su firma.',supervisor:'Además valida o devuelve trabajos, programa preventivos y configura planes.',admin:'Control total: personal, flota, eliminaciones, reaperturas y respaldos.'};
+const CARGOS=['Técnico mecánico','Técnico electricista','Técnico electrónico','Técnico de neumáticos','Engrasador','Soldador','Operador','Supervisor de mantenimiento','Supervisor eléctrico','Jefe de mantenimiento','Jefe de taller','Planner de mantenimiento','Administrador del sistema'];
+const POS_DEF={tecnico:'Técnico mecánico',supervisor:'Supervisor de mantenimiento',admin:'Planner de mantenimiento'};
+const roleFromPos=p=>{p=nk(p);return /planner|administrador|admin|gerente/.test(p)?'admin':/supervisor|jefe|coordinador|residente/.test(p)?'supervisor':'tecnico'};
+const posOf=n=>(me&&String(n||'').trim()===me.name)?(me.position||''):'';
 const ROLE_S={admin:'Planner',supervisor:'Supervisor',tecnico:'Técnico'};
 const ROLE_C={admin:'bg-amber-500/10 text-amber-400 border-amber-500/30',supervisor:'bdg-v',tecnico:'bg-blue-500/10 text-blue-400 border-blue-500/30'};
-const techVal=old=>(me&&me.role==='tecnico')?me.name:(old||'');
+const techVal=old=>(me&&me.role==='tecnico')?me.name:(old||(me&&me.uid!=='local'?me.name:''));
 const techRo=()=>(me&&me.role==='tecnico')?' readonly':'';
 const selfClosed=o=>!!(o.closeUid&&me&&o.closeUid===me.uid&&me.role!=='admin');
 function authMsg(e){
@@ -1934,7 +1955,7 @@ function initAuth(){
       const p=s.data();
       if(p.active===false){blocked('Tu acceso está desactivado. Contacta al planner.');return}
       lgOk(); // Firebase Auth ya validó la clave; el hash de users.pass es solo una copia y no bloquea el ingreso
-      me={uid:u.uid,email:u.email,name:p.name||u.email,role:p.role};
+      me={uid:u.uid,email:u.email,name:p.name||u.email,role:p.role,position:p.position||'',signature:p.signature||''};
       startApp();
     }catch(e){console.error(e);blocked('No se pudo cargar tu perfil. '+authMsg(e))}
   });
@@ -1949,14 +1970,17 @@ function applyRole(){
   $('bt-pm').style.display=supOk?'':'none';
   $('bt-imp').style.display=supOk?'':'none';
   ['bk','gr','pm'].forEach(k=>{const b=$('bt-mod-'+k);if(b)b.style.display=isAdmin()?'':'none'});
-  $('userbox').innerHTML=`<span style="text-align:right;line-height:1.2;max-width:7.5rem;overflow:hidden"><b class="text-slate-200" style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(me.name)}</b><span class="text-slate-400" style="font-size:10px">${esc(ROLE_S[me.role]||me.role)}</span></span>${auth?'<button onclick="logout()" class="btn bg-slate-700 !py-1">Salir</button>':''}`;
+  $('userbox').innerHTML=`<button type="button" onclick="openMe()" title="Mi perfil y firma" style="text-align:right;line-height:1.2;max-width:8.5rem;overflow:hidden;min-height:44px"><b class="text-slate-200" style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${me.uid!=='local'&&!me.signature?'⚠️ ':''}${esc(me.name)}</b><span class="text-slate-400" style="font-size:10px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(me.position||ROLE_S[me.role]||me.role)}</span></button>${auth?'<button onclick="logout()" class="btn bg-slate-700 !py-1">Salir</button>':''}`;
 }
 function startApp(){
   hideLogin();applyRole();if(me.uid!=='local')toast('👋 Bienvenido(a), '+String(me.name).split(' ')[0]);
   listen('fleet',d=>fleet=d);listen('backlogs',d=>backlogs=d);listen('preventive',d=>pms=d);listen('grease',d=>grs=d);listen('greasePlans',d=>gpl=d);listen('tires',d=>trs=d);listen('tireParams',d=>trp=d);listen('stops',d=>sps=d);
-  if(db)unsubs.push(db.collection('users').doc(me.uid).onSnapshot(d=>{if(!d.exists||d.data().active===false){nextLoginMsg='Tu acceso fue desactivado.';logout(true)}},e=>console.error(e)));
+  if(db)unsubs.push(db.collection('users').doc(me.uid).onSnapshot(d=>{if(!d.exists||d.data().active===false){nextLoginMsg='Tu acceso fue desactivado.';logout(true);return}
+    const p=d.data();me.name=p.name||me.name;me.position=p.position||'';me.signature=p.signature||'';applyRole()},e=>console.error(e)));
   if(db&&isAdmin())unsubs.push(db.collection('users').onSnapshot(s=>{usersList=s.docs.map(d=>d.data());migratePw();if(cur==='adm')renderAdm()},e=>console.error(e)));
   tab('dash');openEquipHash();
+  let asked=false;try{asked=sessionStorage.getItem('sigAsk')==='1';sessionStorage.setItem('sigAsk','1')}catch(_){}
+  if(db&&me.uid!=='local'&&!me.signature&&!asked)setTimeout(()=>{if(!me.signature&&$('modal').classList.contains('hidden'))ask('Aún no tienes tu firma registrada. Regístrala una sola vez y se cargará sola en tus cierres y validaciones.',openMe,'✍️ Registrar firma','bg-amber-500 text-slate-950')},900);
 }
 
 /* ---------- Acciones exclusivas del planner ---------- */
@@ -1996,21 +2020,25 @@ function renderAdm(){
   const ord={admin:0,supervisor:1,tecnico:2},us=[...usersList].sort((a,b)=>(ord[a.role]-ord[b.role])||String(a.name).localeCompare(String(b.name)));
   const act=[...backlogs.map(b=>({t:'Backlog',id:b.id,s:stLabel(b.status),by:b.updatedBy,at:b.updatedAt})),...pms.map(p=>({t:'Preventivo',id:p.id,s:PM_LONG[p.status]||p.status,by:p.updatedBy,at:p.updatedAt})),...trs.map(t=>({t:'Neumático',id:t.code,s:TR_L[t.status]||t.status,by:t.updatedBy,at:t.updatedAt})),...grs.map(g=>({t:'Engrase',id:eqOf(g.fleetId).code,s:g.done+'/'+g.total+' puntos',by:g.updatedBy,at:g.updatedAt})),...fleet.map(f=>({t:'Equipo',id:f.code,s:f.status,by:f.updatedBy,at:f.updatedAt}))]
     .filter(x=>x.at).sort((a,b)=>b.at-a.at).slice(0,12);
+  const nosig=us.filter(u=>u.active!==false&&!u.signature).length;
   const Btn=(t,f,c='bg-slate-700')=>`<button onclick="${f}" class="btn ${c} !py-1">${t}</button>`;
   el.innerHTML=`
   <div class="bg-slate-800 border border-slate-700 rounded-xl p-4 space-y-2">
-    <div class="flex justify-between items-center gap-2"><div><h3 class="font-bold">👥 Usuarios</h3><p class="text-xs text-slate-400">${db?us.length+' registrado(s)':'Disponible al conectar Firebase'}</p></div>${db?'<button onclick="openUsers()" class="btn bg-amber-500 text-slate-950">+ Agregar</button>':''}</div>
-    ${us.map(u=>`<div class="border-t border-slate-700" style="padding-top:.6rem"><div class="flex justify-between items-start gap-2">
-      <div class="min-w-0"><b>${esc(u.name)}</b> <span class="bdg ${ROLE_C[u.role]||''}">${esc(ROLE_S[u.role]||u.role)}</span>${u.active===false?' <span class="bdg bg-red-500/10 text-red-400 border-red-500/30">DESACTIVADO</span>':''}<p class="text-xs text-slate-400" style="overflow-wrap:anywhere">${u.username?'Usuario: <b class="text-slate-200">'+esc(u.username)+'</b>':esc(u.email)}</p></div>
+    <div class="flex justify-between items-center gap-2 flex-wrap"><div><h3 class="font-bold">👥 Personal</h3><p class="text-xs text-slate-400">${db?us.length+' registrado(s)'+(nosig?` · <span class="text-amber-400">${nosig} sin firma</span>`:''):'Disponible al conectar Firebase'}</p></div>${db?'<div class="flex gap-2"><button onclick="openUsers()" class="btn bg-slate-700">📋 Carga masiva</button><button onclick="openUser()" class="btn bg-amber-500 text-slate-950">+ Agregar persona</button></div>':''}</div>
+    ${us.map(u=>`<div class="border-t border-slate-700" style="padding-top:.6rem"><div class="flex justify-between items-start gap-2 flex-wrap">
+      <div class="min-w-0" style="flex:1 1 12rem"><b>${esc(u.name)}</b> <span class="bdg ${ROLE_C[u.role]||''}">${esc(ROLE_S[u.role]||u.role)}</span>${u.active===false?' <span class="bdg bg-red-500/10 text-red-400 border-red-500/30">DESACTIVADO</span>':''}
+        <p class="text-xs text-slate-300">${esc(u.position||'Sin cargo asignado')}</p><p class="text-xs text-slate-400" style="overflow-wrap:anywhere">${u.username?'Usuario: <b class="text-slate-200">'+esc(u.username)+'</b>':esc(u.email)}</p>
+        <p class="text-[11px] ${u.signature?'text-emerald-400':'text-amber-400'}">${u.signature?'✍️ Firma registrada':'⚠️ Sin firma: usa ✏️ para registrarla'}</p></div>
+      ${u.signature?`<img src="${esc(u.signature)}" alt="firma" style="height:2.6rem;max-width:7rem;object-fit:contain;background:#fff;border-radius:.35rem;padding:2px">`:''}
       <div class="flex gap-1 flex-wrap justify-end">${Btn('✏️',`openUser('${u.uid}')`)}${Btn('🔑',`openReset('${u.uid}')`)}${u.uid!==me.uid?Btn(u.active===false?'Activar':'Desactivar',`toggleUser('${u.uid}')`):''}</div></div></div>`).join('')}
-    <p class="text-[11px] text-slate-500">🔑 asigna una contraseña nueva (se guardan cifradas y nadie puede verlas). Desactivar bloquea el acceso sin borrar su historial.</p></div>
+    <p class="text-[11px] text-slate-500">✏️ edita nombre, cargo, perfil y firma. 🔑 asigna una contraseña nueva (se guardan cifradas y nadie puede verlas). Desactivar bloquea el acceso sin borrar su historial. La firma registrada se precarga sola en cierres y validaciones.</p></div>
   <div class="bg-slate-800 border border-slate-700 rounded-xl p-4 space-y-2"><h3 class="font-bold">💾 Respaldo y exportación</h3>
     <div class="grid gap-2 sm:grid-cols-4">${Btn('📊 Backlogs (Excel)',"exportCsv('back')")}${Btn('📊 Preventivos (Excel)',"exportCsv('pm')")}${Btn('📊 Engrase (Excel)',"exportCsv('gr')")}${Btn('📊 Neumáticos (Excel)',"exportCsv('tr')")}${Btn('📊 Mediciones de cocada',"exportCsv('trm')")}${Btn('📊 Flota (Excel)',"exportCsv('fleet')")}${Btn('📊 Reporte de mantenimiento (Excel)',"exportStopsOpen()")}${Btn('📥 Importar reporte (Excel)',"importStopsPick()")}${Btn('💾 Respaldo completo',"exportJson()",'bg-amber-500 text-slate-950')}</div>
     <p class="text-[11px] text-slate-500">${backlogs.length} backlogs · ${pms.length} preventivos · ${grs.length} engrases · ${trs.length} neumáticos · ${fleet.length} equipos. Descarga un respaldo completo de vez en cuando.</p></div>
   <div class="bg-slate-800 border border-slate-700 rounded-xl p-4 space-y-2"><h3 class="font-bold">🕘 Actividad reciente</h3>
     ${act.map(x=>`<p class="text-xs text-slate-400 border-t border-slate-700" style="padding-top:.4rem"><b class="text-slate-200">${esc(x.by||'—')}</b> · ${x.t} <span class="text-amber-400">${esc(x.id)}</span> · ${esc(x.s)}<br>${new Date(x.at).toLocaleString('es-PE',{dateStyle:'short',timeStyle:'short'})}</p>`).join('')||'<p class="text-xs text-slate-500">Aún no hay actividad registrada con usuario.</p>'}</div>`;
 }
-const normRole=r=>{r=nk(r);return r==='admin'||r==='planner'||r==='administrador'?'admin':r==='supervisor'?'supervisor':(r==='tecnico'||r==='tec')?'tecnico':''};
+const normRole=r=>{r=nk(r);return r==='admin'||r==='planner'||r==='administrador'?'admin':(r==='supervisor'||r==='jefe')?'supervisor':(r==='tecnico'||r==='tec')?'tecnico':''};
 /* ---------- Contraseñas: PBKDF2-SHA256 + sal aleatoria por usuario + pimienta (config.js) ---------- */
 // shortcut: la pimienta está en el front y cualquiera que lea config.js la ve; protege la copia guardada en la base, Firebase Auth sigue siendo quien valida la clave real
 const PW_IT=210000,b64=a=>btoa(String.fromCharCode(...new Uint8Array(a))),unb64=x=>Uint8Array.from(atob(x),c=>c.charCodeAt(0));
@@ -2027,39 +2055,46 @@ function secAuth(){const sec=firebase.apps.find(a=>a.name==='sec')||firebase.ini
 function copyTxt(id,btn){const t=$(id);t.select();let ok=false;try{ok=document.execCommand('copy')}catch(_){}try{if(navigator.clipboard){navigator.clipboard.writeText(t.value);ok=true}}catch(_){}if(btn)btn.textContent=ok?'✔ Copiado':'Selecciona y copia (Ctrl+C)'}
 function openUsers(){
   const have=new Set(usersList.map(u=>nk(u.name))),
-    tpl=[['Walter Tanta','supervisor'],['Jaime Ventura','supervisor'],['Jorge Tanta','tecnico'],['Alex Cruzado','tecnico'],['Hugo Díaz','tecnico'],['Luis de la Cruz','tecnico'],['Marco Cruz','tecnico'],['Iván Cruz','tecnico']].filter(x=>!have.has(nk(x[0]))).map(x=>x[0]+'; '+x[1]).join('\n');
-  show(`<h3 class="font-bold mb-1">Agregar usuarios</h3><p class="text-xs text-slate-400 mb-2">Una persona por línea: <b>Nombre; rol</b> (rol: tecnico, supervisor o admin). La app genera el <b>usuario</b> y una <b>contraseña</b> para cada una; después las compartes.</p>
+    tpl=[['Walter Tanta','Supervisor de mantenimiento','supervisor'],['Jaime Ventura','Supervisor de mantenimiento','supervisor'],['Jorge Tanta','Técnico mecánico','tecnico'],['Alex Cruzado','Técnico mecánico','tecnico'],['Hugo Díaz','Técnico electricista','tecnico'],['Luis de la Cruz','Técnico mecánico','tecnico'],['Marco Cruz','Técnico mecánico','tecnico'],['Iván Cruz','Técnico mecánico','tecnico']].filter(x=>!have.has(nk(x[0]))).map(x=>x.join('; ')).join('\n');
+  show(`<h3 class="font-bold mb-1">📋 Carga masiva de personal</h3><p class="text-xs text-slate-400 mb-2">Una persona por línea: <b>Nombre; cargo; perfil</b>. Perfil: <b>tecnico</b>, <b>supervisor</b> o <b>admin</b> (si lo omites se deduce del cargo). La app genera el <b>usuario</b> y una <b>contraseña</b>; la firma se agrega después con ✏️ o la registra cada persona al ingresar.</p>
   <textarea maxlength="5000" id="bulk" rows="9" class="inp" style="font-size:13px" spellcheck="false">${esc(tpl)}</textarea><div id="bulk-out" class="text-xs space-y-1 mt-2"></div>
   <div class="flex justify-end gap-2 pt-3 border-t border-slate-700 mt-3"><button type="button" onclick="hide()" class="btn bg-slate-700">Cerrar</button><button id="bulk-go" type="button" onclick="createUsers()" class="btn bg-amber-500 text-slate-950">Crear usuarios</button></div>`,'36rem');
 }
+async function createAccount({name,position,role,signature},taken){
+  const sa=secAuth();
+  let un=userBase(name)||'usuario',k=2;const b0=un;while(taken.has(un))un=b0+(k++);taken.add(un);
+  const pass=genPw(),authEmail=un+DOM;
+  try{
+    const c=await sa.createUserWithEmailAndPassword(authEmail,pass);
+    await db.collection('users').doc(c.user.uid).set({uid:c.user.uid,name,position:position||'',signature:signature||'',signatureAt:signature?Date.now():0,username:un,authEmail,email:authEmail,pass:await hashPw(pass),role,active:true,createdAt:Date.now(),createdBy:me.name});
+    await sa.signOut();return{name,role,position,un,pass};
+  }catch(e){try{await sa.signOut()}catch(_){}throw e}
+}
+const credsHtml=made=>{window._creds=made;const txt=made.map(m=>`${m.name} (${m.position||ROLE_S[m.role]}) | Usuario: ${m.un} | Contraseña: ${m.pass}`).join('\n');
+  return `<p class="text-slate-200 font-semibold mt-2 text-xs">Accesos generados. Guárdalos ahora: las contraseñas se guardan cifradas y no se podrán volver a ver.</p><textarea id="creds" readonly rows="${Math.min(10,made.length+1)}" class="inp" style="font-size:12px">${esc(txt)}</textarea>
+  <div class="grid gap-2 mt-1" style="grid-template-columns:1fr 1fr"><button type="button" onclick="copyTxt('creds',this)" class="btn bg-slate-700">📋 Copiar todo</button><button type="button" onclick="exportCreds()" class="btn bg-slate-700">⬇️ Descargar CSV</button></div>`};
 async function createUsers(){
   if(!isAdmin())return;
   const lines=$('bulk').value.split('\n').map(x=>x.trim()).filter(Boolean),out=$('bulk-out'),go=$('bulk-go');
   if(!lines.length)return;go.disabled=true;go.style.opacity='.5';out.innerHTML='';
   const log=(ok,t)=>{out.insertAdjacentHTML('beforeend',`<p class="${ok?'text-emerald-400':'text-red-400'}">${ok?'✔':'✖'} ${esc(t)}</p>`)};
-  let sa;try{sa=secAuth()}catch(e){log(false,'No se pudo iniciar el registro: '+authMsg(e));go.disabled=false;go.style.opacity='1';return}
-  const made=[],taken=new Set(usersList.map(u=>u.username).filter(Boolean));
+  try{secAuth()}catch(e){log(false,'No se pudo iniciar el registro: '+authMsg(e));go.disabled=false;go.style.opacity='1';return}
+  const made=[],taken=new Set(usersList.map(u=>u.username).filter(Boolean)),seen=new Set(usersList.map(u=>nk(u.name)));
   for(const ln of lines){
-    const [name,r]=ln.split(';').map(x=>(x||'').trim()),role=normRole(r);
-    if(!name){continue}
-    if(!role){log(false,name+': rol no válido (usa tecnico, supervisor o admin)');continue}
-    if(usersList.some(u=>nk(u.name)===nk(name))){log(false,name+': ya existe');continue}
-    let un=userBase(name)||'usuario',k=2;const b0=un;while(taken.has(un))un=b0+(k++);taken.add(un);
-    const pass=genPw(),authEmail=un+DOM;
-    try{
-      const c=await sa.createUserWithEmailAndPassword(authEmail,pass);
-      await db.collection('users').doc(c.user.uid).set({uid:c.user.uid,name,username:un,authEmail,email:authEmail,pass:await hashPw(pass),role,active:true,createdAt:Date.now(),createdBy:me.name});
-      await sa.signOut();made.push({name,role,un,pass});log(true,name+': creado');
-    }catch(e){log(false,name+': '+authMsg(e));try{await sa.signOut()}catch(_){}}
+    const parts=ln.split(';').map(x=>(x||'').trim()),name=parts[0];let position='',role='';
+    if(!name)continue;
+    if(parts.length>=3){position=parts[1];role=parts[2]?normRole(parts[2]):roleFromPos(position);if(parts[2]&&!role){log(false,name+': perfil no válido (usa tecnico, supervisor o admin)');continue}}
+    else if(parts.length===2){role=normRole(parts[1]);if(role)position=POS_DEF[role];else{position=parts[1];role=roleFromPos(position)}}
+    else{role='tecnico';position=POS_DEF.tecnico}
+    if(!position)position=POS_DEF[role];
+    if(seen.has(nk(name))){log(false,name+': ya existe');continue}
+    try{const m=await createAccount({name,position,role,signature:''},taken);seen.add(nk(name));made.push(m);log(true,`${name}: creado (${position} · ${ROLE_S[role]})`)}
+    catch(e){log(false,name+': '+authMsg(e))}
   }
-  if(made.length){
-    const txt=made.map(m=>`${m.name} (${ROLE_S[m.role]}) | Usuario: ${m.un} | Contraseña: ${m.pass}`).join('\n');window._creds=made;
-    out.insertAdjacentHTML('beforeend',`<p class="text-slate-200 font-semibold mt-2">Accesos generados. Guárdalos ahora: las contraseñas se guardan cifradas y no se podrán volver a ver.</p><textarea maxlength="5000" id="creds" readonly rows="${Math.min(10,made.length+1)}" class="inp" style="font-size:12px">${esc(txt)}</textarea>
-    <div class="grid gap-2 mt-1" style="grid-template-columns:1fr 1fr"><button type="button" onclick="copyTxt('creds',this)" class="btn bg-slate-700">📋 Copiar todo</button><button type="button" onclick="exportCreds()" class="btn bg-slate-700">⬇️ Descargar CSV</button></div>`);
-  }
+  if(made.length)out.insertAdjacentHTML('beforeend',credsHtml(made));
   go.disabled=false;go.style.opacity='1';go.textContent='Crear más';
 }
-function exportCreds(){const m=window._creds||[];fileOut(new Blob([toCsv([['Nombre','Rol','Usuario','Contraseña'],...m.map(x=>[x.name,ROLE_S[x.role],x.un,x.pass])])],{type:'text/csv;charset=utf-8'}),'accesos_'+today()+'.csv','🔐 Accesos listos')}
+function exportCreds(){const m=window._creds||[];fileOut(new Blob([toCsv([['Nombre','Cargo','Perfil','Usuario','Contraseña'],...m.map(x=>[x.name,x.position||'',ROLE_S[x.role],x.un,x.pass])])],{type:'text/csv;charset=utf-8'}),'accesos_'+today()+'.csv','🔐 Accesos listos')}
 // las claves viejas en texto plano se convierten a hash la primera vez que el planner abre la app
 const pwMigrated=new Set();
 function migratePw(){usersList.filter(u=>u.pass&&!isHash(u.pass)&&!pwMigrated.has(u.uid)).forEach(async u=>{pwMigrated.add(u.uid);
@@ -2094,15 +2129,54 @@ async function saveReset(id){
   catch(e){err(e&&e.code==='functions/permission-denied'?'Solo un planner activo puede hacer esto.':e&&/not-found|internal|unavailable/.test(e.code||'')?'Cambiar contraseñas necesita la Cloud Function, y el proyecto de Firebase debe estar en el plan Blaze. Todavía no está publicada.':(e&&e.message)||'No se pudo cambiar la contraseña.')}
 }
 function openUser(id){
-  const u=usersList.find(x=>x.uid===id);if(!u||!isAdmin())return;const self=u.uid===me.uid;
-  show(`<h3 class="font-bold mb-3">Editar usuario</h3><form onsubmit="saveUser(event,'${id}')" class="space-y-3">${field('name','Nombre completo *',u.name,'required')}
-    <label class="block text-xs text-slate-400 font-semibold">Correo<input class="inp mt-1 font-normal" value="${esc(u.email)}" disabled></label>
-    <label class="block text-xs text-slate-400 font-semibold">Rol<select class="inp mt-1 font-normal" name="role" ${self?'disabled':''}>${Object.keys(ROLE_L).map(k=>`<option value="${k}" ${k===u.role?'selected':''}>${ROLE_L[k]}</option>`).join('')}</select></label>
-    ${self?'<p class="text-[11px] text-slate-500">No puedes cambiar tu propio rol.</p>':''}${btns()}</form>`);
+  if(!isAdmin()||!db)return;const u=id?usersList.find(x=>x.uid===id):null;if(id&&!u)return;const self=!!u&&u.uid===me.uid,r=u?u.role:'tecnico';
+  show(`<h3 class="font-bold mb-1">${u?'✏️ Editar personal':'➕ Agregar personal'}</h3><p class="text-xs text-slate-400 mb-3">${u?'Cambia los datos o la firma. La firma guardada se precarga sola en cada cierre o validación de esta persona.':'Registra a cualquier persona del equipo. La app le crea un usuario y una contraseña, y su firma quedará precargada en sus cierres y validaciones.'}</p>
+  <form onsubmit="saveUser(event,'${id||''}')" class="space-y-3">
+    ${field('name','Nombre completo *',u?u.name:'','required')}
+    <label class="block text-xs text-slate-400 font-semibold">Cargo * <span class="font-normal">(elige de la lista o escribe uno nuevo)</span><input class="inp mt-1 font-normal" name="position" list="cargos" required placeholder="Ej. Técnico electricista" value="${esc(u?u.position||'':'')}" ${u?'':'oninput="posRole(this)"'}><datalist id="cargos">${CARGOS.map(x=>`<option value="${esc(x)}">`).join('')}</datalist></label>
+    <label class="block text-xs text-slate-400 font-semibold">Perfil de acceso *<select class="inp mt-1 font-normal" name="role" ${self?'disabled':''} onchange="this.dataset.t=1;$('perfil-d').textContent=PERFIL_D[this.value]">${Object.keys(ROLE_L).map(k=>`<option value="${k}" ${k===r?'selected':''}>${ROLE_L[k]}</option>`).join('')}</select></label>
+    <p id="perfil-d" class="text-[11px] text-slate-500">${PERFIL_D[r]}</p>${self?'<p class="text-[11px] text-slate-500">No puedes cambiar tu propio perfil.</p>':''}
+    ${u?`<label class="block text-xs text-slate-400 font-semibold">Usuario<input class="inp mt-1 font-normal" value="${esc(u.username||u.email)}" disabled></label>`:''}
+    ${sigBox('Firma','opt')}
+    <p class="text-[11px] text-slate-500">La firma es opcional aquí: también la puede registrar la propia persona tocando su nombre (arriba a la derecha) al ingresar.</p>
+    <p id="us-err" class="text-xs text-red-400 hidden"></p>${btns('hide()',u?'Guardar':'Crear persona')}</form>`,'36rem');
+  sigInit(u?u.signature||'':'');
 }
-function saveUser(ev,id){ev.preventDefault();const f=Object.fromEntries(new FormData(ev.target)),u=usersList.find(x=>x.uid===id);if(!u)return;
-  const upd={name:f.name.trim()};if(f.role&&id!==me.uid)upd.role=f.role;
-  db.collection('users').doc(id).update(upd).then(()=>hide()).catch(e=>note('No se pudo guardar: '+authMsg(e)))}
+function posRole(inp){const s=inp.form.role;if(!s||s.disabled||s.dataset.t||!inp.value.trim())return;s.value=roleFromPos(inp.value);$('perfil-d').textContent=PERFIL_D[s.value]}
+async function saveUser(ev,id){
+  ev.preventDefault();if(!isAdmin())return;const F=ev.target,f=Object.fromEntries(new FormData(F)),er=$('us-err'),bad=m=>{er.textContent=m;er.classList.remove('hidden');er.scrollIntoView({block:'center'})};
+  const name=(f.name||'').trim(),position=(f.position||'').trim(),signature=sig.drawn?sigData():'',go=F.querySelector('button:not([type=button])');
+  if(!name||!position){bad('Completa el nombre y el cargo.');return}
+  if(usersList.some(u=>u.uid!==id&&nk(u.name)===nk(name))){bad('Ya existe una persona con ese nombre.');return}
+  go.disabled=true;go.style.opacity='.5';
+  if(id){
+    const u=usersList.find(x=>x.uid===id);if(!u)return;const upd={name,position};if(f.role&&id!==me.uid)upd.role=f.role;
+    if(signature!==(u.signature||'')){upd.signature=signature;upd.signatureAt=signature?Date.now():0}
+    try{await db.collection('users').doc(id).update(upd);hide();toast('✔ Datos de '+name+' guardados')}catch(e){go.disabled=false;go.style.opacity='1';bad('No se pudo guardar: '+authMsg(e))}
+    return;
+  }
+  go.textContent='Creando…';
+  try{const m=await createAccount({name,position,role:f.role||roleFromPos(position),signature},new Set(usersList.map(u=>u.username).filter(Boolean)));
+    show(`<h3 class="font-bold text-emerald-400 mb-1">✔ ${esc(m.name)} registrado(a)</h3><p class="text-xs text-slate-400">${esc(m.position)} · ${esc(ROLE_L[m.role])} · ${signature?'firma guardada ✍️':'<span class="text-amber-400">sin firma (la puede registrar al ingresar)</span>'}</p>${credsHtml([m])}
+    <div class="flex justify-end gap-2 pt-3 border-t border-slate-700 mt-3"><button type="button" onclick="hide()" class="btn bg-slate-700">Cerrar</button><button type="button" onclick="openUser()" class="btn bg-amber-500 text-slate-950">+ Agregar otra persona</button></div>`,'36rem');
+  }catch(e){go.disabled=false;go.style.opacity='1';go.textContent='Crear persona';bad(name+': '+authMsg(e))}
+}
+/* ---------- Mi perfil: cada persona registra o actualiza su propia firma ---------- */
+function openMe(){
+  if(!me||me.uid==='local'||!db){note('Disponible al conectar Firebase.');return}
+  show(`<div class="flex justify-between items-start"><div><h3 class="font-bold">👤 Mi perfil</h3><p class="text-xs text-slate-400">${esc(me.name)} · ${esc(me.position||'Sin cargo')}<br>${esc(ROLE_L[me.role]||me.role)}</p></div><button type="button" onclick="hide()" class="text-slate-400 text-xl">✕</button></div>
+  <p class="text-xs text-slate-400 my-3">Tu firma se precarga automáticamente al cerrar o validar trabajos y aparece en las órdenes de trabajo PDF con tu nombre y cargo.</p>
+  ${sigBox('Mi firma')}<p id="me-err" class="text-xs text-red-400 hidden mt-2"></p>
+  <div class="flex justify-between gap-2 pt-3 border-t border-slate-700 mt-3 flex-wrap"><button type="button" onclick="logout()" class="btn bg-slate-800 border border-slate-600">Cerrar sesión</button><div class="flex gap-2"><button type="button" onclick="hide()" class="btn bg-slate-700">Cancelar</button><button type="button" onclick="saveMe()" class="btn bg-amber-500 text-slate-950">Guardar firma</button></div></div>`);
+  sigInit(mySig());
+}
+async function saveMe(){
+  const er=$('me-err'),err=m=>{er.textContent=m;er.classList.remove('hidden')};
+  if(!sig.drawn){err('Firma dentro del recuadro blanco (o sube una foto) antes de guardar.');return}
+  const s=sigData();if(s===me.signature){hide();return}
+  try{await db.collection('users').doc(me.uid).update({signature:s,signatureAt:Date.now()});me.signature=s;applyRole();hide();toast('✔ Firma guardada')}
+  catch(e){err(e&&e.code==='permission-denied'?'Firebase no permite que guardes tu propia firma todavía. Pídele al planner que la registre (Admin → ✏️) o que actualice las reglas.':'No se pudo guardar: '+authMsg(e))}
+}
 function toggleUser(id){const u=usersList.find(x=>x.uid===id);if(!u||id===me.uid)return;
   db.collection('users').doc(id).update({active:u.active===false}).catch(e=>note('No se pudo guardar: '+authMsg(e)))}
 function resendPw(id){const u=usersList.find(x=>x.uid===id);if(!u)return;
