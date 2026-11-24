@@ -1893,7 +1893,8 @@ function loginForm(mode,msg,email){
     <div style="position:relative"><input class="inp" id="lg-pw" name="pass" type="password" maxlength="128" autocomplete="${up?'new-password':'current-password'}" placeholder="Contraseña${up?' (mínimo 6 caracteres)':''}" required minlength="6" style="padding-right:3rem"><button type="button" id="lg-eye" onclick="const i=$('lg-pw'),h=i.type==='password';i.type=h?'text':'password';this.textContent=h?'🙈':'👁️'" aria-label="Mostrar u ocultar contraseña" style="position:absolute;right:0;top:0;bottom:0;width:3rem;font-size:18px">👁️</button></div>
     <p id="lg-err" class="text-xs text-red-400 ${msg?'':'hidden'}">${esc(msg||'')}</p>
     <button id="lg-go" class="btn bg-amber-500 text-slate-950 w-full">${up?'Crear cuenta':'Ingresar'}</button></form>
-    <div class="text-xs text-slate-400 space-y-2" style="text-align:center">${up?'<button type="button" onclick="loginForm(\'in\')" class="underline">Ya tengo cuenta</button>':'<button type="button" onclick="resetForm()" class="underline">¿Olvidaste tu contraseña?</button>'}</div>`);
+    <div class="text-xs text-slate-400 space-y-2" style="text-align:center">${up?'<button type="button" onclick="loginForm(\'in\')" class="underline">Ya tengo cuenta</button>':'<button type="button" onclick="resetForm()" class="underline">¿Olvidaste tu contraseña?</button>'}</div>
+    ${up||!db?'':'<div class="border-t border-slate-700" style="padding-top:.75rem;text-align:center"><p class="text-xs text-slate-400 mb-2">¿Eres nuevo en el equipo?</p><button type="button" onclick="regForm()" class="btn bg-slate-700 w-full">📝 Crear mi cuenta</button></div>'}`);
   lgWire();
 }
 /* ---------- Límite de intentos de login ---------- */
@@ -1918,6 +1919,42 @@ async function doLogin(ev,mode){
   ev.preventDefault();if(lgLeft()>0)return;const f=ev.target,email=toAuthEmail(f.email.value),pass=f.pass.value,btn=$('lg-go');if(!f.email.value.trim()||!pass)return;btn.disabled=true;btn.textContent='Un momento…';
   try{await auth.signInWithEmailAndPassword(email,pass).catch(e=>{const u=f.email.value.trim();if(u.includes('@')||!/credential|user-not-found/.test(e.code||''))throw e;return auth.signInWithEmailAndPassword(uname(u)+DOM_OLD,pass)})}
   catch(e){if(/credential|user-not-found|wrong-password|invalid-email|user-disabled|too-many-requests/.test(e.code||''))lgFail();loginForm('in',authMsg(e),email)}
+}
+/* ---------- Autorregistro: la persona crea su cuenta y queda pendiente hasta que el planner la apruebe ---------- */
+let regBusy=false;
+function regForm(msg){
+  showLogin(`<form onsubmit="doRegister(event)" class="space-y-3"><p class="text-sm text-slate-300"><b>Crear mi cuenta.</b> Tú eliges tu usuario y tu contraseña. El planner revisará tu solicitud y te dará acceso.</p>
+    <input class="inp" name="name" maxlength="80" placeholder="Nombre completo *" required oninput="const u=this.form.username;if(!u.dataset.t)u.value=userBase(this.value)">
+    <input class="inp" name="position" list="cargos-r" maxlength="80" placeholder="Cargo * (ej. Técnico electricista)" required><datalist id="cargos-r">${CARGOS.map(x=>`<option value="${esc(x)}">`).join('')}</datalist>
+    <label class="block text-xs text-slate-400 font-semibold">Usuario para ingresar<input class="inp mt-1 font-normal" name="username" maxlength="40" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="username" placeholder="ej. jorge.tanta" required oninput="this.dataset.t=1"></label>
+    <input class="inp" name="pass" type="password" maxlength="128" minlength="6" autocomplete="new-password" placeholder="Contraseña (mínimo 6 caracteres) *" required>
+    <input class="inp" name="pass2" type="password" maxlength="128" minlength="6" autocomplete="new-password" placeholder="Repite la contraseña *" required>
+    ${sigBox('Mi firma (opcional)','opt')}
+    <p id="rg-err" class="text-xs text-red-400 ${msg?'':'hidden'}">${esc(msg||'')}</p>
+    <button id="rg-go" class="btn bg-amber-500 text-slate-950 w-full">Enviar solicitud</button></form>
+    <div class="text-xs text-slate-400" style="text-align:center"><button type="button" onclick="regBusy=false;loginForm('in')" class="underline">Ya tengo cuenta: ingresar</button></div>`);
+  sigInit('');
+}
+async function doRegister(ev){
+  ev.preventDefault();const F=ev.target,f=Object.fromEntries(new FormData(F)),er=$('rg-err'),go=$('rg-go'),bad=m=>{er.textContent=m;er.classList.remove('hidden');er.scrollIntoView({block:'center'})};
+  const name=(f.name||'').trim(),position=(f.position||'').trim(),un=uname(f.username);
+  if(!name||!position)return bad('Escribe tu nombre completo y tu cargo.');
+  if(un.length<3)return bad('El usuario debe tener al menos 3 letras (solo letras, números, punto o guion).');
+  if((f.pass||'').length<6)return bad('La contraseña debe tener al menos 6 caracteres.');
+  if(f.pass!==f.pass2)return bad('Las dos contraseñas no coinciden.');
+  const signature=sig.drawn?sigData():'';
+  regBusy=true;go.disabled=true;go.textContent='Enviando…';
+  try{
+    const c=await auth.createUserWithEmailAndPassword(un+DOM,f.pass);
+    try{await db.collection('users').doc(c.user.uid).set({uid:c.user.uid,name,position,username:un,authEmail:un+DOM,email:un+DOM,pass:await hashPw(f.pass),signature,signatureAt:signature?Date.now():0,role:'tecnico',active:false,pending:true,createdAt:Date.now(),createdBy:'Autorregistro'})}
+    catch(e){try{await c.user.delete()}catch(_){}throw e}
+    await auth.signOut();
+    showLogin(`<p class="text-sm text-emerald-400 font-semibold">✔ Solicitud enviada</p><p class="text-sm text-slate-300">Tu usuario es <b>${esc(un)}</b>. Cuando el planner apruebe tu solicitud podrás ingresar con ese usuario y la contraseña que elegiste.</p><button type="button" onclick="regBusy=false;loginForm('in')" class="btn bg-amber-500 text-slate-950 w-full">Volver al ingreso</button>`);
+  }catch(e){
+    try{if(auth.currentUser)await auth.signOut()}catch(_){}
+    regForm(e&&e.code==='auth/email-already-in-use'?`El usuario "${un}" ya existe. Elige otro (por ejemplo ${un}2).`:e&&e.code==='permission-denied'?'Firebase aún no permite el autorregistro (falta publicar las reglas). Pide al planner que te registre.':authMsg(e));
+    const F2=document.querySelector('#login form');if(F2){F2.name.value=name;F2.position.value=position;F2.username.value=un;F2.username.dataset.t=1}
+  }
 }
 function resetForm(msg,ok,email){
   showLogin(`<form onsubmit="doReset(event)" class="space-y-3"><p class="text-sm text-slate-300"><b>Técnicos y supervisores:</b> comunícate con tu planner; él te asignará una contraseña nueva.</p><p class="text-sm text-slate-300"><b>Planner:</b> escribe tu correo y te enviaremos un enlace para crear una nueva contraseña.</p>
@@ -1946,6 +1983,7 @@ async function logout(force){
 function initAuth(){
   showLogin('<p class="text-sm text-slate-400" style="text-align:center">Verificando sesión…</p>');
   auth.onAuthStateChanged(async u=>{
+    if(regBusy)return; // durante el autorregistro la sesión se abre y cierra sola
     stopData();me=null;
     if(!u){loginForm('in',nextLoginMsg);nextLoginMsg='';return}
     showLogin('<p class="text-sm text-slate-400" style="text-align:center">Cargando tu perfil…</p>');
@@ -1953,6 +1991,7 @@ function initAuth(){
       const ref=db.collection('users').doc(u.uid);let s=await ref.get();
       if(!s.exists){blocked('Tu cuenta ('+u.email+') aún no está dada de alta en el sistema. Pide al planner que te registre.');return}
       const p=s.data();
+      if(p.pending){blocked('Tu solicitud de acceso está pendiente. El planner debe aprobarla para que puedas ingresar.');return}
       if(p.active===false){blocked('Tu acceso está desactivado. Contacta al planner.');return}
       lgOk(); // Firebase Auth ya validó la clave; el hash de users.pass es solo una copia y no bloquea el ingreso
       me={uid:u.uid,email:u.email,name:p.name||u.email,role:p.role,position:p.position||'',signature:p.signature||''};
@@ -1977,7 +2016,9 @@ function startApp(){
   listen('fleet',d=>fleet=d);listen('backlogs',d=>backlogs=d);listen('preventive',d=>pms=d);listen('grease',d=>grs=d);listen('greasePlans',d=>gpl=d);listen('tires',d=>trs=d);listen('tireParams',d=>trp=d);listen('stops',d=>sps=d);
   if(db)unsubs.push(db.collection('users').doc(me.uid).onSnapshot(d=>{if(!d.exists||d.data().active===false){nextLoginMsg='Tu acceso fue desactivado.';logout(true);return}
     const p=d.data();me.name=p.name||me.name;me.position=p.position||'';me.signature=p.signature||'';applyRole()},e=>console.error(e)));
-  if(db&&isAdmin())unsubs.push(db.collection('users').onSnapshot(s=>{usersList=s.docs.map(d=>d.data());migratePw();if(cur==='adm')renderAdm()},e=>console.error(e)));
+  let lastPend=0;
+  if(db&&isAdmin())unsubs.push(db.collection('users').onSnapshot(s=>{usersList=s.docs.map(d=>d.data());migratePw();if(cur==='adm')renderAdm();
+    const np=usersList.filter(u=>u.pending).length;if(np>lastPend)toast('📝 '+np+' solicitud(es) de acceso por aprobar en Admin');lastPend=np},e=>console.error(e)));
   tab('dash');openEquipHash();
   let asked=false;try{asked=sessionStorage.getItem('sigAsk')==='1';sessionStorage.setItem('sigAsk','1')}catch(_){}
   if(db&&me.uid!=='local'&&!me.signature&&!asked)setTimeout(()=>{if(!me.signature&&$('modal').classList.contains('hidden'))ask('Aún no tienes tu firma registrada. Regístrala una sola vez y se cargará sola en tus cierres y validaciones.',openMe,'✍️ Registrar firma','bg-amber-500 text-slate-950')},900);
@@ -2017,21 +2058,25 @@ function exportJson(){
 /* ---------- Panel de administración ---------- */
 function renderAdm(){
   const el=$('v-adm');if(!isAdmin()){el.innerHTML='';return}
-  const ord={admin:0,supervisor:1,tecnico:2},us=[...usersList].sort((a,b)=>(ord[a.role]-ord[b.role])||String(a.name).localeCompare(String(b.name)));
+  const ord={admin:0,supervisor:1,tecnico:2},pend=usersList.filter(u=>u.pending),us=[...usersList].filter(u=>!u.pending).sort((a,b)=>(ord[a.role]-ord[b.role])||String(a.name).localeCompare(String(b.name)));
   const act=[...backlogs.map(b=>({t:'Backlog',id:b.id,s:stLabel(b.status),by:b.updatedBy,at:b.updatedAt})),...pms.map(p=>({t:'Preventivo',id:p.id,s:PM_LONG[p.status]||p.status,by:p.updatedBy,at:p.updatedAt})),...trs.map(t=>({t:'Neumático',id:t.code,s:TR_L[t.status]||t.status,by:t.updatedBy,at:t.updatedAt})),...grs.map(g=>({t:'Engrase',id:eqOf(g.fleetId).code,s:g.done+'/'+g.total+' puntos',by:g.updatedBy,at:g.updatedAt})),...fleet.map(f=>({t:'Equipo',id:f.code,s:f.status,by:f.updatedBy,at:f.updatedAt}))]
     .filter(x=>x.at).sort((a,b)=>b.at-a.at).slice(0,12);
   const nosig=us.filter(u=>u.active!==false&&!u.signature).length;
   const Btn=(t,f,c='bg-slate-700')=>`<button onclick="${f}" class="btn ${c} !py-1">${t}</button>`;
-  el.innerHTML=`
+  el.innerHTML=`${pend.length?`
+  <div class="bg-slate-800 rounded-xl p-4 space-y-2" style="border:1px solid #f59e0b"><h3 class="font-bold text-amber-400">📝 Solicitudes de acceso (${pend.length})</h3><p class="text-xs text-slate-400">Personas que crearon su cuenta desde la pantalla de ingreso. Apruébalas para que puedan entrar.</p>
+    ${pend.map(u=>`<div class="border-t border-slate-700 flex justify-between items-start gap-2 flex-wrap" style="padding-top:.6rem"><div class="min-w-0" style="flex:1 1 12rem"><b>${esc(u.name)}</b><p class="text-xs text-slate-300">${esc(u.position||'Sin cargo')}</p><p class="text-xs text-slate-400">Usuario: <b class="text-slate-200">${esc(u.username)}</b> · ${u.createdAt?new Date(u.createdAt).toLocaleString('es-PE',{dateStyle:'short',timeStyle:'short'}):''}</p></div>
+      ${u.signature?`<img src="${esc(u.signature)}" alt="firma" style="height:2.6rem;max-width:7rem;object-fit:contain;background:#fff;border-radius:.35rem;padding:2px">`:''}
+      <div class="flex gap-1">${Btn('✅ Aprobar',`openApprove('${u.uid}')`,'bg-emerald-500 text-slate-950')}${Btn('✖ Rechazar',`rejectReq('${u.uid}')`,'bg-red-500/20 text-red-400')}</div></div>`).join('')}</div>`:''}
   <div class="bg-slate-800 border border-slate-700 rounded-xl p-4 space-y-2">
-    <div class="flex justify-between items-center gap-2 flex-wrap"><div><h3 class="font-bold">👥 Personal</h3><p class="text-xs text-slate-400">${db?us.length+' registrado(s)'+(nosig?` · <span class="text-amber-400">${nosig} sin firma</span>`:''):'Disponible al conectar Firebase'}</p></div>${db?'<div class="flex gap-2"><button onclick="openUsers()" class="btn bg-slate-700">📋 Carga masiva</button><button onclick="openUser()" class="btn bg-amber-500 text-slate-950">+ Agregar persona</button></div>':''}</div>
+    <div class="flex justify-between items-center gap-2 flex-wrap"><div><h3 class="font-bold">👥 Personal</h3><p class="text-xs text-slate-400">${db?us.length+' registrado(s)'+(nosig?` · <span class="text-amber-400">${nosig} sin firma</span>`:''):'Disponible al conectar Firebase'}</p></div>${db?'<div class="flex gap-2 flex-wrap"><button onclick="renewAll()" class="btn bg-slate-700">🔄 Renovar accesos</button><button onclick="openUsers()" class="btn bg-slate-700">📋 Carga masiva</button><button onclick="openUser()" class="btn bg-amber-500 text-slate-950">+ Agregar persona</button></div>':''}</div>
     ${us.map(u=>`<div class="border-t border-slate-700" style="padding-top:.6rem"><div class="flex justify-between items-start gap-2 flex-wrap">
       <div class="min-w-0" style="flex:1 1 12rem"><b>${esc(u.name)}</b> <span class="bdg ${ROLE_C[u.role]||''}">${esc(ROLE_S[u.role]||u.role)}</span>${u.active===false?' <span class="bdg bg-red-500/10 text-red-400 border-red-500/30">DESACTIVADO</span>':''}
         <p class="text-xs text-slate-300">${esc(u.position||'Sin cargo asignado')}</p><p class="text-xs text-slate-400" style="overflow-wrap:anywhere">${u.username?'Usuario: <b class="text-slate-200">'+esc(u.username)+'</b>':esc(u.email)}</p>
         <p class="text-[11px] ${u.signature?'text-emerald-400':'text-amber-400'}">${u.signature?'✍️ Firma registrada':'⚠️ Sin firma: usa ✏️ para registrarla'}</p></div>
       ${u.signature?`<img src="${esc(u.signature)}" alt="firma" style="height:2.6rem;max-width:7rem;object-fit:contain;background:#fff;border-radius:.35rem;padding:2px">`:''}
-      <div class="flex gap-1 flex-wrap justify-end">${Btn('✏️',`openUser('${u.uid}')`)}${Btn('🔑',`openReset('${u.uid}')`)}${u.uid!==me.uid?Btn(u.active===false?'Activar':'Desactivar',`toggleUser('${u.uid}')`):''}</div></div></div>`).join('')}
-    <p class="text-[11px] text-slate-500">✏️ edita nombre, cargo, perfil y firma. 🔑 asigna una contraseña nueva (se guardan cifradas y nadie puede verlas). Desactivar bloquea el acceso sin borrar su historial. La firma registrada se precarga sola en cierres y validaciones.</p></div>
+      <div class="flex gap-1 flex-wrap justify-end">${Btn('✏️',`openUser('${u.uid}')`)}${Btn('🔑',`openReset('${u.uid}')`)}${u.uid!==me.uid?Btn('🔄',`renewUser('${u.uid}')`)+Btn(u.active===false?'Activar':'Desactivar',`toggleUser('${u.uid}')`):''}</div></div></div>`).join('')}
+    <p class="text-[11px] text-slate-500">✏️ edita nombre, cargo, perfil y firma. 🔑 asigna una contraseña nueva (necesita la Cloud Function). 🔄 renueva el acceso: crea usuario y contraseña nuevos conservando nombre, cargo, perfil y firma; el acceso anterior deja de funcionar. Las contraseñas se guardan cifradas y solo se ven al crearlas. Desactivar bloquea el acceso sin borrar su historial. La firma registrada se precarga sola en cierres y validaciones.</p></div>
   <div class="bg-slate-800 border border-slate-700 rounded-xl p-4 space-y-2"><h3 class="font-bold">💾 Respaldo y exportación</h3>
     <div class="grid gap-2 sm:grid-cols-4">${Btn('📊 Backlogs (Excel)',"exportCsv('back')")}${Btn('📊 Preventivos (Excel)',"exportCsv('pm')")}${Btn('📊 Engrase (Excel)',"exportCsv('gr')")}${Btn('📊 Neumáticos (Excel)',"exportCsv('tr')")}${Btn('📊 Mediciones de cocada',"exportCsv('trm')")}${Btn('📊 Flota (Excel)',"exportCsv('fleet')")}${Btn('📊 Reporte de mantenimiento (Excel)',"exportStopsOpen()")}${Btn('📥 Importar reporte (Excel)',"importStopsPick()")}${Btn('💾 Respaldo completo',"exportJson()",'bg-amber-500 text-slate-950')}</div>
     <p class="text-[11px] text-slate-500">${backlogs.length} backlogs · ${pms.length} preventivos · ${grs.length} engrases · ${trs.length} neumáticos · ${fleet.length} equipos. Descarga un respaldo completo de vez en cuando.</p></div>
@@ -2060,13 +2105,15 @@ function openUsers(){
   <textarea maxlength="5000" id="bulk" rows="9" class="inp" style="font-size:13px" spellcheck="false">${esc(tpl)}</textarea><div id="bulk-out" class="text-xs space-y-1 mt-2"></div>
   <div class="flex justify-end gap-2 pt-3 border-t border-slate-700 mt-3"><button type="button" onclick="hide()" class="btn bg-slate-700">Cerrar</button><button id="bulk-go" type="button" onclick="createUsers()" class="btn bg-amber-500 text-slate-950">Crear usuarios</button></div>`,'36rem');
 }
-async function createAccount({name,position,role,signature},taken){
+async function createAccount({name,position,role,signature},taken,extra){
   const sa=secAuth();
   let un=userBase(name)||'usuario',k=2;const b0=un;while(taken.has(un))un=b0+(k++);taken.add(un);
-  const pass=genPw(),authEmail=un+DOM;
+  const pass=genPw();let c;
   try{
-    const c=await sa.createUserWithEmailAndPassword(authEmail,pass);
-    await db.collection('users').doc(c.user.uid).set({uid:c.user.uid,name,position:position||'',signature:signature||'',signatureAt:signature?Date.now():0,username:un,authEmail,email:authEmail,pass:await hashPw(pass),role,active:true,createdAt:Date.now(),createdBy:me.name});
+    for(;;){try{c=await sa.createUserWithEmailAndPassword(un+DOM,pass);break}
+      catch(e){if(e&&e.code==='auth/email-already-in-use'&&k<60){do{un=b0+(k++)}while(taken.has(un));taken.add(un);continue}throw e}}
+    const authEmail=un+DOM;
+    await db.collection('users').doc(c.user.uid).set({uid:c.user.uid,name,position:position||'',signature:signature||'',signatureAt:signature?Date.now():0,username:un,authEmail,email:authEmail,pass:await hashPw(pass),role,active:true,createdAt:Date.now(),createdBy:me.name,...(extra||{})});
     await sa.signOut();return{name,role,position,un,pass};
   }catch(e){try{await sa.signOut()}catch(_){}throw e}
 }
@@ -2161,6 +2208,58 @@ async function saveUser(ev,id){
     <div class="flex justify-end gap-2 pt-3 border-t border-slate-700 mt-3"><button type="button" onclick="hide()" class="btn bg-slate-700">Cerrar</button><button type="button" onclick="openUser()" class="btn bg-amber-500 text-slate-950">+ Agregar otra persona</button></div>`,'36rem');
   }catch(e){go.disabled=false;go.style.opacity='1';go.textContent='Crear persona';bad(name+': '+authMsg(e))}
 }
+/* ---------- Solicitudes de acceso (autorregistro) ---------- */
+function openApprove(id){
+  const u=usersList.find(x=>x.uid===id);if(!u||!isAdmin())return;const others=usersList.filter(x=>!x.pending&&x.uid!==me.uid).sort((a,b)=>String(a.name).localeCompare(String(b.name)));
+  const same=others.find(x=>nk(x.name)===nk(u.name)),r=roleFromPos(u.position);
+  show(`<h3 class="font-bold mb-1">✅ Aprobar a ${esc(u.name)}</h3><p class="text-xs text-slate-400 mb-3">Usuario: <b class="text-slate-200">${esc(u.username)}</b> (con la contraseña que la persona eligió)</p>
+  <form onsubmit="saveApprove(event,'${id}')" class="space-y-3">
+    <label class="block text-xs text-slate-400 font-semibold">Cargo *<input class="inp mt-1 font-normal" name="position" list="cargos-a" required value="${esc(u.position||'')}"><datalist id="cargos-a">${CARGOS.map(x=>`<option value="${esc(x)}">`).join('')}</datalist></label>
+    <label class="block text-xs text-slate-400 font-semibold">Perfil de acceso *<select class="inp mt-1 font-normal" name="role" onchange="$('perfil-d').textContent=PERFIL_D[this.value]">${Object.keys(ROLE_L).map(k=>`<option value="${k}" ${k===(same?same.role:r)?'selected':''}>${ROLE_L[k]}</option>`).join('')}</select></label>
+    <p id="perfil-d" class="text-[11px] text-slate-500">${PERFIL_D[same?same.role:r]}</p>
+    <label class="block text-xs text-slate-400 font-semibold">¿Reemplaza a un usuario anterior? <span class="font-normal">(si olvidó su contraseña)</span><select class="inp mt-1 font-normal" name="replace"><option value="">No, es una persona nueva</option>${others.map(x=>`<option value="${x.uid}" ${same&&same.uid===x.uid?'selected':''}>${esc(x.name)} · ${esc(x.position||ROLE_S[x.role]||'')}</option>`).join('')}</select></label>
+    <p class="text-[11px] text-slate-500">Si eliges a alguien, se copia su firma (si la nueva cuenta no trae una) y se borra el usuario anterior.</p>
+    <p id="ap-err" class="text-xs text-red-400 hidden"></p>${btns('hide()','Aprobar acceso','bg-emerald-500')}</form>`,'34rem');
+}
+async function saveApprove(ev,id){
+  ev.preventDefault();const f=Object.fromEntries(new FormData(ev.target)),u=usersList.find(x=>x.uid===id),old=f.replace?usersList.find(x=>x.uid===f.replace):null,er=$('ap-err');if(!u||!isAdmin())return;
+  const upd={active:true,pending:false,role:f.role,position:(f.position||'').trim(),approvedBy:me.name,approvedAt:Date.now()};
+  if(old&&!u.signature&&old.signature){upd.signature=old.signature;upd.signatureAt=old.signatureAt||Date.now()}
+  if(old)upd.replacedUid=old.uid;
+  try{await db.collection('users').doc(id).update(upd);if(old)await db.collection('users').doc(old.uid).delete();hide();toast('✔ '+u.name+' ya puede ingresar con el usuario '+u.username)}
+  catch(e){er.textContent='No se pudo aprobar: '+authMsg(e);er.classList.remove('hidden')}
+}
+function rejectReq(id){const u=usersList.find(x=>x.uid===id);if(!u||!isAdmin())return;
+  ask(`¿Rechazar la solicitud de ${u.name}? No podrá ingresar.`,()=>db.collection('users').doc(id).delete().catch(e=>note('No se pudo rechazar: '+authMsg(e))),'Rechazar')}
+
+/* ---------- Renovar accesos: usuario y contraseña nuevos conservando el perfil ----------
+   Sin Cloud Function no se puede cambiar la clave de otra cuenta, así que se crea una cuenta nueva,
+   se le copia el perfil (nombre, cargo, perfil, firma) y se borra el perfil anterior: el acceso viejo deja de funcionar. */
+async function renewOne(u,taken){
+  const m=await createAccount({name:u.name,position:u.position||'',role:u.role,signature:u.signature||''},taken,{signatureAt:u.signatureAt||(u.signature?Date.now():0),active:u.active!==false,renewedFrom:u.uid,renewedAt:Date.now()});
+  await db.collection('users').doc(u.uid).delete();
+  return m;
+}
+function renewUser(id){
+  const u=usersList.find(x=>x.uid===id);if(!u||!isAdmin()||id===me.uid)return;
+  ask(`¿Renovar el acceso de ${u.name}? Se le crea un usuario y una contraseña nuevos (conserva cargo, perfil y firma). Su acceso actual dejará de funcionar.`,async()=>{
+    show('<p class="text-sm text-slate-300">Renovando acceso…</p>');
+    try{const m=await renewOne(u,new Set(usersList.map(x=>x.username).filter(Boolean)));
+      show(`<h3 class="font-bold text-emerald-400 mb-1">✔ Acceso renovado</h3><p class="text-xs text-slate-400">${esc(m.name)} · ${esc(m.position||ROLE_S[m.role])}</p>${credsHtml([m])}<div class="flex justify-end pt-3 border-t border-slate-700 mt-3"><button type="button" onclick="hide()" class="btn bg-slate-700">Cerrar</button></div>`,'34rem')}
+    catch(e){note('No se pudo renovar el acceso de '+u.name+': '+authMsg(e))}
+  },'🔄 Renovar','bg-amber-500 text-slate-950');
+}
+function renewAll(){
+  if(!isAdmin())return;const list=usersList.filter(u=>!u.pending&&u.uid!==me.uid);
+  if(!list.length){note('No hay más personal registrado.');return}
+  ask(`Se crearán usuarios y contraseñas NUEVOS para ${list.length} persona(s) (todas menos tú). Conservan nombre, cargo, perfil y firma, pero sus accesos actuales dejarán de funcionar. Al final podrás copiar o descargar los accesos nuevos. ¿Continuar?`,async()=>{
+    show(`<h3 class="font-bold mb-2">🔄 Renovando accesos…</h3><p class="text-xs text-amber-400 mb-2">No cierres esta ventana hasta que termine.</p><div id="rn-out" class="text-xs space-y-1"></div><div id="rn-end"></div>`,'36rem');
+    const out=$('rn-out'),log=(ok,t)=>out.insertAdjacentHTML('beforeend',`<p class="${ok?'text-emerald-400':'text-red-400'}">${ok?'✔':'✖'} ${esc(t)}</p>`),made=[],taken=new Set(usersList.map(x=>x.username).filter(Boolean));
+    for(const u of list){try{const m=await renewOne(u,taken);made.push(m);log(true,`${u.name}: usuario ${m.un}`)}catch(e){log(false,u.name+': '+authMsg(e))}}
+    $('rn-end').innerHTML=(made.length?credsHtml(made):'')+'<div class="flex justify-end pt-3 border-t border-slate-700 mt-3"><button type="button" onclick="hide()" class="btn bg-slate-700">Cerrar</button></div>';
+  },'🔄 Renovar todos','bg-amber-500 text-slate-950');
+}
+
 /* ---------- Mi perfil: cada persona registra o actualiza su propia firma ---------- */
 function openMe(){
   if(!me||me.uid==='local'||!db){note('Disponible al conectar Firebase.');return}

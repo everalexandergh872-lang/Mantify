@@ -18,5 +18,11 @@ await t('técnico guarda su propia firma',assertSucceeds(updateDoc(doc(db('tec')
 await t('técnico NO cambia la firma de otro',assertFails(updateDoc(doc(db('tec'),'users/sup'),{signature:'data:image/png;base64,AAA'})));
 await t('técnico NO cambia su rol junto con la firma',assertFails(updateDoc(doc(db('tec'),'users/tec'),{signature:'x',role:'admin'})));
 await t('técnico NO cambia su cargo',assertFails(updateDoc(doc(db('tec'),'users/tec'),{position:'Jefe de mantenimiento'})));
+const solicitud={uid:'nuevo',name:'Nuevo',position:'Técnico mecánico',username:'nuevo',role:'tecnico',active:false,pending:true,createdAt:1};
+await t('autorregistro crea su solicitud pendiente',assertSucceeds(setDoc(doc(db('nuevo'),'users/nuevo'),solicitud)));
+await t('autorregistro NO se crea activo',assertFails(setDoc(doc(db('nuevo2'),'users/nuevo2'),{...solicitud,uid:'nuevo2',active:true})));
+await t('autorregistro NO se crea como admin',assertFails(setDoc(doc(db('nuevo3'),'users/nuevo3'),{...solicitud,uid:'nuevo3',role:'admin'})));
+await t('autorregistro NO crea perfil de otro',assertFails(setDoc(doc(db('nuevo4'),'users/otro'),{...solicitud,uid:'otro'})));
+await t('pendiente NO se aprueba solo',assertFails(updateDoc(doc(db('nuevo'),'users/nuevo'),{signature:'x',signatureAt:2})));
 await t('técnico edita backlog abierto sin tocar closeUid',assertSucceeds(updateDoc(doc(db('tec'),'backlogs/b1'),{description:'x'})));
 console.log(ok.join('\n'));await env.cleanup();
