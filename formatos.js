@@ -189,7 +189,7 @@ function openOt(id){
   <form onsubmit="saveOt(event,'${id}')" class="space-y-4 mt-3">
    ${fsec('👷','Asignación',`<label class="block text-xs text-slate-400 font-semibold">Responsable de ejecución (técnico asignado) *${techSel}</label><p class="text-[11px] text-slate-400">La OT le aparecerá en "Mis OT" de su aplicativo y la cerrará con el reporte de mantenimiento.${T.length?'':' (No se pudo cargar la lista del personal: escribe el nombre tal como figura en su cuenta).'}</p>`)}
    ${fsec(1,'Datos generales',`<div class="g3"><label class="block text-xs text-slate-400 font-semibold">N° OT<input class="inp mt-1 font-normal mono" value="${esc(o.num||'Se asigna al guardar ('+fmtNum('ot',numMax('ot')+1)+')')}" readonly tabindex="-1" style="opacity:.75"></label>${field('date','Fecha de emisión *',o.date||today(),'required','date')}${sel('turno','Turno',FX_TURNO,o.turno||'DÍA')}</div>
-     <div class="g2">${field('parada','N° parada',o.parada||'','placeholder="Opcional"')}${field('prov','Proveedor / contratista',o.prov??'EMPRESA')}</div>
+     <div class="g2"><label class="block text-xs text-slate-400 font-semibold">N° parada<input class="inp mt-1 font-normal mono" value="${esc(o.parada||('Se asigna al guardar ('+fmtNum('pa',numMax('pa')+1)+')'))}" readonly tabindex="-1" style="opacity:.75"></label>${field('prov','Proveedor / contratista',o.prov??'EMPRESA')}</div>
      <label class="block text-xs text-slate-400 font-semibold">Proyecto / frente${lst('proy',lastP,o.proy??b.proyecto??'','Ej. Canteras y rellenos Tía María')}</label>
      <p class="text-[11px] text-slate-400">Equipo: <b class="text-slate-200">${esc(e.code)}</b> · ${esc(e.category||'')} · ${esc(e.brand)} ${esc(e.model)} · S/N ${esc(e.serialNumber||'—')}${e.plate?' · Placa '+esc(e.plate):''} (se toman de la ficha del equipo)</p>`)}
    ${fsec(2,'Datos de la parada',`<div class="g2">${field('fp','Fecha y hora de parada',o.fp||'','','datetime-local')}${field('hp','Horómetro / km actual',o.hp??b.hoursAt??e.hours??'','min="0" step="any" inputmode="decimal"','number')}</div>
@@ -222,8 +222,8 @@ async function saveOt(ev,id){
   const pers={};OT_PERS.forEach(k=>{const v=f['p_'+k];if(v!==''&&v!=null&&Number(v)>0)pers[k]=Number(v)});
   const fotOn=phxOn('otf');
   const sb=F.querySelector('button:not([type=button])');if(sb)sb.disabled=true;
-  const num=old.num||(await takeNums('ot'))[0],nw=!old.num;
-  const ot={...old,num,date:f.date,turno:f.turno||'',parada:(f.parada||'').trim(),prov:(f.prov||'').trim(),proy:(f.proy||'').trim(),
+  const num=old.num||(await takeNums('ot'))[0],nw=!old.num,parada=old.parada||(await takeNums('pa'))[0];
+  const ot={...old,num,date:f.date,turno:f.turno||'',parada,prov:(f.prov||'').trim(),proy:(f.proy||'').trim(),
     fp:f.fp||'',hp:f.hp===''?'':Number(f.hp),tipoPar:f.tipoPar||'',lugar:(f.lugar||'').trim().toUpperCase(),estEq:f.estEq||'',
     mot:fxVals(F,'mot'),motOtro:(f.motOtro||'').trim(),sint:(f.sint||'').trim(),repPor:(f.repPor||'').trim(),alarma:(f.alarma||'').trim(),sis:fxVals(F,'sis'),sisOtro:(f.sisOtro||'').trim(),comp:(f.comp||'').trim(),
     pers,persOtro:(f.persOtro||'').trim(),persOtroC:f.persOtroC===''?'':Number(f.persOtroC),apo:fxVals(F,'apo'),apoOtro:(f.apoOtro||'').trim(),

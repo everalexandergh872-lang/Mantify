@@ -74,13 +74,13 @@ function putMany(col,list){
     return Promise.all(jobs).catch(e=>note('No se pudo guardar: '+e.message))}
   const a=getStore(col);list.forEach(o=>{const i=a.findIndex(x=>x.id===o.id);i>=0?a[i]=o:a.push(o)});lsSet(col,a);render();return Promise.resolve();
 }
-/* ---------- Numeración correlativa automática (BL- backlogs · OT- órdenes de trabajo · RP- reporte de paradas) ---------- */
-const NUM={bk:'BL-',ot:'OT-',rp:'RP-'},loadedCols=new Set();
+/* ---------- Numeración correlativa automática (BL- backlogs · OT- órdenes de trabajo · RP- reporte de paradas · PA- N° de parada de la OT) ---------- */
+const NUM={bk:'BL-',ot:'OT-',rp:'RP-',pa:'PA-'},loadedCols=new Set();
 const numOf=(k,s)=>{const m=new RegExp('^'+NUM[k]+'(\\d+)$').exec(String(s||''));return m?+m[1]:0};
 const fmtNum=(k,n)=>NUM[k]+String(n).padStart(4,'0');
 const bkNo=b=>b?(b.num||b.id):'',pmOt=p=>p?(p.otNum||'OT-P'+String(p.id).replace(/^PM-/,'')):'',spNo=s=>s?(s.num||''):'';
 function numMax(k){let n=0;const f=v=>{n=Math.max(n,numOf(k,v))};
-  if(k==='bk')backlogs.forEach(b=>f(b.num));else if(k==='rp')sps.forEach(s=>f(s.num));else{backlogs.forEach(b=>f(b.ot&&b.ot.num));pms.forEach(p=>f(p.otNum))}
+  if(k==='bk')backlogs.forEach(b=>f(b.num));else if(k==='pa')backlogs.forEach(b=>f(b.ot&&b.ot.parada));else if(k==='rp')sps.forEach(s=>f(s.num));else{backlogs.forEach(b=>f(b.ot&&b.ot.num));pms.forEach(p=>f(p.otNum))}
   return n}
 // Reserva `cant` números seguidos. Un contador en Firestore (counters/{tipo}) evita que dos equipos tomen el mismo número;
 // sin conexión o sin la regla publicada, continúa desde el mayor número ya registrado.
@@ -101,12 +101,14 @@ async function numSweep(){
   const nb=backlogs.filter(b=>!numOf('bk',b.num)).sort(by(b=>(b.observationDate||'')+'|'+ts(b.log&&b.log[0]&&b.log[0].ts)+'|'+b.id));
   const ns=sps.filter(s=>!numOf('rp',s.num)).sort(by(s=>(s.fp||'')+'|'+ts(s.ts)+'|'+s.id));
   const no=[...backlogs.filter(b=>b.ot&&b.ot.num&&!numOf('ot',b.ot.num)).map(b=>({d:b.ot.date||b.observationDate||'',b})),...pms.filter(p=>!numOf('ot',p.otNum)).map(p=>({d:p.scheduledDate||'',p}))].sort(by(x=>x.d+'|'+(x.b||x.p).id));
-  if(!nb.length&&!ns.length&&!no.length)return;
+  const npa=backlogs.filter(b=>b.ot&&b.ot.num&&!String(b.ot.parada||'').trim()).sort(by(b=>(b.ot.date||b.observationDate||'')+'|'+b.id));
+  if(!nb.length&&!ns.length&&!no.length&&!npa.length)return;
   numBusy=true;
   try{
     const upB={},upP=[];let upS=[];
     if(nb.length){const n=await takeNums('bk',nb.length);nb.forEach((b,i)=>{upB[b.id]={...b,num:n[i]}})}
     if(no.length){const n=await takeNums('ot',no.length);no.forEach((x,i)=>{if(x.b){const o=upB[x.b.id]||x.b;upB[x.b.id]={...o,ot:{...o.ot,num:n[i],numAnt:o.ot.num}}}else upP.push({...x.p,otNum:n[i]})})}
+    if(npa.length){const n=await takeNums('pa',npa.length);npa.forEach((b,i)=>{const o=upB[b.id]||b;upB[b.id]={...o,ot:{...o.ot,parada:n[i]}}})}
     if(ns.length){const n=await takeNums('rp',ns.length);upS=ns.map((s,i)=>({...s,num:n[i]}))}
     await Promise.all([putMany('backlogs',Object.values(upB)),putMany('preventive',upP),putMany('stops',upS)]);
   }catch(e){console.error('Numeración',e)}finally{numBusy=false}
