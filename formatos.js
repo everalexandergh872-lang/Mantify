@@ -353,6 +353,7 @@ const RD_MOT=['PM1','PM2','PM3','PM4','MCI','MCP','MEJORATIVO','PREDICTIVO','ENG
 function openRegDia(id,mode,fid,old,e0,lastS){
   const now=stNow(),ro=(me&&me.role==='tecnico')?' readonly':'',s={tipo:'NO PLANIFICADA',motivo:'MCI',rdem:'MANTENIMIENTO',rpar:'MANTENIMIENTO',...old};
   const eqs=fleetIn('st',fid),fl=[...new Set(eqs.map(stFleetTxt))].sort((a,c)=>a.localeCompare(c,'es')),f0=e0?stFleetTxt(e0):'';
+  rdEqs=eqs.map(e=>({id:e.id,code:e.code,fl:stFleetTxt(e)})).sort((a,c)=>String(a.code).localeCompare(String(c.code),'es',{numeric:true}));
   const mot=RD_MOT.includes(s.motivo)?RD_MOT:RD_MOT.concat([s.motivo]);
   const sis=s.sistema||(s.sistemas||[])[0]||'',desc=s.desc!=null&&s.desc!==''?s.desc:(s.tareas||[]).map(x=>x.d).filter(Boolean).join('\n');
   const q=(n,t,body)=>`<div class="fsec"><p class="fsec-h"><span>${n}</span>${t}</p><div class="space-y-2">${body}</div></div>`;
@@ -361,7 +362,7 @@ function openRegDia(id,mode,fid,old,e0,lastS){
   show(`<div class="flex justify-between items-start"><div><h3 class="font-bold text-lg">${ttl}</h3><p class="text-xs text-slate-400">N° ${esc(nrp)}</p></div><button type="button" onclick="hide()" class="text-slate-400 text-xl">✕</button></div>
   <form onsubmit="saveRegDia(event,'${id||''}','${mode}')" onchange="rdEngOn(event)" class="space-y-3 mt-3" ${id?'data-edit="1"':''}>
    ${q(1,'FLOTA *',`<select class="inp font-normal" name="rdFlota" required onchange="rdFlota(this)" ${id?'':''}><option value="">— elegir —</option>${fl.map(x=>`<option value="${esc(x)}" ${x===f0?'selected':''}>${esc(x)}</option>`).join('')}</select>`)}
-   ${q(2,'CÓDIGO *',`<select class="inp font-normal" name="fleetId" required onchange="stEq(this);rdCode(this)"><option value="">— elegir —</option>${eqs.map(e=>`<option value="${e.id}" data-fl="${esc(stFleetTxt(e))}" ${e.id===fid?'selected':''} ${f0&&stFleetTxt(e)!==f0?'hidden':''}>${esc(e.code)}</option>`).join('')}</select><p class="text-[11px] text-slate-400">Códigos del apartado Equipos</p>`)}
+   ${q(2,'CÓDIGO *',`<select class="inp font-normal" name="fleetId" required onchange="stEq(this);rdCode(this)">${rdCodeOpts(f0,fid)}</select><p class="text-[11px] text-slate-400" id="rd-cnt">${rdCodeHint(f0)}</p>`)}
    ${q(3,'TIPO DE PARADA *',fxOpts('tipo',['PLANIFICADA','NO PLANIFICADA'],s.tipo,'radio'))}
    ${q(4,'MOTIVO DE PARADA *',fxOpts('motivo',mot,s.motivo,'radio'))}
    <div id="rd-eng" class="fsec" style="border-color:#10b981${s.motivo==='ENGRASE'?'':';display:none'}"></div>
@@ -418,7 +419,11 @@ function rdEng(){
     <p class="text-[11px] text-slate-400">Engrasó = <b>Responsable</b> (7) · Horómetro = <b>Horómetro de parada</b> (9) · Fecha = <b>Fecha de parada</b> (11). Los puntos y kg vienen del plan del equipo; corrígelos si fue distinto.</p></div>`;
   rdEngDesc(F);
 }
-function rdFlota(sel){const F=sel.form,c=F.fleetId;[...c.options].forEach(o=>{if(o.value)o.hidden=!!sel.value&&o.dataset.fl!==sel.value});if(c.selectedOptions[0]&&c.selectedOptions[0].hidden)c.value=''}
+// Códigos del equipo: la lista se arma solo con la flota elegida (en iPhone las opciones "ocultas" igual se ven)
+let rdEqs=[];
+function rdCodeOpts(fl,sel){const L=fl?rdEqs.filter(x=>x.fl===fl):rdEqs;return `<option value="">${fl?'— elegir código —':'— elige primero la flota —'}</option>`+L.map(x=>`<option value="${x.id}" data-fl="${esc(x.fl)}" ${x.id===sel?'selected':''}>${esc(x.code)}</option>`).join('')}
+function rdCodeHint(fl){const n=fl?rdEqs.filter(x=>x.fl===fl).length:rdEqs.length;return fl?`${n} equipo(s) de ${esc(fl)}`:'Elige la flota para ver solo sus códigos'}
+function rdFlota(sel){const c=sel.form.fleetId,v=c.value,ok=!sel.value||rdEqs.some(x=>x.id===v&&x.fl===sel.value);c.innerHTML=rdCodeOpts(sel.value,ok?v:'');const h=$('rd-cnt');if(h)h.innerHTML=rdCodeHint(sel.value);if(!ok)c.dispatchEvent(new Event('change',{bubbles:true}))}
 function rdCode(sel){const o=sel.selectedOptions[0];if(o&&o.dataset.fl)sel.form.rdFlota.value=o.dataset.fl}
 function rdCalc(){const F=document.querySelector('#modal form');if(!F||!F.tEf||!$('rd-tt'))return;
   const t=F.fp.value&&F.fs.value?stHrs(F.fp.value,F.fs.value):NaN;$('rd-tt').textContent=t>0?t+' h':'–';if(t>0&&!F.tEf.dataset.man)F.tEf.value=t}
