@@ -1217,7 +1217,7 @@ function makePdfRep(d){
   const doc=new J({unit:'mm',format:'a4'}),W=210,M=15,L=stDay(d),C=L.filter(s=>s.status!=='ABIERTA');let y=0;
   const pt=s=>String(s==null?'':s).replace(/[^\x20-\x7E -ÿ\n]/g,''),need=h=>{if(y+h>280){doc.addPage();y=M+4}};
   doc.setFillColor(15,23,42);doc.rect(0,0,W,28,'F');doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(16);doc.text('REPORTE DIARIO DE MANTENIMIENTO',M,13);
-  doc.setFont('helvetica','normal');doc.setFontSize(10);doc.text('COANSA',M,20);doc.setFontSize(9);doc.text('Fecha: '+fmtD(d),W-M,13,{align:'right'});doc.text('Emitido por: '+pt(me?me.name:''),W-M,20,{align:'right'});y=37;
+  doc.setFont('helvetica','normal');doc.setFontSize(10);doc.text('EMPRESA',M,20);doc.setFontSize(9);doc.text('Fecha: '+fmtD(d),W-M,13,{align:'right'});doc.text('Emitido por: '+pt(me?me.name:''),W-M,20,{align:'right'});y=37;
   const sec=t=>{need(14);doc.setFillColor(241,245,249);doc.rect(M,y-5,W-2*M,7.5,'F');doc.setTextColor(180,83,9);doc.setFont('helvetica','bold');doc.setFontSize(10);doc.text(t,M+2,y);y+=8;doc.setTextColor(30,41,59)};
   const row=(l,v)=>{const t=doc.splitTextToSize(pt(v===''||v==null?'-':v),W-2*M-52);need(t.length*5+2);doc.setFont('helvetica','bold');doc.setFontSize(9.5);doc.text(l,M+2,y);doc.setFont('helvetica','normal');doc.text(t,M+52,y);y+=t.length*5+1.5};
   const para=(t,b,x)=>{const q=doc.splitTextToSize(pt(t),W-2*M-4-(x||0));need(q.length*4.6+2);doc.setFont('helvetica',b?'bold':'normal');doc.setFontSize(9);doc.text(q,M+2+(x||0),y);y+=q.length*4.6+1.2};
