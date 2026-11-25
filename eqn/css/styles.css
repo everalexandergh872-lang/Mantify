@@ -328,3 +328,11 @@ html.en-mantify .card,html.en-mantify .kpi{border-radius:12px}
   .med-grid input,.med-grid select{font-size:16px;width:100%}
   .med-grid .hint{font-size:10px}
 }
+/* ---- Fechas en iPhone/Android: el selector nativo no debe salirse de su casilla ---- */
+.fld,.cd-grid label,.med-grid .fld{min-width:0}
+input[type=date],input[type=month],input[type=time]{box-sizing:border-box;min-width:0;max-width:100%}
+@media (max-width:720px){
+  .form-grid input[type=date],.cd-grid input[type=date],.med-grid input[type=date]{-webkit-appearance:none;appearance:none;display:block;width:100%;min-height:42px;line-height:1.2;text-align:left;background-clip:padding-box}
+  input[type=date]::-webkit-date-and-time-value{text-align:left;margin:0}
+  input[type=date]::-webkit-calendar-picker-indicator{margin-left:auto}
+}
