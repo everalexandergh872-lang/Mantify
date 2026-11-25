@@ -56,7 +56,7 @@ const monEnd=m=>{const [y,mo]=m.split('-').map(Number);return fmtISO(new Date(y,
 /* ---------- Menú lateral (laptop) y buscador ---------- */
 const SIDE=[['General',[['dash','📊','Dashboard']]],
   ['Backlogs',[['back:list','🔧','Backlogs'],['back:mis','📋','Mis OT'],['back:board','🗂️','Tablero'],['back:req','📦','Repuestos y servicios'],['back:ot','📄','Órdenes de trabajo'],['back:fal','⚠️','Fallas recurrentes']]],
-  ['Mantenimiento',[['plan','📅','Planificación'],['pm','🗓️','Preventivos'],['gr','🛢️','Engrase y Neumáticos'],['rep','📝','Reporte de paradas']]],
+  ['Mantenimiento',[['plan','📅','Planificación'],['pm','🗓️','Preventivos'],['gr','🛢️','Engrase y Neumáticos'],['rep','📝','Registro de intervenciones']]],
   ['Gestión',[['fleet','🚜','Equipos'],['sup','🛡️','Supervisor'],['adm','⚙️','Admin']]]];
 function renderSide(){
   const s=$('side');if(!s||!me)return;

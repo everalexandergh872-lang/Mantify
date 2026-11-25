@@ -1151,7 +1151,7 @@ async function exportStopsDo(){
     const U=s=>{const x=/^(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d)/.exec(s||'');return x?new Date(Date.UTC(+x[1],+x[2]-1,+x[3],+x[4],+x[5])):null},
       UT=ts=>{const d=new Date(ts);return new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate(),d.getHours(),d.getMinutes(),d.getSeconds(),d.getMilliseconds()))},
       num=v=>v===''||v==null||isNaN(Number(v))?null:Number(v);
-    const rows=list.map(s=>[UT(s.ts||stMs(s.fp)),s.flota,s.cod,s.tipo,s.motivo,s.sistema,s.desc,s.resp,s.frente,num(s.hp),num(s.hs),U(s.fp),U(s.fs),num(s.t),s.rdem,s.rpar,s.lugar,s.obs&&s.obs.trim()?s.obs:null,s.foto||((s.photos||[]).length?'('+s.photos.length+' foto(s) en la app)':null)]);
+    const rows=list.map(s=>[UT(s.ts||stMs(s.fp)),s.flota,s.cod,s.tipo,s.motivo,s.sistema,s.desc,s.resp,s.frente,num(s.hp),num(s.hs),U(s.fp),U(s.fs),num(s.tEf)!=null?num(s.tEf):num(s.t),s.rdem,s.rpar,s.lugar,s.obs&&s.obs.trim()?s.obs:null,s.foto||((s.photos||[]).length?'('+s.photos.length+' foto(s) en la app)':null)]);
     const wb=new ExcelJS.Workbook(),ws=wb.addWorksheet('Respuestas de formulario 1',{views:[{state:'frozen',ySplit:1}]});
     ws.addTable({name:'Form_Responses',ref:'A1',headerRow:true,totalsRow:false,style:{theme:'TableStyleLight1',showRowStripes:true},columns:ST_COLS.map(n=>({name:n,filterButton:true})),rows});
     ST_W.forEach((w,i)=>ws.getColumn(i+1).width=w);

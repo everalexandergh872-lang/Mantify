@@ -239,6 +239,7 @@ function openStop(id,mode,fid,bkId){
      ${stList('dl-res',[...ST_RES,...sps.map(x=>x.resp)])}<p id="st-err" class="text-xs text-red-400 hidden"></p>${btns('hide()','Iniciar parada','bg-red-500')}</form>`,'38rem');
     return;
   }
+  if(!b){openRegDia(id,mode,fid,old,e0,lastS);return}
   // valores por defecto: del reporte existente, de la OT o de la parada abierta
   const s={tipo:'PLANIFICADA',motivo:'MCI',rdem:'MANTENIMIENTO',rpar:'MANTENIMIENTO',turno:'DÍA',...old};
   if(!id&&!b)s.tipo='NO PLANIFICADA';
@@ -283,6 +284,70 @@ function openStop(id,mode,fid,bkId){
   rwInit('rptar',s.tareas,[{k:'d',ph:'Descripción de la tarea (qué se hizo, dónde y con qué resultado)',f:3},{k:'tec',ph:'Técnico',f:1.3,list:'dl-res'},{k:'hh',ph:'H-H',f:.6,t:1}],3);
   rwInit('rppend',s.pend,[{k:'d',ph:'Observación / trabajo pendiente',f:3},{k:'p',ph:'Prioridad',f:.9,opts:PR_K},{k:'r',ph:'Repuesto requerido',f:1.5}],1);
   phxRender('rpf');sigInit(ej.sig||(!s.resp||nk(s.resp)===nk(me.name)||nk(s.resp)===nk(stOfficial(me.name))||(b&&myOt(b))?mySig():''));rpCalc();
+}
+/* ---------- Registro de intervenciones diaria (misma estructura del formulario de Google) ---------- */
+const RD_MOT=['PM1','PM2','PM3','PM4','MCI','MCP','MEJORATIVO','PREDICTIVO','ENGRASE','OTROS'];
+function openRegDia(id,mode,fid,old,e0,lastS){
+  const now=stNow(),ro=(me&&me.role==='tecnico')?' readonly':'',s={tipo:'NO PLANIFICADA',motivo:'MCI',rdem:'MANTENIMIENTO',rpar:'MANTENIMIENTO',...old};
+  const eqs=fleetIn('st',fid),fl=[...new Set(eqs.map(stFleetTxt))].sort((a,c)=>a.localeCompare(c,'es')),f0=e0?stFleetTxt(e0):'';
+  const mot=RD_MOT.includes(s.motivo)?RD_MOT:RD_MOT.concat([s.motivo]);
+  const sis=s.sistema||(s.sistemas||[])[0]||'',desc=s.desc!=null&&s.desc!==''?s.desc:(s.tareas||[]).map(x=>x.d).filter(Boolean).join('\n');
+  const q=(n,t,body)=>`<div class="fsec"><p class="fsec-h"><span>${n}</span>${t}</p><div class="space-y-2">${body}</div></div>`;
+  const ttl={close:'✅ Cerrar parada · Registro de intervenciones diaria',edit:'✏️ Editar registro de intervención diaria'}[mode]||'📝 Registro de intervenciones diaria';
+  const nrp=s.num||'Se asigna al guardar ('+fmtNum('rp',numMax('rp')+1)+')';
+  show(`<div class="flex justify-between items-start"><div><h3 class="font-bold text-lg">${ttl}</h3><p class="text-xs text-slate-400">N° ${esc(nrp)}</p></div><button type="button" onclick="hide()" class="text-slate-400 text-xl">✕</button></div>
+  <form onsubmit="saveRegDia(event,'${id||''}','${mode}')" class="space-y-3 mt-3" ${id?'data-edit="1"':''}>
+   ${q(1,'FLOTA *',`<select class="inp font-normal" name="rdFlota" required onchange="rdFlota(this)" ${id?'':''}><option value="">— elegir —</option>${fl.map(x=>`<option value="${esc(x)}" ${x===f0?'selected':''}>${esc(x)}</option>`).join('')}</select>`)}
+   ${q(2,'CÓDIGO *',`<select class="inp font-normal" name="fleetId" required onchange="stEq(this);rdCode(this)"><option value="">— elegir —</option>${eqs.map(e=>`<option value="${e.id}" data-fl="${esc(stFleetTxt(e))}" ${e.id===fid?'selected':''} ${f0&&stFleetTxt(e)!==f0?'hidden':''}>${esc(e.code)}</option>`).join('')}</select><p class="text-[11px] text-slate-400">Códigos del apartado Equipos</p>`)}
+   ${q(3,'TIPO DE PARADA *',fxOpts('tipo',['PLANIFICADA','NO PLANIFICADA'],s.tipo,'radio'))}
+   ${q(4,'MOTIVO DE PARADA *',fxOpts('motivo',mot,s.motivo,'radio'))}
+   ${q(5,'SISTEMA / COMPONENTE *',stSel('sistema','',ST_SIS,sis,1))}
+   ${q(6,'DESCRIPCIÓN DE LA TAREA *',`<textarea maxlength="3000" name="desc" rows="3" required class="inp font-normal">${esc(desc)}</textarea>`)}
+   ${q(7,'RESPONSABLE *',`<input class="inp font-normal" name="resp" list="dl-res" required value="${esc(s.resp||stOfficial(me&&me.name))}"${ro}>`)}
+   ${q(8,'FRENTE DE TRABAJO *',stSel('frente','',ST_FRE,s.frente||(lastS&&lastS.frente)||'',1))}
+   <div class="g2">${q(9,'HORÓMETRO DE PARADA *',`<input class="inp font-normal" name="hp" type="number" min="0" step="any" inputmode="decimal" required value="${esc(s.hp??(e0?e0.hours:''))}">`)}${q(10,'HORÓMETRO DE SALIDA *',`<input class="inp font-normal" name="hs" type="number" min="0" step="any" inputmode="decimal" required value="${esc(s.hs??'')}">`)}</div>
+   <div class="g2">${q(11,'FECHA Y HORA DE PARADA *',`<input class="inp font-normal" name="fp" type="datetime-local" required max="${now}" value="${esc(s.fp||now)}" oninput="rdCalc()">`)}${q(12,'FECHA Y HORA DE SALIDA *',`<input class="inp font-normal" name="fs" type="datetime-local" required max="${now}" value="${esc(s.fs||now)}" oninput="rdCalc()">`)}</div>
+   ${q(13,'TIEMPO REAL DE LA INTERVENCIÓN (H) *',`<input class="inp font-normal" name="tEf" type="number" min="0" step="0.01" inputmode="decimal" required value="${esc(s.tEf!==''&&s.tEf!=null?s.tEf:(s.t||''))}" ${s.tEf!==''&&s.tEf!=null?'data-man="1"':''} oninput="this.dataset.man=1"><p class="text-[11px] text-slate-400">Fuera de servicio según las fechas: <b id="rd-tt">–</b> (se llena solo; puedes corregirlo)</p>`)}
+   <div class="g2">${q(14,'RESPONSABLE DE LA DEMORA *',stSel('rdem','',ST_DEM,s.rdem,1))}${q(15,'RESPONSABLE DE LA PARADA *',stSel('rpar','',ST_PAR,s.rpar,1))}</div>
+   ${q(16,'LUGAR DE INTERVENCIÓN *',stSel('lugar','',ST_LUG,s.lugar||(lastS&&lastS.lugar)||'',1))}
+   ${q(17,'OBSERVACIONES',`<textarea maxlength="3000" name="obs" rows="2" class="inp font-normal">${esc(s.obs||'')}</textarea>`)}
+   ${phxBox('rpf','18 · EVIDENCIA FOTOGRÁFICA (opcional, hasta 6)',s.fotos||(s.photos||[]).map(x=>({src:x,et:'DESPUÉS',d:''})),s.conFotos!=null?s.conFotos:!!(s.photos||[]).length)}
+   ${stList('dl-res',[...ST_RES,...sps.map(x=>x.resp),...techList().map(u=>u.name)])}
+   <p id="st-err" class="text-xs text-red-400 hidden"></p>${btns('hide()','Guardar registro','bg-emerald-500')}</form>`,'44rem');
+  phxRender('rpf');rdCalc();
+}
+function rdFlota(sel){const F=sel.form,c=F.fleetId;[...c.options].forEach(o=>{if(o.value)o.hidden=!!sel.value&&o.dataset.fl!==sel.value});if(c.selectedOptions[0]&&c.selectedOptions[0].hidden)c.value=''}
+function rdCode(sel){const o=sel.selectedOptions[0];if(o&&o.dataset.fl)sel.form.rdFlota.value=o.dataset.fl}
+function rdCalc(){const F=document.querySelector('#modal form');if(!F||!F.tEf||!$('rd-tt'))return;
+  const t=F.fp.value&&F.fs.value?stHrs(F.fp.value,F.fs.value):NaN;$('rd-tt').textContent=t>0?t+' h':'–';if(t>0&&!F.tEf.dataset.man)F.tEf.value=t}
+async function saveRegDia(ev,id,mode){
+  ev.preventDefault();const F=ev.target,f=Object.fromEntries(new FormData(F)),er=$('st-err'),bad=m=>{er.textContent=m;er.classList.remove('hidden');er.scrollIntoView({block:'center'})};
+  const e=fleet.find(x=>x.id===f.fleetId);if(!e){bad('Elige el código del equipo.');return}
+  const old=sps.find(x=>x.id===id)||{},now=stNow(),up=v=>String(v||'').trim().toUpperCase();
+  if(!f.tipo){bad('Marca el tipo de parada.');return}if(!f.motivo){bad('Marca el motivo de parada.');return}
+  const desc=(f.desc||'').trim();if(!desc){bad('Escribe la descripción de la tarea.');return}
+  const hp=Number(f.hp),hs=Number(f.hs);if(f.hp===''||isNaN(hp)){bad('Ingresa el horómetro de parada.');return}if(f.hs===''||isNaN(hs)){bad('Ingresa el horómetro de salida.');return}
+  if(hs<hp){bad('El horómetro de salida ('+fmtH(hs)+') no puede ser menor al de parada ('+fmtH(hp)+').');return}
+  const fp=f.fp,fs=f.fs;if(!fp||!fs){bad('Ingresa la fecha y hora de parada y de salida.');return}
+  if(fp>now||fs>now){bad('Las fechas no pueden ser futuras.');return}if(stMs(fs)<=stMs(fp)){bad('La salida debe ser posterior a la parada.');return}
+  const t=stHrs(fp,fs),tEf=Number(f.tEf);if(f.tEf===''||isNaN(tEf)||tEf<0){bad('Ingresa el tiempo real de la intervención (h).');return}
+  if(tEf>t+0.01){bad('El tiempo real de la intervención ('+tEf+' h) no puede superar el tiempo entre parada y salida ('+t+' h).');return}
+  if(sps.some(x=>x.id!==id&&x.fleetId===e.id&&x.fp===fp&&x.motivo===f.motivo)){bad('Ya existe una intervención de este equipo con la misma hora de parada y motivo (posible duplicado).');return}
+  const warn=[];if(t>24)warn.push('la intervención dura '+t+' h');
+  if(sps.some(x=>x.id!==id&&x.fleetId===e.id&&x.fp&&stMs(x.fp)<stMs(fs)&&(x.fs?stMs(x.fs):Infinity)>stMs(fp)))warn.push('se cruza con otra intervención del mismo equipo');
+  if(warn.length&&!stFlag){stFlag=true;bad('Revisa: '+warn.join('; ')+'. Si es correcto, presiona Guardar otra vez.');return}
+  const fotOn=phxOn('rpf'),fotos=fotOn?phxGet('rpf'):[],obs=(f.obs||'').trim(),resp=(f.resp||'').trim(),sistema=f.sistema||'OTROS';
+  const rec={...old,id:id||'ST-'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),ts:old.ts||Date.now(),fleetId:e.id,flota:stFleetTxt(e),cod:e.code,
+    tipo:f.tipo,motivo:f.motivo,sistema,sistemas:[sistema],desc,tareas:[{d:desc,tec:resp,hh:tEf}],resp,respUid:old.respUid||me.uid,frente:up(f.frente),lugar:up(f.lugar),
+    hp,hs,fp,fs,t,tEf,tDem:Math.max(0,Math.round((t-tEf)*100)/100),rdem:f.rdem,rpar:f.rpar,obs,pend:obs===(old.obs||'')?(old.pend||[]):[],
+    status:'CERRADA',src:old.src||'app',fmt:'RD',estFin:old.estFin||'OPERATIVO',ejec:{...(old.ejec||{}),name:resp,date:fs.slice(0,10)},conFotos:fotOn,fotos,photos:fotos.map(p=>p.src)};
+  if(docBig(rec)){bad('El registro tiene demasiadas fotos o muy pesadas. Quita alguna e intenta otra vez.');return}
+  const sb=F.querySelector('button:not([type=button])');if(sb)sb.disabled=true;let extra='';
+  if(!numOf('rp',rec.num))rec.num=(await takeNums('rp'))[0];
+  if(rec.motivo==='ENGRASE'&&!old.grLogId){const gid='GR-'+Date.now().toString().slice(-8);put('grease',stGreaseFrom(rec,gid));rec.grLogId=gid;extra=' Se registró también en Engrase.'}
+  put('stops',rec);if(hs>(Number(e.hours)||0))put('fleet',{...e,hours:hs});
+  repDate=fp.slice(0,10);hide();note('Registro '+rec.num+' guardado ('+t+' h).'+extra);
+  if(cur==='rep'||cur==='back'||cur==='dash')render();
 }
 function rpCalc(){
   const F=document.querySelector('#modal form');if(!F||!F.fs||!$('rp-tt'))return;
@@ -517,7 +582,7 @@ function makePdfRpt(id){
   const s=sps.find(x=>x.id===id);if(!s)return;if(s.status==='ABIERTA'){note('La parada sigue abierta. Ciérrala para generar el reporte de mantenimiento.');return}
   const K=pdfKit();if(!K)return;const e=fleet.find(x=>x.id===s.fleetId)||{code:s.cod,category:s.flota},{lab,val,chk}=K,b=backlogs.find(x=>x.id===s.bkRef);
   const sys=s.sistemas||(s.sistema?[s.sistema]:[]),cs=s.causas||[],pr=s.pruebas||[],dH=s.hs!==''&&s.hp!==''&&s.hs!=null?Math.round((Number(s.hs)-Number(s.hp))*100)/100:'';
-  K.title('REPORTE DE MANTENIMIENTO',s.num||'');
+  K.title(s.fmt==='RD'?'REGISTRO DE INTERVENCIÓN DIARIA':'REPORTE DE MANTENIMIENTO',s.num||'');
   K.sec('1. DATOS GENERALES DEL EQUIPO');
   K.row([lab('N° REPORTE',.13),val(s.num||'',.14,'center'),lab('N° OT',.08),val(s.otNum||'',.14,'center'),lab('FECHA',.08),val(fmtD((s.fs||s.fp||'').slice(0,10)),.15,'center'),lab('TURNO',.08),val(s.turno||'',.2,'center')]);
   K.row([lab('CÓDIGO EQUIPO',.13),val(e.code,.14),lab('FLOTA / TIPO',.12),val(s.flota||String(e.category||'').toUpperCase(),.27),lab('MARCA',.1),val(e.brand||'',.24)]);
