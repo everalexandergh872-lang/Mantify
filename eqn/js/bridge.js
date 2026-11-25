@@ -238,6 +238,29 @@
       out.agenda = ag.filter(e => !e.ejecutado || e.fecha >= U.addDays(U.today(), -14)).map(e => ({ d: e.fecha, code: String(e.eq.codigo).toUpperCase(), k: e.tipo, t: e.tipoEng || '', h: e.tipo === 'engrase' ? (Number(e.horas) || 0) : 0, n: e.cantidad || 0, done: !!e.ejecutado, venc: !!e.vencido }));
       out.uso = {}; C.equiposActivos().forEach(eq => { const u = C.usoDia(eq); if (u) out.uso[String(eq.codigo).toUpperCase()] = { u: Math.round(u * 10) / 10, un: C.unidad(eq) }; });
       out.top = C.prioridadEquipos(al).slice(0, 5).map(x => ({ code: x.eq.codigo, score: Math.round(x.score), motivos: [...x.motivos].slice(0, 3) }));
+      // Respuestas rápidas para el planner (antes en el Dashboard General del módulo)
+      const hoy = U.today(), mk = U.monthKey(hoy), lim = Number(C.th().diasSinEngrase) || 4;
+      const progMes = C.programaMes(mk);
+      const pendEq = C.equiposPrograma().filter(e => { const d = C.diasSinEngrase(e); const f = progMes.find(x => x.eq.id === e.id); return (d !== null && d > lim) || (f && f.dias[hoy] && !C.diarioEn(e.id, hoy)); });
+      const noEjMes = progMes.reduce((s, f) => s + Object.keys(f.dias).filter(d => d < hoy && !C.diarioEn(f.eq.id, d)).length, 0);
+      const est30 = C.estatusEngrase({ desde: U.addDays(hoy, -30), hasta: hoy }).tot;
+      const neum = S.neumaticos.filter(n => n.posicion).map(n => Object.assign({ n }, C.analisisNeum(n))).filter(x => x.eq);
+      const irr = neum.filter(x => x.irregular);
+      const proxR = neum.filter(x => x.fechaReemplazo).sort((a, b) => a.fechaReemplazo < b.fechaReemplazo ? -1 : 1);
+      const prog7 = C.programacion(hoy, U.addDays(hoy, 7)).eventos.filter(e => !e.ejecutado);
+      const neumMes = S.movimientos.filter(m => U.monthKey(m.fecha) === mk).reduce((s, m) => s + C.conv(m.costo, m.monedaCosto, C.monNeum()), 0) + S.neumaticos.filter(n => U.monthKey(n.fechaAdq) === mk).reduce((s, n) => s + C.conv(n.costo, n.monedaCosto, C.monNeum()), 0);
+      const lista = (a, n) => a.length ? a.slice(0, n).join(', ') + (a.length > n ? ` (+${a.length - n})` : '') : '';
+      out.kpi.noEjMes = noEjMes; out.kpi.lim = lim;
+      out.rap = {
+        pend: lista(pendEq.map(e => e.codigo), 6), nPend: pendEq.length,
+        venc: `${noEjMes} engrase(s) · ${k.excedidos} equipo(s) con más de ${lim} días sin engrase`, nVenc: noEjMes + (k.excedidos || 0),
+        cons: `${U.num(est30.kg, 2)} kg · ${U.num(est30.puntos)} puntos · ${U.money(est30.costo)} · ${U.usd(est30.costoUSD)}`,
+        irr: lista(irr.map(x => `${x.eq.codigo}/${x.n.posicion}`), 4), nIrr: irr.length,
+        prox: proxR.length ? `${proxR[0].n.codigo} (${proxR[0].eq.codigo}) · ${U.fdate(proxR[0].fechaReemplazo)}` : '',
+        costo: `${U.moneyN(k.costoNeum)} / ${U.moneyN(neumMes)}`,
+        prog7: `${prog7.filter(e => e.tipo === 'engrase').length} engrases (EG ${prog7.filter(e => e.tipoEng === 'EG').length} / EP ${prog7.filter(e => e.tipoEng === 'EP').length}) · ${prog7.filter(e => e.tipo === 'inspeccion').length} inspecciones`,
+        prio: lista(C.prioridadEquipos(al).map(p => p.eq.codigo), 5)
+      };
     } catch (e) { console.warn(e); }
     return out;
   };
@@ -265,7 +288,10 @@
   // Abre un equipo en una vista (lo usa Mantify desde la ficha, el inicio y los pendientes)
   B.open = (route, code) => {
     if (code) { const eq = C.eqByCode(code); if (eq) EQ.App.state.eqId = eq.id; }
-    EQ.App.go(route || 'engrase');
+    let [r, t] = String(route || 'engrase').split(':');
+    if (!EQ.Views[r]) r = 'engrase';
+    if (t) EQ.App.state.tab[r] = t;
+    EQ.App.go(r);
   };
   let refT = null;
   B.refresh = () => { clearTimeout(refT); refT = setTimeout(() => { const busy = document.querySelector('#modalRoot > *'); if (busy) { B.publish(); return; } try { EQ.App.refresh(); } catch (e) { B.publish(); } }, 300); };
@@ -277,7 +303,7 @@
     // cada vez que se dibuja una vista, Mantify recibe el resumen actualizado
     const r0 = EQ.App.render;
     EQ.App.render = () => {
-      if (EQ.App.route === 'configuracion' && !B.isSup()) { EQ.App.route = 'dashboard'; location.hash = '#/dashboard'; }
+      if (EQ.App.route === 'configuracion' && !B.isSup()) { EQ.App.route = 'engrase'; location.hash = '#/engrase'; }
       r0(); B.publish();
     };
     B.publish();
