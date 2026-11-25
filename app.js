@@ -183,7 +183,9 @@ function saveModEq(ev,k){
 const offTxt=e=>(e.off||[]).length?`<p class="text-[11px] text-slate-500 mt-1">No aparece en: ${e.off.map(k=>esc(MODN(k))).join(', ')}</p>`:'';
 
 /* ---------- Flota ---------- */
-const FLEET_CATS=['Excavadora','Cargador Frontal','Tractor de Oruga','Camión Minero','Motoniveladora','Perforadora','Volquete','Cisterna de Agua','Minibús','Camioneta','Grupo Electrógeno','Luminaria','Zaranda Móvil','Compresora','Chancadora'];
+const FLEET_CATS=['Excavadora','Cargador Frontal','Tractor de Oruga','Camión Minero','Motoniveladora','Perforadora','Volquete','Cisterna de Agua','Minibús','Camioneta','Grupo Electrógeno','Luminaria','Zaranda Móvil','Compresora','Chancadora','Telehandler','Rodillo Compactador','Tracto-Cama Baja','Motobomba'];
+/* Tipos de equipo: los estándar + los que el usuario haya creado libremente */
+const allCats=()=>{const m={};FLEET_CATS.concat(fleet.map(e=>String(e.category||'').trim())).forEach(c=>{if(c&&!m[nk(c)])m[nk(c)]=c});return Object.values(m).sort((a,b)=>a.localeCompare(b,'es'))};
 function renderFleet(){
   const s=$('qf').value.toLowerCase();
   const l=fleet.filter(e=>[e.code,e.brand,e.model,e.serialNumber].some(v=>String(v||'').toLowerCase().includes(s)));
@@ -205,7 +207,7 @@ function openFleet(id){if(!isAdmin())return;
   <form onsubmit="saveFleet(event,'${id||''}')" class="space-y-3">
     <div class="grid grid-cols-2 gap-3">${field('code','Código *',e.code,'required placeholder="EX-01"')}${field('brand','Marca *',e.brand,'required')}
     ${field('model','Modelo *',e.model,'required')}${field('serialNumber','Nº de serie *',e.serialNumber,'required')}
-    ${sel('category','Categoría',FLEET_CATS.includes(e.category)||!e.category?FLEET_CATS:FLEET_CATS.concat([e.category]),e.category)}
+    <label class="block text-xs text-slate-400 font-semibold">Tipo de equipo *<input class="inp mt-1 font-normal" name="category" list="dl-cats" value="${esc(e.category||'')}" maxlength="60" required placeholder="Elige o escribe uno nuevo" autocomplete="off"><span class="block font-normal text-slate-500 mt-1">Elige de la lista o escribe un tipo nuevo</span></label>${stList('dl-cats',allCats())}
     ${field('plate','Placa',e.plate||'','placeholder="Opcional"')}${field('year','Año',e.year||'','min="1950" max="2100" placeholder="Opcional"','number')}${field('provider','Proveedor',e.provider||'','placeholder="Opcional"')}${field('project','Proyecto',e.project||'','placeholder="Opcional"')}${field('hours','Horómetro / Odómetro',e.hours??0,'min="0"','number')}${field('location','Ubicación / Frente',e.location)}
     ${sel('status','Estado operativo',[['OPERATIVO','Operativo'],['INOPERATIVO','Inoperativo'],['EN_MANTENIMIENTO','En mantenimiento']],e.status)}</div>
     <div><p class="text-xs text-slate-400 font-semibold mb-1">Apartados donde aparece este equipo</p><div class="grid grid-cols-2 gap-1">${MODS.map(([k,l])=>`<label class="flex items-center gap-2 text-xs text-slate-300"><input type="checkbox" name="mod_${k}" ${inMod(e.id?e:{},k)?'checked':''}> ${l}</label>`).join('')}</div></div>${btns()}</form>`);
@@ -213,6 +215,7 @@ function openFleet(id){if(!isAdmin())return;
 function saveFleet(ev,id){
   ev.preventDefault();const f=Object.fromEntries(new FormData(ev.target)),old=fleet.find(x=>x.id===id)||{},off=MODS.map(m=>m[0]).filter(k=>!f['mod_'+k]);
   MODS.forEach(m=>delete f['mod_'+m[0]]);
+  const ck=nk(f.category);f.category=allCats().find(c=>nk(c)===ck)||String(f.category||'').trim().replace(/\s+/g,' ');
   put('fleet',{...old,...f,id:id||uid('F'),code:f.code.trim().toUpperCase(),hours:Number(f.hours||0),off});hide();
 }
 function delFleet(id){if(!isAdmin())return;
@@ -249,7 +252,7 @@ function openFleetImport(){if(!isAdmin())return;
   <p class="text-xs text-slate-400 mb-3">Sube un Excel (<b>.xlsx</b>) o un <b>CSV</b> con una fila por equipo. La primera fila debe tener los encabezados.</p>
   <div class="bg-slate-900 p-3 rounded-lg text-xs text-slate-300 space-y-1"><p>Columnas de la plantilla: <b>ITEM</b>, <b>FLOTA</b>, <b class="text-amber-400">CÓDIGO INTERNO</b> *, <b>PLACA</b>, <b>SERIE DEL EQUIPO</b>, <b class="text-amber-400">MODELO</b> *, <b class="text-amber-400">MARCA</b> *, <b>AÑO</b>, <b>PROVEEDOR</b>, <b>PROYECTO</b></p>
   <p class="text-slate-400">* obligatorias. ITEM es solo numeración y se ignora. Opcionales extra: HORÓMETRO, UBICACIÓN, ESTADO (Operativo, Inoperativo o En mantenimiento).</p>
-  <p class="text-slate-400">Flotas: ${FLEET_CATS.map(esc).join(', ')}.</p></div>
+  <p class="text-slate-400">Tipos (FLOTA): ${allCats().map(esc).join(', ')}. También puedes poner un tipo nuevo y se crea solo.</p></div>
   <label class="flex items-center gap-2 text-xs text-slate-300 mt-3"><input type="checkbox" id="fimp-upd" onchange="fImpFile&&readFleetImport()"> Actualizar los equipos que ya existen (mismo código). Si no, se omiten.</label>
   <div class="grid gap-2 mt-3"><button type="button" onclick="fleetTpl(this)" class="btn bg-slate-700">⬇️ Descargar plantilla (Excel)</button>
   <input type="file" accept=".csv,.txt,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onchange="fImpFile=this.files[0]||null;readFleetImport()"></div>
@@ -296,7 +299,7 @@ async function readFleetImport(){
     hours:col(['horometro','horometroodometro','odometro','horas','hours','kilometraje','km']),loc:col(['ubicacion','ubicacionfrente','frente','location','lugar']),st:col(['estado','status','estadooperativo','condicion'])};
   if(ix.code<0||ix.brand<0||ix.model<0){out.innerHTML='<p class="text-xs text-red-400">Faltan columnas obligatorias. Usa los encabezados: CÓDIGO INTERNO, MARCA, MODELO (descarga la plantilla).</p>';return}
   const upd=!!($('fimp-upd')&&$('fimp-upd').checked),byCode={};fleet.forEach(e=>byCode[String(e.code).trim().toUpperCase()]=e);
-  const catOf=v=>{const k=nk(v);if(!k)return '';return FLEET_CATS.find(c=>nk(c)===k)||FLEET_CATS.find(c=>nk(c).startsWith(k)||k.startsWith(nk(c)))||String(v).trim()};
+  const CATS=allCats(),catOf=v=>{const k=nk(v);if(!k)return '';return CATS.find(c=>nk(c)===k)||String(v).trim().replace(/\s+/g,' ')};
   const ok=[],bad=[],seen={},warn=[];let nNew=0,nUpd=0,skip=0;
   rows.slice(1).forEach((r,n)=>{const line=n+2,g=i=>i<0?'':String(r[i]??'').trim();
     const code=g(ix.code).toUpperCase().replace(/\s+/g,' ');
@@ -310,7 +313,7 @@ async function readFleetImport(){
     if(hours!==null&&(isNaN(hours)||hours<0)){warn.push(`Fila ${line} (${code}): horómetro "${g(ix.hours)}" no válido, se deja ${old?'el actual':'en 0'}`);hours=null}
     const stRaw=g(ix.st);let status=stRaw?FST[nk(stRaw).toUpperCase()]:null;
     if(stRaw&&!status)warn.push(`Fila ${line} (${code}): estado "${stRaw}" no reconocido, se usa ${old?'el actual':'Operativo'}`);
-    const cat=catOf(g(ix.cat));if(cat&&!FLEET_CATS.includes(cat))warn.push(`Fila ${line} (${code}): categoría "${cat}" no está en la lista estándar (se guarda igual)`);
+    const cat=catOf(g(ix.cat));
     let year=g(ix.year).replace(/\.0+$/,'');if(year&&!/^(19|20)\d{2}$/.test(year)){warn.push(`Fila ${line} (${code}): año "${year}" no válido, se omite`);year=''}
     const base=old||{id:uid('F'),hours:0,status:'OPERATIVO',category:FLEET_CATS[0],serialNumber:'S/D',location:''};
     const proj=g(ix.proj)||base.project||'';
