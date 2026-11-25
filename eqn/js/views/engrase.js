@@ -7,7 +7,7 @@
 
   V.render = root => {
     const App = EQ.App;
-    if (!C.equiposActivos().length) { root.innerHTML = `<div class="card">${U.emptyState('⛽', 'No hay equipos cargados', 'Importe primero el maestro de equipos de su aplicación Backlog.', '<a class="btn btn-orange" href="#/equipos">Ir al Maestro de Equipos</a> <button class="btn" id="engImpXl">⭱ Importar Excel del programa (maestro + programa + control diario)</button>')}</div>`; root.querySelector('#engImpXl').onclick = () => EQ.XL.importarDialog(); return; }
+    if (!C.equiposActivos().length) { root.innerHTML = `<div class="card">${U.emptyState('⛽', 'No hay equipos cargados', 'Los equipos se toman de <b>Mantify → Equipos</b>. Registre allí la flota y aparecerá aquí sola.', '<a class="btn btn-orange" href="#" data-mfleet>Ir a Equipos de Mantify</a>')}</div>`; return; }
     let tab = App.tab('engrase', 'programa');
     if (tab === 'registro') tab = 'control';
     root.innerHTML = App.tabsHtml('engrase', TABS, tab) + '<div id="engBody"></div>';

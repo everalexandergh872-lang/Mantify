@@ -12,7 +12,7 @@
     App.wireTabs(root, 'neumaticos');
     const body = root.querySelector('#neuBody');
     if (!C.equiposNeum().length && C.equiposActivos().length && !['inventario', 'remanentes', 'costos'].includes(tab)) { body.innerHTML = `<div class="card">${U.emptyState('⊘', 'Ningún equipo está en la medición de neumáticos', 'Todos los equipos fueron quitados de la medición de neumáticos. Vuelva a incluirlos desde el Maestro de Equipos.', '<a class="btn btn-orange" href="#/equipos">Ir al Maestro de Equipos</a>')}</div>`; return; }
-    if (!C.equiposActivos().length && tab !== 'inventario' && tab !== 'remanentes') { body.innerHTML = `<div class="card">${U.emptyState('◎', 'No hay equipos cargados', 'Importe primero el maestro de equipos de su aplicación Backlog.', '<a class="btn btn-orange" href="#/equipos">Ir al Maestro de Equipos</a>')}</div>`; return; }
+    if (!C.equiposActivos().length && tab !== 'inventario' && tab !== 'remanentes') { body.innerHTML = `<div class="card">${U.emptyState('◎', 'No hay equipos cargados', 'Los equipos se toman de <b>Mantify → Equipos</b>. Registre allí la flota y aparecerá aquí sola.', '<a class="btn btn-orange" href="#" data-mfleet>Ir a Equipos de Mantify</a>')}</div>`; return; }
     ({ diagrama: renderDiagrama, inventario: renderInventario, inspeccion: renderInspeccion, remanentes: renderRemanentes, analisis: renderAnalisis, presiones: renderPresiones, costos: renderCostos })[tab](body);
   };
 

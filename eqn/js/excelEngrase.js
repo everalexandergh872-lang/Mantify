@@ -90,6 +90,7 @@
     if (!f) return;
     let d;
     try { d = await X.parse(f); } catch (e) { U.toast('No se pudo leer el Excel: ' + e.message, 'bad'); return; }
+    if (EQ.DB.host()) d.maestro = null; // un solo maestro: Mantify → Equipos
     if (!d.maestro && !d.programa && !d.control) { U.toast('El archivo no tiene hojas MAESTRO, PROGRAMA ni CONTROL DIARIO reconocibles.', 'bad'); return; }
     const pm = d.maestro ? EQ.Backlog.previewMerge(d.maestro.filas) : null;
     const codeOk = cod => C.eqByCode(cod) || (d.maestro && d.maestro.filas.some(o => o.codigo.toUpperCase() === String(cod).toUpperCase()));

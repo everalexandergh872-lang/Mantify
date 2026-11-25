@@ -289,12 +289,14 @@
   B.open = (route, code) => {
     if (code) { const eq = C.eqByCode(code); if (eq) EQ.App.state.eqId = eq.id; }
     let [r, t] = String(route || 'engrase').split(':');
-    if (!EQ.Views[r]) r = 'engrase';
+    if (!EQ.Views[r] || !EQ.Views[r].render) r = 'engrase';
     if (t) EQ.App.state.tab[r] = t;
     EQ.App.go(r);
   };
   let refT = null;
   B.refresh = () => { clearTimeout(refT); refT = setTimeout(() => { const busy = document.querySelector('#modalRoot > *'); if (busy) { B.publish(); return; } try { EQ.App.refresh(); } catch (e) { B.publish(); } }, 300); };
+  // Botones "Ir a Equipos de Mantify" (data-mfleet) dentro del módulo
+  document.addEventListener('click', e => { const a = e.target.closest('[data-mfleet]'); if (!a) return; e.preventDefault(); try { host().tab('fleet'); } catch (_) { } });
   B.onFleet = () => { if (window.__EQ_READY) B.syncFleet(); };
   B.onOld = () => { if (window.__EQ_READY) B.migrar().then(B.refresh); };
 

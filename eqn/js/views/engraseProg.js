@@ -27,7 +27,7 @@
         <button class="btn btn-sm btn-orange" id="pgImp">⭱ Importar Excel del programa</button>
         <button class="btn btn-sm" id="pgExp">⭳ Exportar Excel del programa</button>
         <button class="btn btn-sm btn-outline" id="pgPdf">PDF</button></div>
-      ${!filas.length ? `<div class="card">${U.emptyState('📅', 'No hay equipos en el programa', 'Importe el maestro (o el Excel del programa de engrase). Solo entran equipos MOVILIZADOS cuya familia no esté excluida (camionetas, buses, grupos electrógenos, motosoldadoras); puede forzarlo en la ficha del equipo.')}</div>` : `
+      ${!filas.length ? `<div class="card">${U.emptyState('📅', 'No hay equipos en el programa', 'Los equipos vienen de Mantify → Equipos. Solo entran equipos MOVILIZADOS cuya familia no esté excluida (camionetas, buses, grupos electrógenos, motosoldadoras); puede forzarlo en la ficha del equipo.')}</div>` : `
       ${!guardado ? '<div class="info-box mb">Programa generado automáticamente con el plan de cada equipo. Se guarda al editar una celda o con "Guardar programa".</div>' : ''}
       ${excl.length ? `<div class="warn-box mb"><b>Quitados del programa de ${nombreMes(s.mes)} (${excl.length}):</b> ${excl.map(e => `<span class="chip" style="display:inline-flex;margin:2px">${U.esc(e.codigo)} <button data-rest="${e.id}" title="Volver a incluir en este mes">↺</button></span>`).join(' ')}</div>` : ''}
       <div class="card"><h3 style="justify-content:center">PROGRAMA DE ENGRASE MENSUAL DE ${nombreMes(s.mes)}</h3>

@@ -3,7 +3,7 @@
    ========================================================================= */
 (function () {
   const U = EQ.U, S = EQ.S, C = EQ.C;
-  const TITLES = { engrase: 'Control de Engrase', neumaticos: 'Control de Neumáticos', equipos: 'Maestro de Equipos', programacion: 'Programación', alertas: 'Centro de Alertas', historial: 'Historial y Trazabilidad', reportes: 'Reportes', configuracion: 'Configuración' };
+  const TITLES = { engrase: 'Control de Engrase', neumaticos: 'Control de Neumáticos', programacion: 'Programación', alertas: 'Centro de Alertas', historial: 'Historial y Trazabilidad', reportes: 'Reportes', configuracion: 'Configuración' };
   const App = { state: { eqId: null, tab: {} }, route: 'engrase' };
 
   App.render = () => {
@@ -51,7 +51,7 @@
       try { const h = EQ.DB.host(); if (h && h.eqnSummary) h.eqnSummary(null, e.message); } catch (_) { }
       return;
     }
-    const onHash = () => { const r = (location.hash || '#/engrase').replace('#/', '').split('?')[0]; App.route = EQ.Views[r] ? r : 'engrase'; App.render(); document.getElementById('sidebar').classList.remove('open'); };
+    const onHash = () => { const r = (location.hash || '#/engrase').replace('#/', '').split('?')[0]; App.route = EQ.Views[r] && EQ.Views[r].render ? r : 'engrase'; App.render(); document.getElementById('sidebar').classList.remove('open'); };
     window.addEventListener('hashchange', onHash);
     onHash();
     document.getElementById('btnMenu').onclick = () => document.getElementById('sidebar').classList.toggle('open');
