@@ -308,7 +308,7 @@
     root.querySelector('#dWipe').onclick = async () => {
       const v = await U.prompt('Escriba BORRAR para confirmar. Se descargará antes una copia de seguridad.', '', 'Borrar base de datos');
       if (v !== 'BORRAR') { if (v !== null) U.toast('Confirmación incorrecta', 'bad'); return; }
-      await V.backup(); await EQ.DB.wipe(); await EQ.DB.put('config', JSON.parse(JSON.stringify(EQ.DEFAULT_CONFIG)), { noAudit: true }); U.toast('Base de datos borrada', 'ok'); EQ.App.go('dashboard');
+      await V.backup(); await EQ.DB.wipe(); await EQ.DB.put('config', JSON.parse(JSON.stringify(EQ.DEFAULT_CONFIG)), { noAudit: true }); U.toast('Base de datos borrada', 'ok'); EQ.App.go('engrase');
     };
   }
 

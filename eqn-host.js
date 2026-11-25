@@ -31,7 +31,7 @@ function eqnTab(t){
   const on=t==='gr'||t==='tr',h=document.getElementById('eqn-host');if(!h)return;
   h.classList.toggle('hidden',!on);document.querySelector('main').classList.toggle('eqn-wide',on);
   if(!on)return;
-  const route=eqnRoute||'dashboard';
+  const route=eqnRoute||'engrase';
   eqnShow(route);
 }
 function eqnShow(route,code){

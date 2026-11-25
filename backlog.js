@@ -70,7 +70,7 @@ function renderSide(){
   <div class="side-foot"><button type="button" class="side-i" onclick="themeToggle()" style="margin-bottom:.4rem"><span class="side-ic">${isLight()?'🌙':'☀️'}</span><span class="side-l">${isLight()?'Fondo oscuro':'Fondo blanco'}</span></button>${$('sync')?$('sync').innerHTML:''}</div>`;
   otNotify();
 }
-function sideGo(k){const [a,b]=k.split(':');if(a==='back'){bkGo(b)}else{if(a==='gr')eqnRoute='dashboard';tab(a)}}
+function sideGo(k){const [a,b]=k.split(':');if(a==='back'){bkGo(b)}else{if(a==='gr')eqnRoute='engrase';tab(a)}}
 function bkGo(sub,st){bkSub=sub||'list';if(st!=null){bkF.st=st;bkF.venc=false}if(cur!=='back')tab('back');else render()}
 function gSearch(v){
   v=(v||'').trim();if(!v)return;const q=v.toLowerCase(),e=fleet.find(x=>String(x.code).toLowerCase()===q);
@@ -439,23 +439,34 @@ function dashRel(){
   return `<div class="flex justify-between items-center gap-2" style="margin-top:.75rem"><h3 class="font-semibold text-slate-300">⚙️ Confiabilidad del mes</h3><button type="button" onclick="bkGo('fal')" class="btn bg-slate-700 !py-1 text-xs">Ver fallas recurrentes ›</button></div>
   <div class="kgrid">${kpi('Disponibilidad',a.disp==null?'—':a.disp+'%',`${v(a.hrs)} h fuera de servicio · ${fleet.length} equipos`,dc,'✅',"bkGo('fal')")}${kpi('MTBF',f.mtbf==null?'—':v(f.mtbf)+' h','Tiempo medio entre fallas (MCI/MCP)','#38bdf8','📈',"bkGo('fal')")}${kpi('MTTR',f.mttr==null?'—':v(f.mttr)+' h','Tiempo medio de reparación','#fb923c','🛠️',"bkGo('fal')")}${kpi('Paradas cerradas',a.n,`${f.n} por falla (MCI/MCP)`,'#e2e8f0','🛑',"tab('rep')")}</div>`;
 }
-/* ---------- Dashboard de Engrase y Neumáticos (indicadores del módulo eqn/) ---------- */
+/* ---------- Engrase y Neumáticos: lo esencial del módulo eqn/ en el Dashboard principal ---------- */
 function dashEqn(){
-  const S=window.EQN_SUM,K=S&&S.kpi,n=v=>v==null||isNaN(v)?'—':Math.round(v).toLocaleString('es-PE'),p=v=>v==null||isNaN(v)?'—':Math.round(v)+'%';
-  const head=`<div class="flex justify-between items-center gap-2" style="margin-top:.75rem"><h3 class="font-semibold text-slate-300">🛢️ Engrase y Neumáticos</h3><button type="button" onclick="eqnOpen('dashboard')" class="btn bg-slate-700 !py-1 text-xs">Abrir panel completo ›</button></div>`;
+  const S=window.EQN_SUM,K=S&&S.kpi,R=S&&S.rap,n=v=>v==null||isNaN(v)?'—':Math.round(v).toLocaleString('es-PE'),p=v=>v==null||isNaN(v)?'—':(Math.round(v*10)/10)+'%';
+  const head=`<div class="flex justify-between items-center gap-2" style="margin-top:.75rem"><h3 class="font-semibold text-slate-300">🛢️ Engrase y Neumáticos</h3><button type="button" onclick="eqnOpen('engrase')" class="btn bg-slate-700 !py-1 text-xs">Abrir módulo ›</button></div>`;
   if(!K)return head+`<div class="bg-slate-800 border border-slate-700 rounded-xl p-4 text-sm text-slate-400">${typeof eqnErr!=='undefined'&&eqnErr?'⚠️ '+esc(eqnErr):'Cargando indicadores de engrase y neumáticos…'}</div>`;
   const cp=K.cumplimientoProg,cc=cp==null?'#94a3b8':cp>=90?'#34d399':cp>=75?'#fbbf24':'#f87171';
-  const top=(S.top||[]).length?`<div class="bg-slate-800 border border-slate-700 rounded-xl p-4 space-y-2"><h4 class="font-semibold text-sm">🚨 Equipos que requieren atención</h4>${S.top.map(t=>`<button type="button" onclick="eqnOpen('alertas','${esc(t.code)}')" class="w-full text-left flex justify-between gap-2 text-sm py-1 border-b border-slate-700"><b class="text-amber-400">${esc(t.code)}</b><span class="text-slate-400 text-xs truncate">${esc((t.motivos||[]).join(' · '))}</span></button>`).join('')}</div>`:'';
-  return head+`<div class="kgrid">
-    ${kpi('Cumplimiento del programa',p(cp),`${n(K.ejecMes)} de ${n(K.progMes)} engrases del mes`,cc,'📅',"eqnOpen('engrase')")}
-    ${kpi('Engrases para hoy',n(K.pendHoy),`pendientes de ${n(K.progHoy)} programados`,'#fbbf24','🛢️',"eqnOpen('engrase')")}
-    ${kpi('Días sin engrase excedidos',n(K.excedidos),`de ${n(K.equiposPrograma)} equipos en programa`,'#ef4444','⏱️',"eqnOpen('engrase')")}
-    ${kpi('Grasa consumida (mes)',(K.consumoMesKg==null?'—':(+K.consumoMesKg).toFixed(1))+' kg',`${n(K.egMes)} EG · ${n(K.epMes)} EP`,'#38bdf8','⚖️',"eqnOpen('engrase')")}
-    ${kpi('Neumáticos críticos',n(K.neumCriticos),`${n(K.neumObservacion)} en observación · ${n(K.neumInstalados)} instalados`,'#fb923c','🛞',"eqnOpen('neumaticos')")}
-    ${kpi('Próximos reemplazos',n(K.proxReemplazo),`desgaste promedio ${p(K.desgProm)}`,'#f472b6','🔄',"eqnOpen('neumaticos')")}
-    ${kpi('Presión fuera de rango',n(K.presionFuera),'neumáticos en la última medición','#a78bfa','🎯',"eqnOpen('neumaticos')")}
-    ${kpi('Alertas abiertas',n(K.alertas),`${n(K.alertasCriticas)} críticas · ${n(K.equiposCriticos)} equipos críticos`,'#f87171','⚠️',"eqnOpen('alertas')")}
-  </div>${top}`;
+  // [pregunta, respuesta, ¿requiere atención?, vista del módulo]
+  const qa=R?[
+    ['Equipos con engrases pendientes',R.pend||'Ninguno',R.nPend>0,'engrase:prioridad'],
+    ['Engrases vencidos (mes)',R.venc,R.nVenc>0,'engrase:cumplimiento'],
+    ['Consumo de lubricante (30 días)',R.cons,false,'engrase:consumo'],
+    ['Neumáticos con desgaste anormal',R.irr||'Ninguno detectado',R.nIrr>0,'neumaticos:analisis'],
+    ['Próximo reemplazo de neumático',R.prox||'Sin proyección (faltan mediciones)',false,'neumaticos:analisis'],
+    ['Costo de neumáticos (acumulado / mes)',R.costo,false,'neumaticos:costos'],
+    ['Actividades a programar (7 días)',R.prog7,false,'programacion'],
+    ['Equipos con atención prioritaria',R.prio||'Ninguno',!!R.prio,'alertas']
+  ]:[];
+  const rap=qa.length?`<div class="dcard" style="margin-top:.75rem"><p class="font-semibold mb-2">⚡ Respuestas rápidas para el planner</p><div class="grid sm:grid-cols-2 gap-2">${qa.map(([q,r,w,v])=>`<button type="button" class="eqa${w?' eqa-w':''}" onclick="eqnOpen('${v}')"><small>${q}</small><b>${esc(r)}</b></button>`).join('')}</div></div>`:'';
+  return head+rap+`<div class="kgrid" style="margin-top:.75rem">
+    ${kpi('Cumplimiento del programa',p(cp),`${n(K.ejecMes)} de ${n(K.progMes)} engrases del mes`,cc,'📅',"eqnOpen('engrase:cumplimiento')")}
+    ${kpi('Engrases pendientes hoy',n(K.pendHoy),`de ${n(K.progHoy)} programados hoy`,'#fbbf24','🛢️',"eqnOpen('engrase:control')")}
+    ${kpi('Programados no ejecutados',n(K.noEjMes),'engrases del mes sin registrar','#ef4444','📌',"eqnOpen('engrase:cumplimiento')")}
+    ${kpi(`Equipos > ${n(K.lim)} días sin engrase`,n(K.excedidos),`de ${n(K.equiposPrograma)} equipos en programa`,'#f87171','⏱️',"eqnOpen('engrase:prioridad')")}
+    ${kpi('Neumáticos críticos',n(K.neumCriticos),`${n(K.neumObservacion)} en observación · ${n(K.neumInstalados)} instalados`,'#fb923c','🛞',"eqnOpen('neumaticos:analisis')")}
+    ${kpi('Próximos a reemplazo',n(K.proxReemplazo),`desgaste promedio ${p(K.desgProm)}`,'#f472b6','🔄',"eqnOpen('neumaticos:analisis')")}
+    ${kpi('Presión fuera de rango',n(K.presionFuera),'neumáticos en la última medición','#a78bfa','🎯',"eqnOpen('neumaticos:presiones')")}
+    ${kpi('Equipos críticos',n(K.equiposCriticos),`${n(K.alertas)} alertas abiertas · ${n(K.alertasCriticas)} críticas`,'#ef4444','⚠️',"eqnOpen('alertas')")}
+  </div>`;
 }
 function dashOther(){
   return `<h3 class="font-semibold text-slate-300" style="margin-top:.75rem">🧰 Otros controles</h3>

@@ -484,3 +484,15 @@ html.light #eqn-frame{border-color:#cbd5e1!important}
 .plrow{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:.4rem}
 html.light .plday{background:#fff;border-color:#d5dce6}html.light .plhd{color:#334155;border-color:#e5e9f0}
 html.light .plc{color:#0f172a}html.light .plc .pl2,html.light .plc .plh,html.light .plhd span{color:#64748b}
+
+/* Respuestas rápidas de Engrase y Neumáticos (dashboard) */
+.eqa{display:block;width:100%;text-align:left;border:1px solid #334155;border-left:3px solid #f59e0b;border-radius:.7rem;padding:.55rem .7rem;min-width:0}
+.eqa:hover{background:rgba(51,65,85,.35)}
+.eqa small{display:block;font-size:11px;color:#94a3b8}
+.eqa b{display:block;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.eqa-w{border-left-color:#ef4444}
+.eqa-w b{color:#f87171}
+html.light .eqa{border-color:#e2e8f0;border-left-color:#f59e0b}
+html.light .eqa-w{border-left-color:#ef4444}
+html.light .eqa-w b{color:#dc2626}
+html.light .eqa:hover{background:#f1f5f9}
