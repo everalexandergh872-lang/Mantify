@@ -335,39 +335,72 @@
     const defPts = (eq, t) => { const n = C.puntosDeTipo(eq, t || 'EG').length; return n || ''; };
     const defKg = (eq, t) => { const g = C.puntosDeTipo(eq, t || 'EG').reduce((a, p) => a + (Number(p.gramos) || 0), 0); return g ? +(g / 1000).toFixed(3) : ''; };
     const pend = prog.filter(f => f.dias[s.diaRapido] && !C.diarioEn(f.eq.id, s.diaRapido));
+    const hechos = S.engrasesDiarios.filter(d => d.fecha === s.diaRapido).sort((a, b) => String((C.eq(a.equipoId) || {}).codigo).localeCompare(String((C.eq(b.equipoId) || {}).codigo)));
     const rows = S.engrasesDiarios.filter(d => (!s.ctrlMes || C.mesDe(d.fecha) === s.ctrlMes) && (!s.ctrlEq || d.equipoId === s.ctrlEq)).sort((a, b) => a.fecha < b.fecha ? 1 : a.fecha > b.fecha ? -1 : 0);
+    // "Engrasó": cada equipo lleva a quien lo engrasó. El técnico siempre registra a su nombre.
+    const teInp = w => tec ? `<input class="te" value="${U.esc(miNombre())}" readonly${w ? ` style="width:${w}"` : ''}>` : `<input class="te" list="cdTecL" value="${U.esc(s.tecRapido || '')}" placeholder="¿Quién engrasó?"${w ? ` style="width:${w}"` : ''}>`;
+    const tpSel = f => `<select class="tp">${U.opts(tiposCod(), f.dias[s.diaRapido])}</select>`;
+    const hrInp = (f, w) => `<input type="number" class="hr" min="0" step="any" inputmode="decimal" placeholder="${f.eq.horometro !== null && f.eq.horometro !== undefined ? 'últ. ' + U.num(f.eq.horometro, 1) : ''}"${w ? ` style="width:${w}"` : ''}>`;
+    const npInp = (f, w) => `<input type="number" class="np" min="0" step="1" inputmode="numeric" value="${defPts(f.eq, f.dias[s.diaRapido])}"${w ? ` style="width:${w}"` : ''}>`;
+    const kgInp = (f, w) => `<input type="number" class="kg" min="0" step="0.001" inputmode="decimal" value="${defKg(f.eq, f.dias[s.diaRapido])}"${w ? ` style="width:${w}"` : ''}>`;
+    const gsSel = f => `<select class="gs">${U.opts(cfg.tiposGrasa.map(g => g.nombre), C.grasaEq(f.eq))}</select>`;
+    const tabla = `<div class="tbl-wrap cd-tblwrap"><table class="tbl" id="cdTbl"><thead><tr><th class="nosort">✓</th><th class="nosort">COD</th><th class="nosort">Equipo</th><th class="nosort">Programado</th><th class="nosort">Tipo ejecutado</th><th class="nosort">Horómetro / Km</th><th class="nosort num">Puntos engrasados</th><th class="nosort num">Grasa (kg)</th><th class="nosort">Grasa</th><th class="nosort">Engrasó</th><th class="nosort">Observación</th></tr></thead><tbody>
+          ${pend.map(f => `<tr class="cd-row" data-eq="${f.eq.id}"><td><input type="checkbox" class="ck" ${tec ? '' : 'checked'}></td><td><b>${U.esc(f.eq.codigo)}</b></td><td>${U.esc(f.eq.descripcion || '')} <span class="small muted">${U.esc(f.eq.placa || '')}</span></td><td>${U.pill('info', f.dias[s.diaRapido])}</td>
+            <td>${tpSel(f)}</td><td>${hrInp(f, '120px')}</td><td class="num">${npInp(f, '70px')}</td><td class="num">${kgInp(f, '80px')}</td><td>${gsSel(f)}</td><td>${teInp('160px')}</td><td><input class="ob" style="width:180px"></td></tr>`).join('')}
+          </tbody></table></div><div class="flex mt cd-tblwrap"><span class="muted small">${tec ? 'Marca solo los equipos que engrasaste tú.' : 'Revisa en cada fila quién engrasó.'}</span><span class="spacer"></span><button class="btn btn-ok" id="cdSave">✓ Registrar seleccionados</button></div>`;
+    const tarjetas = `<div class="cd-cards">${pend.map(f => `<details class="cd-card cd-row" data-eq="${f.eq.id}">
+          <summary><b class="cd-cod">${U.esc(f.eq.codigo)}</b><span class="cd-desc">${U.esc(f.eq.descripcion || '')}${f.eq.placa ? ` · ${U.esc(f.eq.placa)}` : ''}</span>${U.pill('info', f.dias[s.diaRapido])}<span class="cd-chev">›</span></summary>
+          <div class="cd-grid">
+            <label>Tipo${tpSel(f)}</label><label>${C.lecturaLbl(f.eq)}${hrInp(f)}</label>
+            <label>Puntos${npInp(f)}</label><label>Grasa (kg)${kgInp(f)}</label>
+            <label class="w2">Grasa usada${gsSel(f)}</label>
+            <label class="w2">Engrasó${teInp()}</label>
+            <label class="w2">Observación<input class="ob" placeholder="Opcional"></label>
+          </div>
+          <button type="button" class="btn btn-ok cd-one">✓ Registrar ${U.esc(f.eq.codigo)}</button>
+        </details>`).join('')}</div>`;
+    const lista = hechos.length ? `<div class="cd-done"><div class="cd-done-t">Ya registrados el ${U.fdate(s.diaRapido)} (${hechos.length})</div>${hechos.map(d => { const e = C.eq(d.equipoId) || {}; return `<button type="button" class="cd-done-i" data-v="${d.id}"><b>${U.esc(e.codigo || '—')}</b> ${U.pill(d.tipo === 'EG' ? 'info' : 'amarillo', d.tipo)} <span>${U.esc(d.tecnico || 'Sin técnico')}</span><span class="muted">${U.num((Number(d.gramos) || 0) / 1000, 3)} kg</span></button>`; }).join('')}</div>` : '';
     root.innerHTML = `
-      <div class="card mb"><h3>Registro rápido del día <span class="right"><button class="btn btn-sm btn-ok" id="cdNew">+ Registrar engrase individual</button></span></h3>
-        <div class="flex mb"><b>Fecha:</b><input type="date" id="cdDia" value="${s.diaRapido}" max="${U.today()}"><b>Técnico:</b><input id="cdTec" list="cdTecL" style="width:180px" value="${U.esc(s.tecRapido || '')}" ${tec ? 'readonly title="Se registra a tu nombre"' : ''}><datalist id="cdTecL">${C.tecnicos('Engrase').map(t => `<option value="${U.esc(t)}">`).join('')}</datalist>
-        <span class="muted small">Equipos programados para el día y aún no registrados (${pend.length}).</span></div>
-        ${pend.length ? `<div class="tbl-wrap"><table class="tbl" id="cdTbl"><thead><tr><th class="nosort">✓</th><th class="nosort">COD</th><th class="nosort">Equipo</th><th class="nosort">Programado</th><th class="nosort">Tipo ejecutado</th><th class="nosort">Horómetro / Km</th><th class="nosort num">Puntos engrasados</th><th class="nosort num">Grasa (kg)</th><th class="nosort">Grasa</th><th class="nosort">Observación</th></tr></thead><tbody>
-          ${pend.map(f => `<tr data-eq="${f.eq.id}"><td><input type="checkbox" class="ck" checked></td><td><b>${U.esc(f.eq.codigo)}</b></td><td>${U.esc(f.eq.descripcion || '')} <span class="small muted">${U.esc(f.eq.placa || '')}</span></td><td>${U.pill('info', f.dias[s.diaRapido])}</td>
-            <td><select class="tp">${U.opts(tiposCod(), f.dias[s.diaRapido])}</select></td><td><input type="number" class="hr" min="0" step="any" placeholder="${f.eq.horometro !== null && f.eq.horometro !== undefined ? 'últ. ' + U.num(f.eq.horometro, 1) : ''}" style="width:120px"></td>
-            <td class="num"><input type="number" class="np" min="0" step="1" value="${defPts(f.eq, f.dias[s.diaRapido])}" style="width:70px"></td><td class="num"><input type="number" class="kg" min="0" step="0.001" value="${defKg(f.eq, f.dias[s.diaRapido])}" style="width:80px"></td>
-            <td><select class="gs">${U.opts(cfg.tiposGrasa.map(g => g.nombre), C.grasaEq(f.eq))}</select></td><td><input class="ob" style="width:180px"></td></tr>`).join('')}
-          </tbody></table></div><div class="flex mt"><span class="spacer"></span><button class="btn btn-ok" id="cdSave">✓ Registrar seleccionados</button></div>` : '<div class="muted">No hay engrases programados pendientes para esta fecha.</div>'}
+      <div class="card mb cd-quick"><h3>Registro rápido del día <span class="right"><button class="btn btn-sm btn-ok" id="cdNew">+ Engrase individual</button></span></h3>
+        <div class="flex mb cd-head"><label class="flex"><b>Fecha:</b><input type="date" id="cdDia" value="${s.diaRapido}" max="${U.today()}"></label>${tec ? `<span class="small">Registras como <b>${U.esc(miNombre())}</b></span>` : `<label class="flex"><b>Engrasó:</b><input id="cdTec" list="cdTecL" style="width:180px" value="${U.esc(s.tecRapido || '')}" placeholder="Para todas las filas"></label>`}<datalist id="cdTecL">${C.tecnicos('Engrase').map(t => `<option value="${U.esc(t)}">`).join('')}</datalist>
+        <span class="muted small">Pendientes del día: <b>${pend.length}</b>${hechos.length ? ` · registrados: <b>${hechos.length}</b>` : ''}</span></div>
+        ${pend.length ? tabla + tarjetas : '<div class="muted">No hay engrases programados pendientes para esta fecha.</div>'}
+        ${lista}
       </div>
       <div class="selector-bar"><b>CONTROL DIARIO DE ENGRASE</b><input type="month" id="cdMes" value="${s.ctrlMes}"><select id="cdEq">${U.opts(C.equiposEngrase().map(e => ({ v: e.id, t: C.eqLabel(e) })), s.ctrlEq, 'Todos los equipos')}</select><span class="spacer"></span>${tec ? '' : '<button class="btn btn-sm btn-orange" id="cdImp">⭱ Importar Excel</button>'}</div>
       <div class="card"><div id="cdList"></div></div>`;
+    const q = root.querySelector('.cd-quick');
     root.querySelector('#cdDia').onchange = e => { if (e.target.value) { s.diaRapido = e.target.value > U.today() ? U.today() : e.target.value; EQ.App.refresh(); } };
-    const cdT = root.querySelector('#cdTbl');
-    if (cdT) cdT.addEventListener('change', e => { if (!e.target.classList.contains('tp')) return; const tr = e.target.closest('tr'); const eq = C.eq(tr.dataset.eq); tr.querySelector('.np').value = defPts(eq, e.target.value); tr.querySelector('.kg').value = defKg(eq, e.target.value); });
-    root.querySelector('#cdTec').onchange = e => { s.tecRapido = e.target.value.trim(); };
+    q.addEventListener('change', e => { if (!e.target.classList.contains('tp')) return; const tr = e.target.closest('.cd-row'); const eq = C.eq(tr.dataset.eq); tr.querySelector('.np').value = defPts(eq, e.target.value); tr.querySelector('.kg').value = defKg(eq, e.target.value); });
+    q.addEventListener('input', e => { if (e.target.classList.contains('te')) e.target.dataset.manual = '1'; });
+    const cdTec = root.querySelector('#cdTec');
+    if (cdTec) cdTec.oninput = () => { s.tecRapido = cdTec.value.trim(); q.querySelectorAll('.cd-row .te:not([readonly])').forEach(i => { if (!i.dataset.manual) i.value = cdTec.value; }); };
+    // al abrir un equipo en el teléfono se cierran los demás, para que la lista quede corta
+    q.querySelectorAll('details.cd-card').forEach(d => d.addEventListener('toggle', () => { if (d.open) q.querySelectorAll('details.cd-card[open]').forEach(o => { if (o !== d) o.open = false; }); }));
+    q.querySelectorAll('.cd-done-i').forEach(b => b.onclick = () => P.verDiario(S.engrasesDiarios.find(x => x.id === b.dataset.v)));
     root.querySelector('#cdMes').onchange = e => { s.ctrlMes = e.target.value; EQ.App.refresh(); };
     root.querySelector('#cdEq').onchange = e => { s.ctrlEq = e.target.value; EQ.App.refresh(); };
     root.querySelector('#cdNew').onclick = () => P.registrarDialog(s.ctrlEq ? C.eq(s.ctrlEq) : null, s.diaRapido);
     if (!tec) root.querySelector('#cdImp').onclick = () => EQ.XL.importarDialog();
+    const guardar = async el => {
+      const eq = C.eq(el.dataset.eq), te = el.querySelector('.te');
+      const quien = tec ? miNombre() : te.value.trim();
+      if (!quien) { te.classList.add('invalid'); throw new Error(`${eq.codigo}: indica quién lo engrasó.`); }
+      try { await C.registrarDiario({ eq, fecha: s.diaRapido, horometro: U.toNum(el.querySelector('.hr').value), tipo: el.querySelector('.tp').value, tecnico: quien, observaciones: el.querySelector('.ob').value.trim(), nPuntos: U.toNum(el.querySelector('.np').value), kg: U.toNum(el.querySelector('.kg').value), tipoGrasa: el.querySelector('.gs').value }); }
+      catch (e) { el.querySelector('.hr').classList.add('invalid'); throw new Error(`${eq.codigo}: ${e.message}`); }
+    };
+    q.querySelectorAll('.cd-one').forEach(b => b.onclick = async () => {
+      b.disabled = true;
+      try { await guardar(b.closest('.cd-row')); U.toast(`Engrase de ${C.eq(b.closest('.cd-row').dataset.eq).codigo} registrado`, 'ok'); EQ.App.refresh(); }
+      catch (e) { b.disabled = false; U.toast(e.message, 'bad'); }
+    });
     const sv = root.querySelector('#cdSave');
     if (sv) sv.onclick = async () => {
+      const sel = [...root.querySelectorAll('#cdTbl tbody tr')].filter(tr => tr.querySelector('.ck').checked);
+      if (!sel.length) { U.toast('Marca los equipos que se engrasaron', 'bad'); return; }
       sv.disabled = true;
-      const tec = root.querySelector('#cdTec').value.trim();
       let ok = 0; const errs = [];
-      for (const tr of root.querySelectorAll('#cdTbl tbody tr')) {
-        if (!tr.querySelector('.ck').checked) continue;
-        const eq = C.eq(tr.dataset.eq);
-        try { await C.registrarDiario({ eq, fecha: s.diaRapido, horometro: U.toNum(tr.querySelector('.hr').value), tipo: tr.querySelector('.tp').value, tecnico: tec, observaciones: tr.querySelector('.ob').value.trim(), nPuntos: U.toNum(tr.querySelector('.np').value), kg: U.toNum(tr.querySelector('.kg').value), tipoGrasa: tr.querySelector('.gs').value }); ok++; }
-        catch (e) { errs.push(`${eq.codigo}: ${e.message}`); tr.querySelector('.hr').classList.add('invalid'); }
-      }
+      for (const tr of sel) { try { await guardar(tr); ok++; } catch (e) { errs.push(e.message); } }
       sv.disabled = false;
       if (errs.length) U.modal({ title: `Registrados ${ok}; con errores ${errs.length}`, body: `<ul>${errs.map(e => `<li>${U.esc(e)}</li>`).join('')}</ul>`, buttons: [{ label: 'Cerrar', cls: 'btn-outline', onClick: () => EQ.App.refresh() }] });
       else { U.toast(`${ok} engrase(s) registrados`, 'ok'); EQ.App.refresh(); }

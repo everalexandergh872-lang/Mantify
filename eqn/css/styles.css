@@ -290,3 +290,33 @@ html.en-mantify.dark #menu a.active{color:#0f172a}
 html.en-mantify.dark #topbar{background:transparent}
 html.en-mantify .card,html.en-mantify .kpi{border-radius:12px}
 @media(max-width:640px){html.en-mantify #menu a{padding:6px 10px;font-size:12px}html.en-mantify #globalSearch{width:160px}}
+
+/* ---- Control diario: registro rápido (tarjetas compactas en teléfono) ---- */
+.cd-cards{display:none}
+.cd-done{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
+.cd-done-t{font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:6px}
+.cd-done-i{display:flex;align-items:center;gap:8px;width:100%;text-align:left;background:none;border:0;border-bottom:1px solid var(--line-2);padding:6px 2px;font:inherit;color:var(--text);cursor:pointer}
+.cd-done-i span:last-child{margin-left:auto;font-size:12px}
+@media (max-width:720px){
+  .cd-tblwrap{display:none!important}
+  .cd-cards{display:flex;flex-direction:column;gap:6px}
+  .cd-quick{padding:10px}
+  .cd-quick h3{font-size:14px;margin-bottom:8px}
+  .cd-quick h3 .right .btn{padding:4px 8px;font-size:12px}
+  .cd-head{gap:6px 10px;flex-wrap:wrap}
+  .cd-head input[type=date]{padding:5px 7px}
+  .cd-head #cdTec{width:100%!important}
+  .cd-card{border:1px solid var(--line);border-radius:10px;background:var(--card);overflow:hidden}
+  .cd-card[open]{border-color:var(--orange);box-shadow:0 2px 8px rgba(0,0,0,.08)}
+  .cd-card summary{list-style:none;display:flex;align-items:center;gap:8px;padding:9px 10px;cursor:pointer;min-height:44px}
+  .cd-card summary::-webkit-details-marker{display:none}
+  .cd-cod{white-space:nowrap;font-size:14px}
+  .cd-desc{flex:1;min-width:0;font-size:12px;color:var(--text-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .cd-chev{font-size:20px;line-height:1;color:var(--muted);transition:transform .15s}
+  .cd-card[open] .cd-chev{transform:rotate(90deg)}
+  .cd-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 10px 10px}
+  .cd-grid label{display:flex;flex-direction:column;gap:3px;font-size:11px;font-weight:600;color:var(--text-2)}
+  .cd-grid .w2{grid-column:span 2}
+  .cd-grid input,.cd-grid select{width:100%;font-size:16px;padding:7px 8px}
+  .cd-one{display:block;width:calc(100% - 20px);margin:0 10px 10px;padding:10px;font-size:15px}
+}
