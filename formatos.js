@@ -201,7 +201,7 @@ function openOt(id){
   const o=b.ot||{},e=eqOf(b.fleetId),T=techList(),pers=o.pers||{};
   const lastP=[...backlogs.map(x=>x.ot&&x.ot.proy),...sps.map(s=>s.frente)].filter(Boolean);
   const tarDef=o.tareas||(b.actividad?b.actividad.split(/\n+/).map(s=>s.replace(/^[\s\-•\d.)]+/,'').trim()).filter(Boolean).map(d=>({d})):[{d:`Intervenir ${b.component.toLowerCase()} (${b.system.toLowerCase()})`}]);
-  const techSel=T.length?`<select class="inp mt-1 font-normal" name="techUid" required><option value="">— Selecciona al técnico —</option>${T.map(u=>`<option value="${esc(u.uid)}" ${u.uid===o.techUid?'selected':''}>${esc(u.name)}${u.position?' · '+esc(u.position):''}</option>`).join('')}${o.techName&&!o.techUid?`<option value="" selected disabled>${esc(o.techName)} (sin cuenta)</option>`:''}</select>`
+  const techSel=T.length?`<select class="inp mt-1 font-normal" name="techUid" required onchange="otSigPrev()"><option value="">— Selecciona al técnico —</option>${T.map(u=>`<option value="${esc(u.uid)}" ${u.uid===o.techUid?'selected':''}>${esc(u.name)}${u.position?' · '+esc(u.position):''}</option>`).join('')}${o.techName&&!o.techUid?`<option value="" selected disabled>${esc(o.techName)} (sin cuenta)</option>`:''}</select>`
     :`<input class="inp mt-1 font-normal" name="techName" required maxlength="80" list="dl-otres" value="${esc(otTech(o))}" placeholder="Nombre completo del técnico">${stList('dl-otres',[...ST_RES,...backlogs.map(x=>x.ot&&otTech(x.ot))])}`;
   show(`<div class="flex justify-between items-start"><div><h3 class="font-bold text-lg">${o.num?'✏️ Editar':'＋ Aperturar'} orden de trabajo</h3><p class="text-xs text-slate-400">${esc(bkNo(b))} · ${esc(e.code)} · ${esc(b.component)} · formato F-MT-24</p></div><button type="button" onclick="bkDetail('${id}')" class="text-slate-400 text-xl">✕</button></div>
   <form onsubmit="saveOt(event,'${id}')" class="space-y-4 mt-3">
@@ -224,13 +224,24 @@ function openOt(id){
    ${fsec(6,'Tareas a ejecutar (adicionales al programa)',`<div id="rw-ottar"></div>`)}
    ${fsec(8,'Repuestos y materiales a utilizar',`<div id="rw-otrep"></div>`)}
    ${fsec(9,'Recomendaciones técnicas',`<div id="rw-otrec"></div>`)}
-   ${fsec(10,'Conformidad',`<div class="g2">${field('by','Elaborado por (planner / supervisor)',o.by||me.name,'readonly')}${field('jefe','V°B° Jefe de mantenimiento',o.jefe||'','placeholder="Nombre (opcional)"')}</div><p class="text-[11px] text-slate-400">Tu firma del perfil se imprime en "Elaborado por". El responsable de ejecución firma al cerrar con el reporte.</p>`)}
+   ${fsec(10,'Conformidad',`<div class="g2">${field('by','Elaborado por (planner / supervisor)',o.by||me.name,'readonly')}<label class="block text-xs text-slate-400 font-semibold">V°B° Supervisor / jefe de equipos de guardia *<input class="inp mt-1 font-normal" name="jefe" list="dl-guard" required maxlength="80" autocomplete="off" placeholder="Elige quién está de guardia" value="${esc(o.jefe||otGuard())}" oninput="clearTimeout(window._otg);window._otg=setTimeout(otSigPrev,300)">${stList('dl-guard',T.filter(u=>u.role==='supervisor'||u.role==='admin').map(u=>u.name))}</label></div>
+     <div id="ot-sigprev" class="g3 mt-2"></div><p class="text-[11px] text-slate-400">Las firmas se cargan solas desde el perfil de cada persona: la tuya en "Elaborado por", la del técnico asignado en "Responsable de ejecución" y la del supervisor / jefe de guardia en "V°B°". La guardia elegida queda sugerida para las siguientes OT.</p>`)}
    ${phxBox('otf','Panel fotográfico (opcional, hasta 6)',o.fotos||[],!!o.conFotos)}
    <p id="ot-err" class="text-xs text-red-400 hidden"></p>${btns(`bkDetail('${id}')`,o.num?'Guardar OT':'Aperturar y asignar OT')}</form>`,'50rem');
+  otSigPrev();
   rwInit('ottar',tarDef,[{k:'d',ph:'Descripción de la tarea',f:3},{k:'r',ph:'Responsable',f:1.2},{k:'h',ph:'H estim.',f:.6,t:1},{k:'e',ph:'Estado',f:1,opts:OT_TEST}],3);
   rwInit('otrep',o.reps||(b.parts||[]).map(p=>({c:p.np,d:p.d,q:p.cant,u:p.med})),[{k:'c',ph:'Código / N° parte',f:1.2},{k:'d',ph:'Descripción',f:2.4},{k:'q',ph:'Cant.',f:.6,t:1},{k:'u',ph:'Und',f:.6},{k:'s',ph:'¿En stock?',f:.8,opts:['SÍ','NO']},{k:'rq',ph:'N° req.',f:1}],2);
   rwInit('otrec',o.recs||(b.obsRec?[{d:b.obsRec}]:[]),[{k:'d',ph:'Recomendación',f:3},{k:'p',ph:'Prioridad',f:1,opts:PR_K}],1);
   phxRender('otf');
+}
+// Supervisor / jefe de guardia sugerido: el último elegido en este equipo o en la última OT
+function otGuard(){let g='';try{g=localStorage.getItem('otGuardia')||''}catch(_){}if(g)return g;const l=backlogs.filter(b=>b.ot&&b.ot.jefe).sort((a,c)=>String(c.ot.date||'').localeCompare(String(a.ot.date||'')))[0];return l?l.ot.jefe:''}
+function otTechName(F){const s=F.techUid;if(s&&s.tagName==='SELECT'){const op=s.selectedOptions[0];if(op&&op.value){const u=techList().find(x=>x.uid===op.value);return u?u.name:''}return ''}return F.techName?F.techName.value:''}
+function otSigPrev(){
+  const el=$('ot-sigprev'),F=document.querySelector('#modal form');if(!el||!F)return;
+  const box=(t,n,sg)=>`<div class="bg-slate-900/50 border border-slate-700 rounded-lg p-2"><p class="text-[11px] text-slate-400 font-semibold">${t}</p><p class="text-xs">${esc(n||'—')}</p>${sg?`<img src="${esc(sg)}" alt="Firma" style="height:2.4rem;max-width:100%;object-fit:contain" class="bg-white rounded mt-1"><p class="text-[11px] text-emerald-400">✔ Firma automática</p>`:`<p class="text-[11px] text-amber-400 mt-1">${n?'⚠️ Sin firma registrada en su perfil':'Elige a la persona'}</p>`}</div>`;
+  const tn=otTechName(F),jn=(F.jefe.value||'').trim(),by=F.by?F.by.value:me.name;
+  el.innerHTML=box('Elaborado por',by,(sigOfName(by)||{}).sig||(nk(by)===nk(me.name)?mySig():''))+box('Responsable de ejecución',tn,(sigOfName(tn)||{}).sig)+box('V°B° Supervisor / jefe de guardia',jn,(sigOfName(jn)||{}).sig);
 }
 async function saveOt(ev,id){
   ev.preventDefault();const b=backlogs.find(x=>x.id===id);if(!b||!isSup())return;const F=ev.target,f=Object.fromEntries(new FormData(F)),er=$('ot-err'),bad=m=>{er.textContent=m;er.classList.remove('hidden');er.scrollIntoView({block:'center'})};
@@ -238,14 +249,16 @@ async function saveOt(ev,id){
   const techName=tu?tu.name:(f.techName!=null?String(f.techName).trim():otTech(old));if(!techName)return bad('Asigna la OT a un técnico.');
   const tareas=rwGet('ottar');if(!tareas.length)return bad('Escribe al menos una tarea a ejecutar.');
   const pers={};OT_PERS.forEach(k=>{const v=f['p_'+k];if(v!==''&&v!=null&&Number(v)>0)pers[k]=Number(v)});
+  if(!(f.jefe||'').trim())return bad('Elige al supervisor o jefe de equipos de guardia.');
   const fotOn=phxOn('otf');
   const sb=F.querySelector('button:not([type=button])');if(sb)sb.disabled=true;
   const num=old.num||(await takeNums('ot'))[0],nw=!old.num,parada=old.parada||(await takeNums('pa'))[0];
+  try{localStorage.setItem('otGuardia',(f.jefe||'').trim())}catch(_){}
   const ot={...old,num,date:f.date,turno:f.turno||'',parada,prov:(f.prov||'').trim(),proy:(f.proy||'').trim(),
     fp:f.fp||'',hp:f.hp===''?'':Number(f.hp),tipoPar:f.tipoPar||'',lugar:(f.lugar||'').trim().toUpperCase(),estEq:f.estEq||'',
     mot:fxVals(F,'mot'),motOtro:(f.motOtro||'').trim(),sint:(f.sint||'').trim(),repPor:(f.repPor||'').trim(),alarma:(f.alarma||'').trim(),sis:fxVals(F,'sis'),sisOtro:(f.sisOtro||'').trim(),comp:(f.comp||'').trim(),
     pers,persOtro:(f.persOtro||'').trim(),persOtroC:f.persOtroC===''?'':Number(f.persOtroC),apo:fxVals(F,'apo'),apoOtro:(f.apoOtro||'').trim(),
-    tareas,reps:rwGet('otrep'),recs:rwGet('otrec'),techUid:tu?tu.uid:(f.techName!=null?'':old.techUid||''),techName,jefe:(f.jefe||'').trim(),
+    tareas,reps:rwGet('otrep'),recs:rwGet('otrec'),techUid:tu?tu.uid:(f.techName!=null?'':old.techUid||''),techName,jefe:(f.jefe||'').trim(),techSig:(sigOfName(techName)||{}).sig||old.techSig||'',jefeSig:(sigOfName(f.jefe)||{}).sig||(nk(f.jefe)===nk(old.jefe)?old.jefeSig||'':''),
     by:old.by||me.name,byPos:old.byPos||me.position||'',bySig:old.by&&old.by!==me.name?(old.bySig||''):mySig(),byDate:old.byDate||f.date,
     conFotos:fotOn,fotos:fotOn?phxGet('otf'):[],
     // compatibilidad con vistas anteriores
@@ -628,7 +641,8 @@ function makePdfOt(id){
   K.pad(o.recs||[],4).forEach((r,i)=>K.row([val(i+1,.06,'center'),val(r?r.d:'',.74),val(r?(PR_L[r.p]||r.p):'',.2,'center')]));
   K.gap();K.sec('10. CONFORMIDAD',48);
   const done=bkClosed(b);
-  K.sigs([{h:'ELABORADO POR (PLANNER / SUPERVISOR)',name:o.by,date:o.byDate||o.date,sig:o.bySig},{h:'RESPONSABLE DE EJECUCIÓN',name:otTech(o),date:done?b.closeDate:'',sig:done?b.closeSignature:''},{h:'V°B° JEFE DE MANTENIMIENTO',name:o.jefe||(b.supName||''),date:b.supName?b.supDate:'',sig:b.supName&&(!o.jefe||o.jefe===b.supName)?b.supSignature:''}]);
+  const tSig=(done&&b.closeSignature)||o.techSig||(sigOfName(otTech(o))||{}).sig||'',jSig=o.jefeSig||(o.jefe?(sigOfName(o.jefe)||{}).sig:'')||(b.supName&&(!o.jefe||nk(o.jefe)===nk(b.supName))?b.supSignature:'');
+  K.sigs([{h:'ELABORADO POR (PLANNER / SUPERVISOR)',name:o.by,date:o.byDate||o.date,sig:o.bySig},{h:'RESPONSABLE DE EJECUCIÓN',name:otTech(o),date:done?b.closeDate:o.date,sig:tSig},{h:'V°B° SUPERVISOR / JEFE DE GUARDIA',name:o.jefe||(b.supName||''),date:o.jefe?o.date:(b.supName?b.supDate:''),sig:jSig}]);
   const fot=o.conFotos?(o.fotos||[]):[];
   if(fot.length){K.gap();K.sec('11. PANEL FOTOGRÁFICO',72);K.row([{v:'Fotos de la intervención indicando si es ANTES, DURANTE o DESPUÉS y lo que se observa.',w:1,al:'center',sz:6.5}]);K.photos(fot,true)}
   K.out(o.num+'_'+e.code+'.pdf','📄 Orden de trabajo lista',o.num+' - '+e.code);
