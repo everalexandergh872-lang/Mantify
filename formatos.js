@@ -101,7 +101,15 @@ function techList(){
 const otTech=o=>o?(o.techName||o.resp||''):'';
 const myOt=b=>!!(b&&b.ot&&b.ot.num&&me&&(b.ot.techUid?b.ot.techUid===me.uid:(!!otTech(b.ot)&&nk(otTech(b.ot))===nk(me.name))));
 const otCanClose=b=>!!b&&(isSup()||!b.ot||myOt(b)||(!b.ot.techUid&&!otTech(b.ot)));
-const misOts=()=>backlogs.filter(myOt);
+// también ve la OT quien figura como responsable de alguna de sus tareas (pero solo el técnico asignado la cierra)
+const myOtTask=b=>!!(b&&b.ot&&b.ot.num&&me&&(b.ot.tareas||[]).some(t=>t.r&&nk(t.r)===nk(me.name)));
+const misOts=()=>backlogs.filter(b=>myOt(b)||myOtTask(b));
+// actividades asignadas en la OT (las del usuario resaltadas)
+function otActs(o,max){
+  const T=(o.tareas||[]).filter(t=>t.d);if(!T.length)return '<p class="text-xs text-slate-500 mt-1">Sin actividades detalladas en la OT.</p>';
+  const L=max?T.slice(0,max):T,mine=t=>t.r&&me&&nk(t.r)===nk(me.name);
+  return `<div class="mt-2 bg-slate-900/50 border border-slate-700 rounded-lg p-2"><p class="text-[11px] text-slate-400 font-semibold mb-1">🛠️ Actividades asignadas (${T.length})</p><ol class="space-y-1" style="list-style:decimal;padding-left:1.1rem">${L.map(t=>`<li class="text-xs ${mine(t)?'text-amber-300':'text-slate-200'}">${esc(t.d)}${t.r||t.h?`<span class="text-slate-400"> · ${esc(t.r||'')}${t.r&&t.h?' · ':''}${t.h?esc(t.h)+' h':''}</span>`:''}${t.e?` <span class="chipm">${esc(t.e)}</span>`:''}</li>`).join('')}</ol>${max&&T.length>max?`<p class="text-[11px] text-slate-500 mt-1">… y ${T.length-max} más</p>`:''}</div>`;
+}
 const misOpen=()=>misOts().filter(bkOpen);
 function otNotify(){
   if(!me||me.uid==='local'||!loadedCols.has('backlogs'))return;
@@ -113,7 +121,7 @@ function otNotify(){
 function misCard(){
   const L=misOpen();if(!L.length)return '';
   return `<div class="dcard" style="border-color:rgba(245,158,11,.55)"><div class="flex justify-between items-center gap-2"><div><p class="font-semibold">📋 Mis órdenes de trabajo (${L.length})</p><p class="text-xs text-slate-400">OT asignadas a ti. Ciérralas con el reporte de mantenimiento.</p></div><button onclick="bkGo('mis')" class="btn bg-slate-700 !py-1">Ver todas</button></div>
-  ${L.slice(0,5).map(b=>{const e=eqOf(b.fleetId);return `<div class="flex justify-between items-center gap-2 text-sm border-t border-slate-700 mt-2" style="padding-top:.6rem"><div class="min-w-0"><b class="mono">${esc(b.ot.num)}</b> · <b class="text-amber-400">${esc(e.code)}</b> <span class="text-slate-300">${esc(b.component)}</span><p class="text-xs text-slate-400">${bkPrBadge(b.criticality)} Emitida ${fmtD(b.ot.date)}${b.ot.fp?' · parada '+esc(fxDT(b.ot.fp)):''}</p></div><div class="flex gap-1" style="flex-shrink:0"><button onclick="makePdfOt('${b.id}')" class="btn bg-slate-700 !py-1" title="OT en PDF">📄</button><button onclick="openClose('${b.id}')" class="btn bg-emerald-500/20 text-emerald-400 !py-1">📝 Reporte</button></div></div>`}).join('')}</div>`;
+  ${L.slice(0,5).map(b=>{const e=eqOf(b.fleetId);return `<div class="flex justify-between items-center gap-2 text-sm border-t border-slate-700 mt-2" style="padding-top:.6rem"><div class="min-w-0"><b class="mono">${esc(b.ot.num)}</b> · <b class="text-amber-400">${esc(e.code)}</b> <span class="text-slate-300">${esc(b.component)}</span><p class="text-xs text-slate-400">${bkPrBadge(b.criticality)} Emitida ${fmtD(b.ot.date)}${b.ot.fp?' · parada '+esc(fxDT(b.ot.fp)):''}</p>${otActs(b.ot,3)}</div><div class="flex gap-1" style="flex-shrink:0"><button onclick="makePdfOt('${b.id}')" class="btn bg-slate-700 !py-1" title="OT en PDF">📄</button>${otCanClose(b)?`<button onclick="openClose('${b.id}')" class="btn bg-emerald-500/20 text-emerald-400 !py-1">📝 Reporte</button>`:''}</div></div>`}).join('')}</div>`;
 }
 function misView(){
   const all=misOts().sort((a,b)=>bkOpen(b)-bkOpen(a)||String(b.ot.num).localeCompare(String(a.ot.num))),op=all.filter(bkOpen);
@@ -121,9 +129,9 @@ function misView(){
   ${all.length?`<div class="grid gap-3 md:grid-cols-2">${all.slice(0,60).map(b=>{const e=eqOf(b.fleetId),o=b.ot,rp=stById(b.repId);return `<div class="bkcard" style="border-left:4px solid ${bkOpen(b)?'#f59e0b':'#10b981'}" onclick="if(!event.target.closest('button'))bkDetail('${b.id}')">
     <div class="flex justify-between items-start gap-2"><div class="min-w-0"><span class="mono text-xs text-slate-400">${esc(o.num)} · ${esc(bkNo(b))}</span><p class="font-bold"><span class="text-amber-400">${esc(e.code)}</span> <span class="text-xs text-slate-400">${esc(e.category||'')}</span></p></div>${bkPrBadge(b.criticality)}</div>
     <p class="font-semibold mt-1">${esc(b.component)}</p><p class="text-xs text-slate-400 clamp2">${esc(o.sint||b.description)}</p>
-    <p class="text-xs text-slate-400 mt-1">Emitida ${fmtD(o.date)} por ${esc(o.by||'—')}${o.fp?' · parada '+esc(fxDT(o.fp)):''}</p>
+    <p class="text-xs text-slate-400 mt-1">Emitida ${fmtD(o.date)} por ${esc(o.by||'—')}${o.fp?' · parada '+esc(fxDT(o.fp)):''} · técnico: <b>${esc(otTech(o)||'—')}</b>${o.parada?' · '+esc(o.parada):''}</p>${otActs(o)}
     <div class="flex gap-1 flex-wrap items-center mt-2">${bkStBadge(b.status)}${rp?` <span class="chipm">${esc(rp.num||'Reporte')}</span>`:''}</div>
-    <div class="cact flex gap-1 justify-end mt-3 flex-wrap"><button onclick="makePdfOt('${b.id}')" class="btn bg-slate-700 !py-1">📄 OT</button>${rp?`<button onclick="makePdfRpt('${rp.id}')" class="btn bg-slate-700 !py-1">📄 Reporte</button>`:''}${bkOpen(b)?`<button onclick="openClose('${b.id}')" class="btn bg-emerald-500/20 text-emerald-400 !py-1">📝 Cerrar con reporte</button>`:''}</div></div>`}).join('')}</div>`
+    <div class="cact flex gap-1 justify-end mt-3 flex-wrap"><button onclick="makePdfOt('${b.id}')" class="btn bg-slate-700 !py-1">📄 OT</button>${rp?`<button onclick="makePdfRpt('${rp.id}')" class="btn bg-slate-700 !py-1">📄 Reporte</button>`:''}${bkOpen(b)&&otCanClose(b)?`<button onclick="openClose('${b.id}')" class="btn bg-emerald-500/20 text-emerald-400 !py-1">📝 Cerrar con reporte</button>`:''}</div></div>`}).join('')}</div>`
   :'<p class="text-sm text-slate-500">No tienes órdenes de trabajo asignadas. Cuando el planner o el supervisor te asigne una OT, aparecerá aquí.</p>'}`;
 }
 
