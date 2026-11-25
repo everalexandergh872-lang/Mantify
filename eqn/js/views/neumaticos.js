@@ -7,9 +7,11 @@
 
   V.render = root => {
     const App = EQ.App;
+    // El técnico solo trabaja en "Medición de remanentes"; el resto es para supervisor y planner.
+    const tabs = EQ.Bridge.isSup() ? TABS : TABS.filter(([k]) => k === 'diagrama');
     let tab = App.tab('neumaticos', 'diagrama');
-    if (!TABS.some(([k]) => k === tab)) tab = App.state.tab.neumaticos = 'diagrama'; // la "carga libre de remanentes" ya no existe
-    root.innerHTML = App.tabsHtml('neumaticos', TABS, tab) + '<div id="neuBody"></div>';
+    if (!tabs.some(([k]) => k === tab)) tab = App.state.tab.neumaticos = 'diagrama'; // también cubre la antigua "carga libre de remanentes"
+    root.innerHTML = App.tabsHtml('neumaticos', tabs, tab) + '<div id="neuBody"></div>';
     App.wireTabs(root, 'neumaticos');
     const body = root.querySelector('#neuBody');
     if (!C.equiposNeum().length && C.equiposActivos().length && !['inventario', 'costos'].includes(tab)) { body.innerHTML = `<div class="card">${U.emptyState('⊘', 'Ningún equipo está en la medición de neumáticos', 'Todos los equipos fueron quitados de la medición de neumáticos. Vuelva a incluirlos desde el Maestro de Equipos.', '<a class="btn btn-orange" href="#/equipos">Ir al Maestro de Equipos</a>')}</div>`; return; }
@@ -29,23 +31,26 @@
   }
   function renderDiagrama(root) {
     const App = EQ.App;
-    const nFuera = C.equiposActivos().filter(e => !C.neumAplica(e)).length;
+    const sup = EQ.Bridge.isSup();
+    const nFuera = sup ? C.equiposActivos().filter(e => !C.neumAplica(e)).length : 0;
     root.innerHTML = `<div class="selector-bar"><b>Equipo:</b> ${App.eqSelector(root, { modulo: 'neum' })}
-      <span class="legend-inline">${U.pill('verde', 'Normal')} ${U.pill('amarillo', 'Observación')} ${U.pill('rojo', 'Crítico')} ${U.pill('gris', 'Sin inspección')}</span><span class="spacer"></span>
+      <span class="legend-inline">${U.pill('verde', 'Normal')} ${U.pill('amarillo', 'Observación')} ${U.pill('rojo', 'Crítico')} ${U.pill('gris', 'Sin inspección')}</span> <span class="spacer"></span>${sup ? `
       <button class="btn btn-outline btn-sm" id="bLay">⚙ Configurar distribución</button>
       <button class="btn btn-sm" id="bIns">🔎 Inspeccionar equipo</button>
       <button class="btn btn-orange btn-sm" id="bNewN">+ Registrar neumático</button>
-      <button class="btn btn-outline btn-sm" id="bQuitN" title="El equipo deja de aparecer en la medición de neumáticos (diagrama, inspección, desgaste y alertas)">⊘ Quitar de la medición</button>
+      <button class="btn btn-outline btn-sm" id="bQuitN" title="El equipo deja de aparecer en la medición de neumáticos (diagrama, inspección, desgaste y alertas)">⊘ Quitar de la medición</button>` : ''}
       ${nFuera ? `<button class="btn btn-ghost btn-sm" id="bVerFuera">Sin medición (${nFuera})</button>` : ''}</div><div id="dgBody"></div>`;
     App.wireEqSelector(root);
     const eq = C.eq(App.state.eqId);
+    if (sup) {
     root.querySelector('#bLay').onclick = () => V.configLayout(eq);
     root.querySelector('#bIns').onclick = () => { App.state.tab.neumaticos = 'inspeccion'; App.refresh(); };
     root.querySelector('#bNewN').onclick = () => V.formNeum(null);
     root.querySelector('#bQuitN').onclick = () => EQ.Views.equipos.cambiarAlcance([eq], 'neum', false);
+    }
     const bvf = root.querySelector('#bVerFuera'); if (bvf) bvf.onclick = () => V.equiposSinMedicion();
     const b = root.querySelector('#dgBody');
-    if (eq.layoutNeum === null || eq.layoutNeum === undefined) { b.innerHTML = `<div class="card">${U.emptyState('⚙', 'Distribución de neumáticos no configurada', `Defina la cantidad de ejes y posiciones para <b>${U.esc(eq.codigo)}</b> (${U.esc(eq.familia || '')}). Cada equipo tiene su propia configuración.`, '<button class="btn btn-orange" id="bLay2">Configurar distribución</button>')}</div>`; b.querySelector('#bLay2').onclick = () => V.configLayout(eq); return; }
+    if (eq.layoutNeum === null || eq.layoutNeum === undefined) { b.innerHTML = `<div class="card">${U.emptyState('⚙', 'Distribución de neumáticos no configurada', `Defina la cantidad de ejes y posiciones para <b>${U.esc(eq.codigo)}</b> (${U.esc(eq.familia || '')}). Cada equipo tiene su propia configuración.`, sup ? '<button class="btn btn-orange" id="bLay2">Configurar distribución</button>' : '<span class="muted small">Pide al supervisor o al planner que configure la distribución de este equipo.</span>')}</div>`; if (sup) b.querySelector('#bLay2').onclick = () => V.configLayout(eq); return; }
     const pos = C.posiciones(eq.layoutNeum);
     if (!pos.length) { b.innerHTML = `<div class="card">${U.emptyState('🚜', 'Equipo sin neumáticos', 'La distribución configurada no tiene ejes (equipo sobre orugas). Puede cambiarla en "Configurar distribución".')}</div>`; return; }
     const ejes = eq.layoutNeum.ejes || [];
@@ -75,9 +80,10 @@
     const n = C.neumEnPos(eq.id, posCode);
     if (!n) {
       el.innerHTML = `<h3>Posición P${p.num} · ${U.esc(p.pos)}</h3><div class="muted mb">${U.esc(p.label)} — <b>posición vacía</b></div>
-        <div class="flex"><button class="btn btn-ok" id="pMed">✎ Medir y registrar neumático</button><button class="btn btn-orange" id="pInst">Instalar neumático</button><button class="btn btn-outline" id="pNew">Registrar nuevo e instalar</button></div>
-        <div class="small muted mt">Neumáticos disponibles en almacén: ${stockDisponible().length}</div>`;
+        <div class="flex"><button class="btn btn-ok" id="pMed">✎ Medir y registrar neumático</button>${EQ.Bridge.isSup() ? `<button class="btn btn-orange" id="pInst">Instalar neumático</button><button class="btn btn-outline" id="pNew">Registrar nuevo e instalar</button>` : ''}</div>
+        ${EQ.Bridge.isSup() ? `<div class="small muted mt">Neumáticos disponibles en almacén: ${stockDisponible().length}</div>` : ''}`;
       el.querySelector('#pMed').onclick = () => V.medirPos(eq, posCode);
+      if (!EQ.Bridge.isSup()) return;
       el.querySelector('#pInst').onclick = () => V.instalar(eq, posCode);
       el.querySelector('#pNew').onclick = () => V.formNeum(null, saved => V.instalar(eq, posCode, saved));
       return;
@@ -90,13 +96,14 @@
         .map(([k, v]) => `<div><div class="k">${k}</div><div class="v">${U.esc(v || '—')}</div></div>`).join('')}</div>
       ${a.patrones.length ? `<div class="warn-box mt">Desgaste / condición: <b>${U.esc(a.patrones.join(', '))}</b></div>` : ''}
       ${!a.suficiente ? `<div class="small muted mt">Proyección: ${U.esc(a.motivoInsuf)}</div>` : ''}
-      <div class="flex mt"><button class="btn btn-sm" data-a="ficha">Ficha e historial</button><button class="btn btn-sm btn-outline" data-a="mover">⇄ Rotar / cambiar posición</button><button class="btn btn-sm btn-outline" data-a="retirar">⤓ Retirar</button><button class="btn btn-sm btn-outline" data-a="estado">Cambiar estado</button><button class="btn btn-sm btn-outline" data-a="rep">Reparación</button><button class="btn btn-sm btn-orange" data-a="rem">✎ Medir remanente</button></div>`;
+      <div class="flex mt">${EQ.Bridge.isSup() ? '<button class="btn btn-sm" data-a="ficha">Ficha e historial</button><button class="btn btn-sm btn-outline" data-a="mover">⇄ Rotar / cambiar posición</button><button class="btn btn-sm btn-outline" data-a="retirar">⤓ Retirar</button><button class="btn btn-sm btn-outline" data-a="estado">Cambiar estado</button><button class="btn btn-sm btn-outline" data-a="rep">Reparación</button>' : ''}<button class="btn btn-sm btn-orange" data-a="rem">✎ Medir remanente</button></div>`;
+    el.querySelector('[data-a=rem]').onclick = () => V.medirPos(eq, posCode);
+    if (!EQ.Bridge.isSup()) return;
     el.querySelector('[data-a=ficha]').onclick = () => V.fichaNeum(n);
     el.querySelector('[data-a=mover]').onclick = () => V.mover(n);
     el.querySelector('[data-a=retirar]').onclick = () => V.retirar(n);
     el.querySelector('[data-a=estado]').onclick = () => V.cambiarEstado(n);
     el.querySelector('[data-a=rep]').onclick = () => V.reparar(n, 'Reparación');
-    el.querySelector('[data-a=rem]').onclick = () => V.medirPos(eq, posCode);
   }
 
   // ---------------- A. Configuración de distribución por equipo ----------------

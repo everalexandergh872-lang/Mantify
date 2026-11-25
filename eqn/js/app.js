@@ -73,7 +73,10 @@
       const d = e.target.closest('[data-eq],[data-ne]'); if (!d) return;
       sr.classList.add('hidden'); gs.value = '';
       if (d.dataset.eq) App.go('engrase', { eqId: d.dataset.eq });
-      else { const n = S.neumaticos.find(x => x.id === d.dataset.ne); EQ.Views.neumaticos.fichaNeum(n); }
+      else { const n = S.neumaticos.find(x => x.id === d.dataset.ne);
+        if (EQ.Bridge.isSup()) EQ.Views.neumaticos.fichaNeum(n);
+        else if (n && n.equipoId) { App.state.tab.neumaticos = 'diagrama'; App.go('neumaticos', { eqId: n.equipoId, selPos: n.posicion }); } // el técnico va a la medición
+        else U.toast('Ese neumático no está instalado en ningún equipo.', 'bad'); }
     });
     document.addEventListener('click', e => { if (!e.target.closest('.topbar-right')) sr.classList.add('hidden'); });
     window.__EQ_READY = true;
