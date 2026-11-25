@@ -91,6 +91,19 @@ function bkFiltered(){
     return !s||[b.id,b.num,e.code,e.brand,e.model,b.component,b.system,b.description,b.rqMain,b.ot&&b.ot.num,...(b.reqs||[]).map(r=>r.num)].some(v=>nk(v).includes(s))})
    .sort((a,b)=>(bkOpen(b)-bkOpen(a))||(b.observationDate||'').localeCompare(a.observationDate||'')||String(b.id).localeCompare(String(a.id)));
 }
+// Detecta la firma registrada del solicitante al escribir su nombre
+function bkSigName(name){
+  if(!$('sigc'))return;const h=()=>$('sig-hint'),hit=sigOfName(name);
+  if(hit){sigInit(hit.sig);const x=h();if(x){x.textContent='✔ Firma registrada de '+hit.name+' (detectada por el nombre). Para firmar de nuevo, toca el recuadro o usa Borrar.';x.className='text-[11px] text-emerald-400'}}
+  else{if(sig.dirty&&sig.drawn)return;sigInit('');const x=h();if(x){x.textContent=String(name||'').trim()?'No hay firma registrada para ese nombre: el solicitante debe firmar en el recuadro.':'Escribe el nombre del solicitante para cargar su firma.';x.className='text-[11px] text-amber-400'}}
+}
+function bkAprBanner(){
+  const k=isAdmin()?'PLANNER':(me&&me.role==='supervisor')?'SUPERVISOR':'';const L=k?backlogs.filter(b=>bkApr(b)===k):[];
+  const mine=backlogs.filter(b=>bkApr(b)==='OBSERVADO'&&me&&nk(b.detectedBy)===nk(me.name));
+  const row=b=>`<button type="button" onclick="bkDetail('${b.id}')" class="mvb"><b class="mono">${esc(bkNo(b))}</b> · ${esc(eqOf(b.fleetId).code)} · ${esc(b.component)}</button>`;
+  return (L.length?`<div class="dcard" style="border-color:${BK_APR[k].c}88"><p class="font-semibold">✍️ ${L.length} backlog(s) esperan tu V°B° ${k==='PLANNER'?'de planner':'de supervisor'}</p><div class="flex gap-1 flex-wrap mt-2">${L.slice(0,12).map(row).join('')}</div></div>`:'')
+   +(mine.length?`<div class="dcard" style="border-color:#ef444488"><p class="font-semibold">↩️ ${mine.length} backlog(s) tuyos fueron observados: corrígelos y guárdalos con tu firma</p><div class="flex gap-1 flex-wrap mt-2">${mine.slice(0,12).map(row).join('')}</div></div>`:'');
+}
 function renderBack(){
   const el=$('v-back');if(!el)return;
   const subBar=`<div class="subbar">${BK_SUBS.map(([k,l])=>`<button type="button" onclick="bkGo('${k}')" class="btn ${bkSub===k?'bg-amber-500 text-slate-950':'bg-slate-700'} !py-1" style="white-space:nowrap">${l}</button>`).join('')}</div>`;
@@ -109,7 +122,7 @@ function renderBack(){
     <select class="inp" onchange="bkSet('sy',this.value)">${o('','Sistema',bkF.sy)}${systems.map(k=>o(k,k,bkF.sy)).join('')}</select>
     <select class="inp" onchange="bkSet('fa',this.value)">${o('','Familia',bkF.fa)}${fams.map(k=>o(k,k,bkF.fa)).join('')}</select>
     <button type="button" onclick="bkSet('venc')" class="btn ${bkF.venc?'bg-red-500 text-white':'bg-slate-700'}">⏰ Vencidos</button></div>`;
-  el.innerHTML=subBar+head+filt+(bkSub==='board'?bkBoard(l):bkList(l));
+  el.innerHTML=subBar+head+bkAprBanner()+filt+(bkSub==='board'?bkBoard(l):bkList(l));
 }
 function renderBackKeep(){const a=document.activeElement,pos=a&&a.selectionStart;renderBack();const i=document.querySelector('.bkfilt input');if(i&&a&&a.tagName==='INPUT'){i.focus();try{i.setSelectionRange(pos,pos)}catch(_){}}}
 function bkActs(b){
@@ -121,11 +134,11 @@ function bkList(l){
   const reqTxt=b=>[b.rqMain&&chipMono(b.rqMain),...(b.reqs||[]).filter(r=>r.num&&r.num!==b.rqMain).slice(0,2).map(r=>chipMono(r.num)),b.ot&&b.ot.num?chipMono(b.ot.num,'#60a5fa'):(bkOpen(b)?'<span class="chipm" style="color:#fbbf24;border-color:#fbbf2466">Sin OT</span>':'')].filter(Boolean).join(' ');
   const venc=b=>bkVenc(b)?`<span class="lsub text-red-400">Vencido ${fmtD(bkLimit(b))}</span>`:b.rejectNote&&b.status==='EN_EJECUCION'?`<span class="lsub text-red-400">⚠️ Devuelto</span>`:'';
   const tbl=`<div class="lap-only"><div class="ltw"><table class="ltbl"><thead><tr><th>N° / Fecha</th><th>Equipo</th><th>Observación</th><th>Prioridad</th><th>Estado</th><th>N° Req. · OT</th><th>Días</th><th></th></tr></thead><tbody>${lim.map(b=>{const e=eqOf(b.fleetId),a=bkAge(b);
-    return `<tr class="clk" onclick="if(!event.target.closest('button'))bkDetail('${b.id}')"><td class="nw"><b class="text-amber-400 mono">${esc(bkNo(b))}</b><span class="lsub">${fmtD(b.observationDate)}</span></td><td class="nw"><b>${esc(e.code)}</b><span class="lsub">${esc(e.category||'')}</span></td><td style="max-width:28rem"><span class="lsub" style="color:#cbd5e1">${esc(b.system)} · <b>${esc(b.component)}</b></span><span class="lsub clamp2">${esc(b.description)}</span></td><td>${bkPrBadge(b.criticality)}</td><td class="nw">${bkStBadge(b.status)}${venc(b)}</td><td>${reqTxt(b)}</td><td class="num nw"><b class="${bkVenc(b)?'text-red-400':'text-slate-300'}">${a}</b></td><td><div class="lact">${bkActs(b)}</div></td></tr>`}).join('')}</tbody></table></div></div>`;
+    return `<tr class="clk" onclick="if(!event.target.closest('button'))bkDetail('${b.id}')"><td class="nw"><b class="text-amber-400 mono">${esc(bkNo(b))}</b><span class="lsub">${fmtD(b.observationDate)}</span></td><td class="nw"><b>${esc(e.code)}</b><span class="lsub">${esc(e.category||'')}</span></td><td style="max-width:28rem"><span class="lsub" style="color:#cbd5e1">${esc(b.system)} · <b>${esc(b.component)}</b></span><span class="lsub clamp2">${esc(b.description)}</span></td><td>${bkPrBadge(b.criticality)}</td><td class="nw">${bkStBadge(b.status)}${bkAprBadge(b)}${venc(b)}</td><td>${reqTxt(b)}</td><td class="num nw"><b class="${bkVenc(b)?'text-red-400':'text-slate-300'}">${a}</b></td><td><div class="lact">${bkActs(b)}</div></td></tr>`}).join('')}</tbody></table></div></div>`;
   const cards=`<div class="mob-only grid gap-3 md:grid-cols-2">${lim.map(b=>{const e=eqOf(b.fleetId);
     return `<div class="bkcard" onclick="if(!event.target.closest('button'))bkDetail('${b.id}')" style="border-left:4px solid ${BK_ST[b.status]?BK_ST[b.status].c:'#334155'}"><div class="flex justify-between items-start gap-2"><div class="min-w-0"><span class="mono text-xs text-slate-400">${esc(bkNo(b))} · ${fmtD(b.observationDate)}</span><p class="font-bold"><span class="text-amber-400">${esc(e.code)}</span> <span class="text-xs text-slate-400">${esc(e.category||'')}</span></p></div>${bkPrBadge(b.criticality)}</div>
       <p class="font-semibold mt-1">${esc(b.component)}</p><p class="text-xs text-slate-400">${esc(b.system)}</p><p class="text-xs text-slate-400 clamp2 mt-1">${esc(b.description)}</p>
-      <div class="flex gap-1 flex-wrap items-center mt-2">${bkStBadge(b.status)} ${reqTxt(b)} <span class="text-xs font-bold ${bkVenc(b)?'text-red-400':'text-slate-400'}" style="margin-left:auto">${bkAge(b)} d</span></div>${venc(b)}
+      <div class="flex gap-1 flex-wrap items-center mt-2">${bkStBadge(b.status)} ${bkAprBadge(b)} ${reqTxt(b)} <span class="text-xs font-bold ${bkVenc(b)?'text-red-400':'text-slate-400'}" style="margin-left:auto">${bkAge(b)} d</span></div>${venc(b)}
       <div class="cact flex gap-1 justify-end mt-3 flex-wrap">${bkActs(b)}</div></div>`}).join('')}</div>`;
   return tbl+cards+more;
 }
@@ -154,7 +167,8 @@ function openBack(id){
   show(`<div class="flex justify-between items-start"><div><h3 class="font-bold text-lg">${id?'Editar backlog '+esc(bkNo(b)||id):'Nuevo backlog'}</h3><p class="text-xs text-slate-400">Formato de backlog (F-MT-21) · el N° se asigna solo</p></div><button type="button" onclick="hide()" class="text-slate-400 text-xl">✕</button></div>
   <form onsubmit="saveBack(event,'${id||''}')" class="space-y-4 mt-3">
    ${fsec(1,'Datos del backlog',`<label class="block text-xs text-slate-400 font-semibold">Equipo *<select class="inp mt-1 font-normal" name="fleetId" required>${eqs.map(f=>`<option value="${f.id}" ${f.id===b.fleetId?'selected':''}>${esc(f.code)} · ${esc(f.category||'')} · ${esc(f.brand)} ${esc(f.model)}</option>`).join('')}</select></label>
-     <div class="g2">${field('observationDate','Fecha de detección *',b.observationDate||today(),`required max="${today()}" onchange="bkLimPrev()"`,'date')}<label class="block text-xs text-slate-400 font-semibold">Elaborado por (solicitante) *<input class="inp mt-1 font-normal" name="detectedBy" required maxlength="80" value="${esc(b.detectedBy||(id?'':me.name))}"></label></div>
+     <div class="g2">${field('observationDate','Fecha de detección *',b.observationDate||today(),`required max="${today()}" onchange="bkLimPrev()"`,'date')}<label class="block text-xs text-slate-400 font-semibold">Elaborado por (solicitante) *<input class="inp mt-1 font-normal" name="detectedBy" required maxlength="80" list="dl-solic" autocomplete="off" value="${esc(b.detectedBy||(id?'':me.name))}" oninput="clearTimeout(window._bks);window._bks=setTimeout(()=>bkSigName(this.value),350)"></label>${stList('dl-solic',techList().map(u=>u.name))}</div>
+     ${sigBox('Firma del solicitante (técnico)')}
      <div class="g2"><label class="block text-xs text-slate-400 font-semibold">Ubicación${lst('ubic',prev('ubic'),b.ubic??(id?'':e0.location||''),'Ej. Tajo, taller, chancadora')}</label><label class="block text-xs text-slate-400 font-semibold">Proyecto${lst('proyecto',prev('proyecto'),b.proyecto,'Ej. Canteras y rellenos Tía María')}</label></div>
      <div class="g2">${field('hoursAt','Horómetro / km',b.hoursAt??(id?'':e0.hours??''),'min="0" step="any" inputmode="decimal"','number')}<label class="block text-xs text-slate-400 font-semibold">Lugar de inspección${lst('lugarInsp',[...ST_LUG,...prev('lugarInsp')],b.lugarInsp,'Campo, taller…')}</label></div>
      <div class="g2"><div><p class="text-xs text-slate-400 font-semibold mb-1">Responsabilidad</p>${fxOpts('respons',['EMPRESA','PROVEEDOR'],b.respons==='PROVEEDOR'?'PROVEEDOR':'EMPRESA','radio')}</div><label class="block text-xs text-slate-400 font-semibold">Fuente${lst('source',BK_SRC,b.source,'Elige o escribe')}</label></div>`)}
@@ -179,6 +193,7 @@ function openBack(id){
    <p id="bk-err" class="text-xs text-red-400 hidden"></p>${btns('hide()',id?'Guardar cambios':'Registrar backlog')}</form>`,'48rem');
   rwInit('bkparts',b.parts||[],[{k:'np',ph:'N° parte',f:1},{k:'d',ph:'Descripción',f:3},{k:'cant',ph:'Cant.',f:.6,t:'number'},{k:'med',ph:'Medida',f:.8}],3);
   phxRender('bkf');bkReqRender();bkLimPrev();
+  const s0=b.elab&&b.elab.sig&&nk(b.elab.name)===nk(b.detectedBy)?b.elab.sig:'';if(s0)sigInit(s0);else bkSigName(b.detectedBy||(id?'':me.name));
   const s=document.querySelector('#modal select[name=fleetId]'),h=document.querySelector('#modal input[name=hoursAt]');if(s&&h&&!id)s.onchange=()=>{h.value=eqOf(s.value).hours??''};
 }
 // Abre "Nuevo backlog" con datos ya llenos (lo usan las alertas de Engrase y Neumáticos)
@@ -220,16 +235,18 @@ async function saveBack(ev,id){
     durH:f.durH===''?'':Number(f.durH),hh:f.hh===''?'':Number(f.hh),lugarEj:f.lugarEj||'Site',rrhh,eqSop:F.querySelectorAll('input[name=eqSop]:checked').length?[...F.querySelectorAll('input[name=eqSop]:checked')].map(x=>x.value):[],eqOtros:(f.eqOtros||'').trim(),
     parts:rwGet('bkparts'),rqMain:(f.rqMain||'').trim()||(reqs[0]||{}).num||'',scheduledDate:f.scheduledDate||'',cost:Number(f.cost||0),reqs,conFotos:fotOn,photosBefore:fotos,
     status:old.status&&!bkOpen(old)?old.status:(f.status||'REGISTRADO')};
-  if(!id||!n.elab)n.elab={name:n.detectedBy,date:n.observationDate,sig:n.detectedBy===me.name?mySig():''};
-  else n.elab={...n.elab,name:n.detectedBy,date:n.observationDate,sig:n.detectedBy===n.elab.name?n.elab.sig:(n.detectedBy===me.name?mySig():'')};
-  const ch=[];if(!id)ch.push('Backlog registrado por '+(n.detectedBy||me.name));else{if(old.status!==n.status)ch.push('Estado: '+(BK_ST[old.status]||{}).l+' → '+BK_ST[n.status].l);ch.push('Datos del backlog editados');}
+  const a0=bkApr(old),need=!id||a0==='OBSERVADO';
+  if(need&&!sig.drawn)return bad('Falta la firma del solicitante: escribe su nombre (si tiene firma registrada se carga sola) o firma en el recuadro.');
+  n.elab={...(old.elab||{}),name:n.detectedBy,date:n.observationDate,sig:sig.drawn?sigData():((old.elab&&nk(old.elab.name)===nk(n.detectedBy)&&old.elab.sig)||'')};
+  if(need){n.apr='PLANNER';n.vbPl=null;n.vbSup=null;n.aprObs=null}
+  const ch=[];if(!id)ch.push('Backlog registrado y firmado por '+(n.detectedBy||me.name)+' · enviado al V°B° del planner');else if(a0==='OBSERVADO')ch.push('Corregido y firmado por '+n.detectedBy+' · reenviado al V°B° del planner');else{if(old.status!==n.status)ch.push('Estado: '+(BK_ST[old.status]||{}).l+' → '+BK_ST[n.status].l);ch.push('Datos del backlog editados');}
   const nr=reqs.filter(r=>!(old.reqs||[]).some(o=>o.id===r.id));nr.forEach(r=>ch.push(`${RQ_T[r.type]} ${r.num} solicitado`));
   n.log=ch.reduce((lg,t)=>bkLog({log:lg},t),old.log||[]);
   if(docBig(n))return bad('El backlog tiene demasiadas fotos o muy pesadas. Quita alguna foto e intenta otra vez.');
   if(!numOf('bk',n.num)){const sb=F.querySelector('button:not([type=button])');if(sb)sb.disabled=true;n.num=(await takeNums('bk'))[0]}
   put('backlogs',n);
   const e=fleet.find(x=>x.id===n.fleetId);if(e&&n.hoursAt!==''&&n.hoursAt>(Number(e.hours)||0))put('fleet',{...e,hours:n.hoursAt});
-  if(id&&bkDetId===id)bkDetail(id);else{hide();toast(id?'✔ Backlog actualizado':'✔ Backlog '+n.num+' registrado')}
+  if(id&&bkDetId===id)bkDetail(id);else{hide();toast(id?'✔ Backlog actualizado':'✔ Backlog '+n.num+' registrado y enviado al planner para su V°B°')}
 }
 function delBack(id){if(!isAdmin())return;ask('¿Eliminar este backlog? Esta acción no se puede deshacer.',()=>{del('backlogs',id);bkDetId=null})}
 

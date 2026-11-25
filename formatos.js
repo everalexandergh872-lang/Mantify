@@ -77,10 +77,19 @@ function staffListen(){
 }
 function staffSync(){
   if(!db||!isAdmin()||!usersList.length)return;
-  const want=usersList.filter(u=>!u.pending&&u.uid).map(u=>({id:u.uid,uid:u.uid,name:u.name||'',position:u.position||'',role:u.role||'tecnico',active:u.active!==false}));
-  const same=(a,b)=>a&&b&&a.name===b.name&&a.position===b.position&&a.role===b.role&&a.active===b.active;
+  const want=usersList.filter(u=>!u.pending&&u.uid).map(u=>({id:u.uid,uid:u.uid,name:u.name||'',position:u.position||'',role:u.role||'tecnico',active:u.active!==false,sig:u.signature||''}));
+  const same=(a,b)=>a&&b&&a.name===b.name&&a.position===b.position&&a.role===b.role&&a.active===b.active&&(a.sig||'')===(b.sig||'');
   want.filter(w=>!same(w,staffList.find(x=>x.uid===w.uid))).forEach(w=>db.collection('staff').doc(w.uid).set(w).catch(()=>{}));
   staffList.filter(x=>!want.some(w=>w.uid===x.uid)).forEach(x=>db.collection('staff').doc(x.uid).delete().catch(()=>{}));
+}
+// Firma precargada por nombre: busca a la persona en el personal registrado (exacto o por palabras del nombre)
+function sigOfName(name){
+  const k=nk(name);if(!k)return null;
+  const L=(isAdmin()&&usersList.length?usersList.filter(u=>!u.pending).map(u=>({name:u.name,sig:u.signature||''})):staffList.map(u=>({name:u.name,sig:u.sig||''})));
+  if(me&&me.uid!=='local')L.push({name:me.name,sig:mySig()});
+  const P=L.filter(u=>u.name&&u.sig);let hit=P.find(u=>nk(u.name)===k);
+  if(!hit){const t=stNorm(name).split(' ').filter(x=>x.length>1);if(t.length>=2){const m=P.filter(u=>{const w=stNorm(u.name).split(' ');return t.every(x=>w.includes(x))});if(m.length===1)hit=m[0]}}
+  return hit||null;
 }
 function techList(){
   const L=(isAdmin()&&usersList.length?usersList.filter(u=>!u.pending).map(u=>({uid:u.uid,name:u.name,position:u.position,role:u.role,active:u.active!==false})):staffList).filter(u=>u.active&&u.name);
@@ -135,14 +144,37 @@ function rpCard(b){
 }
 function vbCard(b){
   const one=(t,v,k,can)=>`<div class="bg-slate-900/50 border border-slate-700 rounded-lg p-3"><p class="ilab">${t}</p>${v&&v.name?`<p class="text-sm"><b>${esc(v.name)}</b> · ${fmtD(v.date)}</p>${v.sig?`<img src="${esc(v.sig)}" alt="Firma" style="height:2.6rem" class="bg-white rounded mt-1">`:'<p class="text-xs text-slate-500">Sin firma</p>'}`:`<p class="text-sm text-slate-500">Pendiente</p>`}${can?`<button type="button" onclick="bkVb('${b.id}','${k}')" class="btn bg-slate-700 !py-1 mt-2">✍️ ${v&&v.name?'Volver a firmar':'Dar V°B°'}</button>`:''}</div>`;
-  const e=b.elab||{name:b.detectedBy,date:b.observationDate};
-  return `<div class="dcard"><p class="font-semibold">Aprobaciones del backlog</p><p class="text-xs text-slate-400 mb-2">Se imprimen en el PDF del backlog</p><div class="g3">${one('Elaborado por (solicitante)',e,'elab',false)}${one('V°B° Planner de mantenimiento',b.vbPl,'vbPl',isAdmin())}${one('V°B° Supervisor de mantenimiento',b.vbSup,'vbSup',me&&me.role==='supervisor'||isAdmin())}</div></div>`;
+  const e=b.elab||{name:b.detectedBy,date:b.observationDate},a=bkApr(b),st=BK_APR[a];
+  const canPl=isAdmin()&&a==='PLANNER',canSu=!!me&&me.role==='supervisor'&&a==='SUPERVISOR';
+  const dev=(canPl||canSu)?`<button type="button" onclick="bkObs('${b.id}')" class="btn bg-red-500/20 text-red-300 !py-1 mt-2">↩️ Observar / devolver</button>`:'';
+  const one2=(t,v,k,can,lbl)=>one(t,v,k,false).replace(/<\/div>$/,'')+(can?`<button type="button" onclick="bkVb('${b.id}','${k}')" class="btn bg-emerald-500 text-slate-950 !py-1 mt-2">✍️ ${lbl}</button>`:'')+(can?dev:'')+'</div>';
+  return `<div class="dcard" ${st?`style="border-color:${st.c}88"`:''}><div class="flex justify-between items-center gap-2 flex-wrap"><p class="font-semibold">Aprobaciones del backlog</p>${st?`<span class="bdg" style="color:${st.c};background:${st.c}1f;border-color:${st.c}66">${st.l}</span>`:''}</div>
+   ${a==='OBSERVADO'&&b.aprObs?`<p class="text-xs text-red-300 mt-1">↩️ Observado por ${esc(b.aprObs.by)} (${fmtD(b.aprObs.date)}): ${esc(b.aprObs.note)}. El solicitante debe corregirlo y guardarlo de nuevo con su firma.</p>`:''}
+   <p class="text-xs text-slate-400 mb-2">Flujo: técnico firma → V°B° planner → V°B° supervisor / jefe de área. Se imprimen en el PDF.</p>
+   <div class="g3">${one('Elaborado por (solicitante)',e,'elab',false)}${one2('V°B° Planner de mantenimiento',b.vbPl,'vbPl',canPl,'Dar V°B° y enviar al supervisor')}${one2('V°B° Supervisor / jefe de área',b.vbSup,'vbSup',canSu,'Dar V°B° (aprobar)')}</div></div>`;
 }
+const BK_APR={PLANNER:{l:'⏳ Por V°B° del planner',c:'#f59e0b'},SUPERVISOR:{l:'⏳ Por V°B° del supervisor',c:'#60a5fa'},APROBADO:{l:'✔ Aprobado',c:'#10b981'},OBSERVADO:{l:'↩️ Observado',c:'#ef4444'}};
+const bkApr=b=>b.apr||(b.vbSup&&b.vbSup.name?'APROBADO':'');
+const bkAprBadge=b=>{const s=BK_APR[bkApr(b)];return s&&bkApr(b)!=='APROBADO'?`<span class="bdg" style="color:${s.c};background:${s.c}1f;border-color:${s.c}66">${s.l}</span>`:''};
 function bkVb(id,k){
-  const b=backlogs.find(x=>x.id===id);if(!b)return;
+  const b=backlogs.find(x=>x.id===id);if(!b)return;const a=bkApr(b);
+  if(k==='vbPl'&&!(isAdmin()&&a==='PLANNER')){note('Este backlog no está pendiente del V°B° del planner.');return}
+  if(k==='vbSup'&&!(me&&me.role==='supervisor'&&a==='SUPERVISOR')){note(a==='PLANNER'?'Primero debe dar su V°B° el planner.':'Solo el supervisor o jefe de área da este V°B°.');return}
   if(!mySig()){ask('Para dar tu V°B° primero registra tu firma en tu perfil.',openMe,'✍️ Registrar firma','bg-amber-500 text-slate-950');return}
-  put('backlogs',{...b,[k]:{name:me.name,pos:me.position||'',date:today(),sig:mySig()},log:bkLog(b,(k==='vbPl'?'V°B° del planner':'V°B° del supervisor')+' · '+me.name)});
-  setTimeout(()=>bkDetail(id,true),60);
+  const pl=k==='vbPl';
+  put('backlogs',{...b,[k]:{name:me.name,pos:me.position||'',date:today(),sig:mySig()},apr:pl?'SUPERVISOR':'APROBADO',aprObs:null,log:bkLog(b,pl?'V°B° del planner · '+me.name+' · enviado al supervisor / jefe de área':'V°B° del supervisor · '+me.name+' · backlog aprobado')});
+  toast(pl?'✔ V°B° dado. Enviado al supervisor.':'✔ Backlog aprobado');setTimeout(()=>bkDetail(id,true),60);
+}
+function bkObs(id){
+  const b=backlogs.find(x=>x.id===id);if(!b)return;
+  show(`<h3 class="font-bold mb-2">↩️ Observar / devolver ${esc(bkNo(b))}</h3><p class="text-xs text-slate-400 mb-2">Vuelve al solicitante (${esc(b.detectedBy||'')}) para que lo corrija y lo firme de nuevo.</p>
+   <textarea id="bk-obs" rows="3" maxlength="1000" class="inp" placeholder="¿Qué debe corregir?"></textarea><p id="bk-obs-e" class="text-xs text-red-400 hidden">Escribe la observación.</p>
+   <div class="flex justify-end gap-2 mt-3"><button type="button" onclick="bkDetail('${id}')" class="btn bg-slate-700">Cancelar</button><button type="button" onclick="bkObsGo('${id}')" class="btn bg-red-500 text-white">Devolver</button></div>`,'30rem');
+}
+function bkObsGo(id){
+  const b=backlogs.find(x=>x.id===id),t=($('bk-obs').value||'').trim();if(!b)return;if(!t){$('bk-obs-e').classList.remove('hidden');return}
+  put('backlogs',{...b,apr:'OBSERVADO',vbPl:null,vbSup:null,aprObs:{by:me.name,date:today(),note:t},log:bkLog(b,'Observado por '+me.name+': '+t)});
+  toast('↩️ Backlog devuelto al solicitante');setTimeout(()=>bkDetail(id),60);
 }
 
 /* ---------- Orden de trabajo (F-MT-24): aperturar / editar y asignar ---------- */
@@ -422,7 +454,7 @@ function bkFromPend(s,e,p,id){
     description:d+'\n\n(Origen: reporte de mantenimiento '+s.num+(s.otNum?' · '+s.otNum:'')+' del '+fmtD(day)+' · '+s.resp+')',sintoma:'',causa:'',actividad:'',obsRec:'',
     parts:p.r?[{np:'',d:p.r,cant:'',med:''}]:[],observationDate:day,scheduledDate:'',cost:0,status:'REGISTRADO',detectedBy:s.resp,source:'Reporte de mantenimiento '+s.num,
     workType:p.r?BK_TYPE[3]:BK_TYPE[0],hoursAt:s.hs,ubic:'',proyecto:s.frente||'',lugarInsp:s.lugar||'',respons:'EMPRESA',rrhh:{},eqSop:[],conFotos:false,
-    elab:{name:s.resp,date:day,sig:(s.ejec||{}).sig||''},log:[{t:'Backlog creado desde el reporte '+s.num,ts:Date.now(),by:me?me.name:''}],photosBefore:[],photosAfter:[],closeDate:'',closeTech:'',closeNotes:'',origin:'reporte',stopId:s.id};
+    elab:{name:s.resp,date:day,sig:(s.ejec||{}).sig||''},apr:'PLANNER',log:[{t:'Backlog creado desde el reporte '+s.num+' · enviado al V°B° del planner',ts:Date.now(),by:me?me.name:''}],photosBefore:[],photosAfter:[],closeDate:'',closeTech:'',closeNotes:'',origin:'reporte',stopId:s.id};
 }
 function openStopView(id){
   const s=sps.find(x=>x.id===id);if(!s)return;const w=stWarn(s),row=(l,v)=>`<div class="flex justify-between gap-3 text-sm border-t border-slate-700" style="padding:.4rem 0"><span class="text-slate-400">${l}</span><span class="text-slate-200" style="text-align:right;white-space:pre-line">${esc(v===''||v==null?'–':v)}</span></div>`;
