@@ -8,13 +8,17 @@
   V.render = root => {
     const App = EQ.App;
     if (!C.equiposActivos().length) { root.innerHTML = `<div class="card">${U.emptyState('⛽', 'No hay equipos cargados', 'Los equipos se toman de <b>Mantify → Equipos</b>. Registre allí la flota y aparecerá aquí sola.', '<a class="btn btn-orange" href="#" data-mfleet>Ir a Equipos de Mantify</a>')}</div>`; return; }
-    let tab = App.tab('engrase', 'programa');
+    // El técnico solo trabaja en "Control diario"; el resto de vistas es para supervisor y planner.
+    const tec = !EQ.Bridge.isSup();
+    const tabs = tec ? TABS.filter(([k]) => k === 'control') : TABS;
+    let tab = App.tab('engrase', tec ? 'control' : 'programa');
     if (tab === 'registro') tab = 'control';
-    root.innerHTML = App.tabsHtml('engrase', TABS, tab) + '<div id="engBody"></div>';
+    if (!tabs.some(([k]) => k === tab)) { tab = 'control'; App.state.tab.engrase = tab; }
+    root.innerHTML = App.tabsHtml('engrase', tabs, tab) + '<div id="engBody"></div>';
     App.wireTabs(root, 'engrase');
     const body = root.querySelector('#engBody');
     const P = EQ.EngProg;
-    if (!C.equiposEngrase().length && !['plan', 'consumo', 'registros'].includes(tab)) { body.innerHTML = `<div class="card">${U.emptyState('⊘', 'Ningún equipo está en el plan de engrase', 'Todos los equipos activos fueron quitados del plan de engrase. Vuelva a incluir los que correspondan.', '<button class="btn btn-orange" id="goPlan">Ir a "Equipos del plan"</button>')}</div>`; body.querySelector('#goPlan').onclick = () => App.setTab('engrase', 'plan'); return; }
+    if (!C.equiposEngrase().length && !['plan', 'consumo', 'registros'].includes(tab)) { body.innerHTML = `<div class="card">${U.emptyState('⊘', 'Ningún equipo está en el plan de engrase', 'Todos los equipos activos fueron quitados del plan de engrase. Vuelva a incluir los que correspondan.', tec ? '<span class="muted small">Pide al supervisor o al planner que incluya los equipos en el plan.</span>' : '<button class="btn btn-orange" id="goPlan">Ir a "Equipos del plan"</button>')}</div>`; if (!tec) body.querySelector('#goPlan').onclick = () => App.setTab('engrase', 'plan'); return; }
     ({ programa: P.programa, control: P.control, cumplimiento: P.cumplimiento, prioridad: P.prioridad, plan: renderPlan, ficha: renderFicha, flota: renderFlota, consumo: renderConsumo, registros: renderRegistros })[tab](body);
   };
 

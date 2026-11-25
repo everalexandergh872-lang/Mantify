@@ -4,6 +4,10 @@
   const U = EQ.U, S = EQ.S, C = EQ.C;
   const P = {};
   const DOW = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
+  // Técnico: solo registra su propio trabajo (sin costos, sin importar Excel, sin editar registros ajenos)
+  const esTec = () => !EQ.Bridge.isSup();
+  const miNombre = () => (EQ.Bridge.me() || {}).name || '';
+  const puedeEditar = d => !esTec() || (!!miNombre() && d.tecnico === miNombre());
   const st = () => { const d = { mes: C.mesDe(U.today()), modo: 'registrar', aLaFecha: true, ctrlMes: C.mesDe(U.today()), ctrlEq: '', diaRapido: U.today() }; EQ.App.state.prog2 = Object.assign(d, EQ.App.state.prog2 || {}); return EQ.App.state.prog2; };
   const tiposCod = () => C.tiposEng().map(t => t.codigo);
   const nombreMes = mes => { const n = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SETIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE']; return n[+mes.slice(5) - 1] + ' ' + mes.slice(0, 4); };
@@ -191,6 +195,9 @@
   // ===================== REGISTRO (CONTROL DIARIO) =====================
   // Registro por punto de engrase (marcando cada punto y sus gramos) y/o por cantidad total (N° de puntos y kg)
   const costoHtml = (np, kg, grasa) => {
+    if (esTec()) return `<div class="kpis" style="margin:0">
+      <div class="kpi orange"><div class="lbl">Puntos engrasados</div><div class="val">${U.num(np)}</div></div>
+      <div class="kpi orange"><div class="lbl">Grasa usada</div><div class="val">${U.num(kg, 3)} kg</div></div></div>`;
     const pk = C.precioGrasa(grasa), pp = C.precioPunto(grasa);
     return `<div class="kpis" style="margin:0">
       <div class="kpi orange"><div class="lbl">Puntos engrasados</div><div class="val">${U.num(np)}</div></div>
@@ -215,7 +222,7 @@
       ${U.field('fecha', 'Fecha real', { type: 'date', value: fecha, req: true, attrs: `max="${U.today()}"` })}
       ${U.field('tipo', 'Tipo de engrase', { type: 'select', options: C.tiposEng().map(t => ({ v: t.codigo, t: `${t.codigo} – ${t.nombre}` })), value: tipo || 'EG', req: true, empty: undefined })}
       ${U.field('horometro', 'Horómetro / Km', { type: 'number', attrs: 'min="0"', hint: 'Opcional, recomendado' })}
-      ${U.field('tecnico', 'Técnico', { type: 'datalist', options: tecs, value: tecs.length === 1 ? tecs[0] : '', hint: 'Si escribe un nombre nuevo se agrega a los técnicos del área' })}
+      ${esTec() ? U.field('tecnico', 'Técnico', { value: miNombre(), attrs: 'readonly' }) : U.field('tecnico', 'Técnico', { type: 'datalist', options: tecs, value: tecs.length === 1 ? tecs[0] : '', hint: 'Si escribe un nombre nuevo se agrega a los técnicos del área' })}
       ${U.field('tipoGrasa', 'Grasa usada', { type: 'select', options: cfg.tiposGrasa.map(g => g.nombre), value: eq ? C.grasaEq(eq) : '', req: true, empty: undefined })}
       <div class="fld"><label>Fotografía de evidencia</label><input type="file" accept="image/*" id="dFoto"></div>
       ${U.field('observaciones', 'Observaciones', { type: 'textarea' })}
@@ -286,17 +293,19 @@
   };
 
   P.editarDiario = d => {
+    if (!puedeEditar(d)) { U.toast('Solo puedes editar tus propios registros. Pide la corrección al supervisor o al planner.', 'bad'); return; }
+    const tec = esTec();
     const cfg = C.cfg(), eq = C.eq(d.equipoId);
     U.modal({ title: `Editar engrase · ${eq ? eq.codigo : ''} · ${U.fdate(d.fecha)}`, size: 'lg', body: `<form class="form-grid" id="fEd">
       ${U.field('fecha', 'Fecha real', { type: 'date', value: d.fecha, req: true, attrs: `max="${U.today()}"` })}
       ${U.field('tipo', 'Tipo de engrase asignado', { type: 'select', options: C.tiposEng().map(t => ({ v: t.codigo, t: `${t.codigo} – ${t.nombre}` })), value: d.tipo, req: true, empty: undefined })}
       ${U.field('horometro', 'Horómetro / Km', { type: 'number', value: d.horometro, attrs: 'min="0"' })}
-      ${U.field('tecnico', 'Técnico', { type: 'datalist', options: C.tecnicos('Engrase'), value: d.tecnico })}
+      ${tec ? U.field('tecnico', 'Técnico', { value: d.tecnico, attrs: 'readonly' }) : U.field('tecnico', 'Técnico', { type: 'datalist', options: C.tecnicos('Engrase'), value: d.tecnico })}
       ${U.field('tipoGrasa', 'Grasa usada', { type: 'select', options: cfg.tiposGrasa.map(g => g.nombre), value: C.costoDiario(d).grasa, empty: undefined })}
       ${U.field('puntos', 'Cantidad de puntos engrasados', { type: 'number', value: d.puntos, attrs: 'min="0" step="1"' })}
       ${U.field('kg', 'Grasa usada (kg)', { type: 'number', value: +((Number(d.gramos) || 0) / 1000).toFixed(3), attrs: 'min="0" step="0.001"' })}
-      ${U.field('tc', `Tipo de cambio del registro (${C.monBase()} por ${C.monUSD()})`, { type: 'number', value: C.costoDiario(d).tc, attrs: 'min="0" step="0.001"' })}
-      <div class="fld"><label class="flex"><input type="checkbox" name="actualizarPrecio"> Recalcular con los precios y T.C. vigentes</label><span class="hint">Guardados: ${U.money(C.costoDiario(d).precioKg)}/kg · ${U.money(C.costoDiario(d).precioPunto)}/punto</span></div>
+      ${tec ? '' : `${U.field('tc', `Tipo de cambio del registro (${C.monBase()} por ${C.monUSD()})`, { type: 'number', value: C.costoDiario(d).tc, attrs: 'min="0" step="0.001"' })}
+      <div class="fld"><label class="flex"><input type="checkbox" name="actualizarPrecio"> Recalcular con los precios y T.C. vigentes</label><span class="hint">Guardados: ${U.money(C.costoDiario(d).precioKg)}/kg · ${U.money(C.costoDiario(d).precioPunto)}/punto</span></div>`}
       ${U.field('observaciones', 'Observaciones', { type: 'textarea', value: d.observaciones, cls: 'full' })}
       ${U.field('motivo', 'Motivo de la modificación', { req: true, cls: 'full', hint: 'Queda en la auditoría' })}</form><div id="eCost" class="mt"></div>`,
       onOpen: m => { const f = m.querySelector('#fEd'); const c = () => { const x = U.formData(f); m.querySelector('#eCost').innerHTML = costoHtml(x.puntos || 0, x.kg || 0, x.tipoGrasa); }; f.addEventListener('input', c); f.addEventListener('change', c); c(); },
@@ -304,7 +313,7 @@
         const f = m.querySelector('#fEd'); const x = U.formData(f);
         U.requireFields(f, x, ['fecha', 'tipo', 'motivo']);
         const precioCambia = x.actualizarPrecio || x.tipoGrasa !== C.costoDiario(d).grasa;
-        await C.actualizarDiario(d, { fecha: x.fecha, tipo: x.tipo, horometro: x.horometro, tecnico: x.tecnico, tipoGrasa: x.tipoGrasa, puntos: x.puntos === null ? 0 : Math.round(x.puntos), kg: x.kg === null ? 0 : x.kg, observaciones: x.observaciones, actualizarPrecio: precioCambia, tc: x.actualizarPrecio ? null : x.tc }, x.motivo);
+        await C.actualizarDiario(d, { fecha: x.fecha, tipo: x.tipo, horometro: x.horometro, tecnico: x.tecnico, tipoGrasa: x.tipoGrasa, puntos: x.puntos === null ? 0 : Math.round(x.puntos), kg: x.kg === null ? 0 : x.kg, observaciones: x.observaciones, actualizarPrecio: precioCambia, tc: tec || x.actualizarPrecio ? null : x.tc }, x.motivo);
         U.toast('Registro actualizado', 'ok'); EQ.App.refresh();
       } }] });
   };
@@ -312,15 +321,16 @@
   P.verDiario = d => {
     const eq = C.eq(d.equipoId), c = C.costoDiario(d);
     U.modal({ title: `Engrase ${d.tipo} · ${eq ? eq.codigo : ''} · ${U.fdate(d.fecha)}`, body: `<div class="ficha">
-      ${[['Tipo', C.tipoEng(d.tipo).nombre], ['Fecha', U.fdate(d.fecha)], ['Horómetro', U.num(d.horometro, 1)], ['Técnico', d.tecnico], ['Puntos engrasados', U.num(c.puntos)], ['Grasa usada', U.num(c.kg, 3) + ' kg'], ['Tipo de grasa', c.grasa], ['Costo por puntos', `${U.money(c.costoPuntos)} (${U.money(c.precioPunto)}/punto)`], ['Costo por kg', `${U.money(c.costoKg)} (${U.money(c.precioKg)}/kg)`], [`Costo por puntos (${C.monUSD()})`, `${U.usd(c.costoPuntosUSD)} (${U.usd(c.precioPuntoUSD)}/punto)`], [`Costo por kg (${C.monUSD()})`, `${U.usd(c.costoKgUSD)} (${U.usd(c.precioKgUSD)}/kg)`], ['Tipo de cambio', U.num(c.tc, 3)], ['Observaciones', d.observaciones]].map(([k, v]) => `<div><div class="k">${k}</div><div class="v">${U.esc(v === null || v === undefined || v === '' ? '—' : v)}</div></div>`).join('')}</div>
+      ${[['Tipo', C.tipoEng(d.tipo).nombre], ['Fecha', U.fdate(d.fecha)], ['Horómetro', U.num(d.horometro, 1)], ['Técnico', d.tecnico], ['Puntos engrasados', U.num(c.puntos)], ['Grasa usada', U.num(c.kg, 3) + ' kg'], ['Tipo de grasa', c.grasa], ['Costo por puntos', `${U.money(c.costoPuntos)} (${U.money(c.precioPunto)}/punto)`], ['Costo por kg', `${U.money(c.costoKg)} (${U.money(c.precioKg)}/kg)`], [`Costo por puntos (${C.monUSD()})`, `${U.usd(c.costoPuntosUSD)} (${U.usd(c.precioPuntoUSD)}/punto)`], [`Costo por kg (${C.monUSD()})`, `${U.usd(c.costoKgUSD)} (${U.usd(c.precioKgUSD)}/kg)`], ['Tipo de cambio', U.num(c.tc, 3)], ['Observaciones', d.observaciones]].filter(([k]) => !esTec() || !/^(Costo|Tipo de cambio)/.test(k)).map(([k, v]) => `<div><div class="k">${k}</div><div class="v">${U.esc(v === null || v === undefined || v === '' ? '—' : v)}</div></div>`).join('')}</div>
       ${(() => { const rs = S.engrases.filter(r => r.intervencionId === d.id && r.puntoId); return rs.length ? `<div class="section-title">Puntos engrasados (${rs.length})</div><div class="small">${rs.map(r => `${U.esc(r.codigoPunto)} <span class="muted">${U.num(r.gramos, 0)} g</span>`).join(' · ')}</div>` : ''; })()}
       ${d.foto ? `<img src="${d.foto}" style="max-width:100%;margin-top:10px;border-radius:6px">` : ''}`,
-      buttons: [{ label: 'Eliminar registro', cls: 'btn-bad', onClick: async () => { const mot = await U.prompt('Motivo de la eliminación (queda en auditoría):', '', 'Eliminar engrase'); if (!mot) return false; await C.eliminarDiario(d, mot); U.toast('Registro eliminado', 'ok'); EQ.App.refresh(); } }, { label: '✎ Editar', cls: 'btn-orange', onClick: () => { setTimeout(() => P.editarDiario(d), 30); } }, { label: 'Cerrar', cls: 'btn-outline' }] });
+      buttons: [esTec() ? null : { label: 'Eliminar registro', cls: 'btn-bad', onClick: async () => { const mot = await U.prompt('Motivo de la eliminación (queda en auditoría):', '', 'Eliminar engrase'); if (!mot) return false; await C.eliminarDiario(d, mot); U.toast('Registro eliminado', 'ok'); EQ.App.refresh(); } }, puedeEditar(d) ? { label: '✎ Editar', cls: 'btn-orange', onClick: () => { setTimeout(() => P.editarDiario(d), 30); } } : null, { label: 'Cerrar', cls: 'btn-outline' }].filter(Boolean) });
   };
 
   // ===================== CONTROL DIARIO =====================
   P.control = root => {
-    const s = st(), cfg = C.cfg();
+    const s = st(), cfg = C.cfg(), tec = esTec();
+    if (tec) s.tecRapido = miNombre();
     const prog = C.programaMes(C.mesDe(s.diaRapido));
     const defPts = (eq, t) => { const n = C.puntosDeTipo(eq, t || 'EG').length; return n || ''; };
     const defKg = (eq, t) => { const g = C.puntosDeTipo(eq, t || 'EG').reduce((a, p) => a + (Number(p.gramos) || 0), 0); return g ? +(g / 1000).toFixed(3) : ''; };
@@ -328,7 +338,7 @@
     const rows = S.engrasesDiarios.filter(d => (!s.ctrlMes || C.mesDe(d.fecha) === s.ctrlMes) && (!s.ctrlEq || d.equipoId === s.ctrlEq)).sort((a, b) => a.fecha < b.fecha ? 1 : a.fecha > b.fecha ? -1 : 0);
     root.innerHTML = `
       <div class="card mb"><h3>Registro rápido del día <span class="right"><button class="btn btn-sm btn-ok" id="cdNew">+ Registrar engrase individual</button></span></h3>
-        <div class="flex mb"><b>Fecha:</b><input type="date" id="cdDia" value="${s.diaRapido}" max="${U.today()}"><b>Técnico:</b><input id="cdTec" list="cdTecL" style="width:180px" value="${U.esc(s.tecRapido || '')}"><datalist id="cdTecL">${C.tecnicos('Engrase').map(t => `<option value="${U.esc(t)}">`).join('')}</datalist>
+        <div class="flex mb"><b>Fecha:</b><input type="date" id="cdDia" value="${s.diaRapido}" max="${U.today()}"><b>Técnico:</b><input id="cdTec" list="cdTecL" style="width:180px" value="${U.esc(s.tecRapido || '')}" ${tec ? 'readonly title="Se registra a tu nombre"' : ''}><datalist id="cdTecL">${C.tecnicos('Engrase').map(t => `<option value="${U.esc(t)}">`).join('')}</datalist>
         <span class="muted small">Equipos programados para el día y aún no registrados (${pend.length}).</span></div>
         ${pend.length ? `<div class="tbl-wrap"><table class="tbl" id="cdTbl"><thead><tr><th class="nosort">✓</th><th class="nosort">COD</th><th class="nosort">Equipo</th><th class="nosort">Programado</th><th class="nosort">Tipo ejecutado</th><th class="nosort">Horómetro / Km</th><th class="nosort num">Puntos engrasados</th><th class="nosort num">Grasa (kg)</th><th class="nosort">Grasa</th><th class="nosort">Observación</th></tr></thead><tbody>
           ${pend.map(f => `<tr data-eq="${f.eq.id}"><td><input type="checkbox" class="ck" checked></td><td><b>${U.esc(f.eq.codigo)}</b></td><td>${U.esc(f.eq.descripcion || '')} <span class="small muted">${U.esc(f.eq.placa || '')}</span></td><td>${U.pill('info', f.dias[s.diaRapido])}</td>
@@ -337,7 +347,7 @@
             <td><select class="gs">${U.opts(cfg.tiposGrasa.map(g => g.nombre), C.grasaEq(f.eq))}</select></td><td><input class="ob" style="width:180px"></td></tr>`).join('')}
           </tbody></table></div><div class="flex mt"><span class="spacer"></span><button class="btn btn-ok" id="cdSave">✓ Registrar seleccionados</button></div>` : '<div class="muted">No hay engrases programados pendientes para esta fecha.</div>'}
       </div>
-      <div class="selector-bar"><b>CONTROL DIARIO DE ENGRASE</b><input type="month" id="cdMes" value="${s.ctrlMes}"><select id="cdEq">${U.opts(C.equiposEngrase().map(e => ({ v: e.id, t: C.eqLabel(e) })), s.ctrlEq, 'Todos los equipos')}</select><span class="spacer"></span><button class="btn btn-sm btn-orange" id="cdImp">⭱ Importar Excel</button></div>
+      <div class="selector-bar"><b>CONTROL DIARIO DE ENGRASE</b><input type="month" id="cdMes" value="${s.ctrlMes}"><select id="cdEq">${U.opts(C.equiposEngrase().map(e => ({ v: e.id, t: C.eqLabel(e) })), s.ctrlEq, 'Todos los equipos')}</select><span class="spacer"></span>${tec ? '' : '<button class="btn btn-sm btn-orange" id="cdImp">⭱ Importar Excel</button>'}</div>
       <div class="card"><div id="cdList"></div></div>`;
     root.querySelector('#cdDia').onchange = e => { if (e.target.value) { s.diaRapido = e.target.value > U.today() ? U.today() : e.target.value; EQ.App.refresh(); } };
     const cdT = root.querySelector('#cdTbl');
@@ -346,7 +356,7 @@
     root.querySelector('#cdMes').onchange = e => { s.ctrlMes = e.target.value; EQ.App.refresh(); };
     root.querySelector('#cdEq').onchange = e => { s.ctrlEq = e.target.value; EQ.App.refresh(); };
     root.querySelector('#cdNew').onclick = () => P.registrarDialog(s.ctrlEq ? C.eq(s.ctrlEq) : null, s.diaRapido);
-    root.querySelector('#cdImp').onclick = () => EQ.XL.importarDialog();
+    if (!tec) root.querySelector('#cdImp').onclick = () => EQ.XL.importarDialog();
     const sv = root.querySelector('#cdSave');
     if (sv) sv.onclick = async () => {
       sv.disabled = true;
@@ -376,7 +386,7 @@
       { k: 'cpu', t: `Costo puntos ${C.monUSD()}`, num: true, sort: r => C.costoDiario(r).costoPuntosUSD, fmt: (v, r) => U.usd(C.costoDiario(r).costoPuntosUSD), text: r => +C.costoDiario(r).costoPuntosUSD.toFixed(2) },
       { k: 'cku', t: `Costo kg ${C.monUSD()}`, num: true, sort: r => C.costoDiario(r).costoKgUSD, fmt: (v, r) => U.usd(C.costoDiario(r).costoKgUSD), text: r => +C.costoDiario(r).costoKgUSD.toFixed(2) },
       { k: 'observaciones', t: 'Observaciones' },
-      { k: 'acc', t: '', nosort: true, noexport: true, fmt: (v, r) => `<div class="flex" style="flex-wrap:nowrap">${r.foto ? '📷 ' : ''}<button class="btn btn-ghost btn-sm" data-v="${r.id}" title="Ver">👁</button><button class="btn btn-ghost btn-sm" data-ed="${r.id}" title="Editar">✎</button></div>` }] });
+      { k: 'acc', t: '', nosort: true, noexport: true, fmt: (v, r) => `<div class="flex" style="flex-wrap:nowrap">${r.foto ? '📷 ' : ''}<button class="btn btn-ghost btn-sm" data-v="${r.id}" title="Ver">👁</button>${puedeEditar(r) ? `<button class="btn btn-ghost btn-sm" data-ed="${r.id}" title="Editar">✎</button>` : ''}</div>` }].filter(c => !tec || !['cp', 'ck', 'cpu', 'cku'].includes(c.k)) });
     root.querySelector('#cdList').addEventListener('click', e => { const b = e.target.closest('[data-v]'); if (b) P.verDiario(S.engrasesDiarios.find(x => x.id === b.dataset.v)); const ed = e.target.closest('[data-ed]'); if (ed) P.editarDiario(S.engrasesDiarios.find(x => x.id === ed.dataset.ed)); });
   };
 
