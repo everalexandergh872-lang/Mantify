@@ -361,9 +361,10 @@ const sigBox=(l,opt)=>`<div class="border border-slate-700 bg-slate-900/50 p-3 r
 function sigFit(x,c,img){const k=Math.min(c.width/img.width,c.height/img.height),w=img.width*k,h=img.height*k;x.drawImage(img,(c.width-w)/2,(c.height-h)/2,w,h)}
 function sigInit(existing){
   const c=$('sigc');if(!c)return;
-  c.width=c.clientWidth||320;c.height=c.clientHeight||140;
-  const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);
-  x.strokeStyle='#0f172a';x.lineWidth=2.5;x.lineCap='round';x.lineJoin='round';
+  const R=3; // resolución interna x3: trazos y fotos de firma nítidos
+  c.width=(c.clientWidth||320)*R;c.height=(c.clientHeight||140)*R;
+  const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.imageSmoothingQuality='high';
+  x.strokeStyle='#0f172a';x.lineWidth=2.5*R;x.lineCap='round';x.lineJoin='round';
   sig={c,x,drawn:false,down:false,dirty:false,src:existing||''};
   if(existing){sig.drawn=true;const i=new Image();i.onload=()=>{if(sig.c===c&&!sig.dirty)sigFit(x,c,i)};i.src=existing;
     const h=$('sig-hint');if(h){h.textContent='✔ Firma precargada del perfil. Para firmar de nuevo, toca el recuadro o usa Borrar.';h.className='text-[11px] text-emerald-400'}}
@@ -379,14 +380,17 @@ function sigUpload(inp){
   const f=inp.files[0];inp.value='';const{c,x}=sig;if(!f||!c)return;
   const i=new Image();i.onload=()=>{URL.revokeObjectURL(i.src);x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);sigFit(x,c,i);
     // limpia el fondo de la foto: lo claro pasa a blanco y el trazo a tinta oscura
-    try{const d=x.getImageData(0,0,c.width,c.height),p=d.data;for(let k=0;k<p.length;k+=4){const l=.299*p[k]+.587*p[k+1]+.114*p[k+2];if(l>150){p[k]=p[k+1]=p[k+2]=255}else{p[k]=15;p[k+1]=23;p[k+2]=42}p[k+3]=255}x.putImageData(d,0,0)}catch(_){}
+    // transición suave (no blanco/negro puro) para que los bordes del trazo no salgan dentados
+    try{const d=x.getImageData(0,0,c.width,c.height),p=d.data;for(let k=0;k<p.length;k+=4){const l=.299*p[k]+.587*p[k+1]+.114*p[k+2],a=l>=185?0:l<=110?1:(185-l)/75;p[k]=255-a*(255-15);p[k+1]=255-a*(255-23);p[k+2]=255-a*(255-42);p[k+3]=255}x.putImageData(d,0,0)}catch(_){}
     sig.drawn=true;sig.dirty=true;sig.src='';const h=$('sig-hint');if(h){h.textContent='Foto cargada. Si no se ve bien, bórrala y firma a mano.';h.className='text-[11px] text-slate-400'}};
   i.onerror=()=>note('No se pudo leer la imagen de la firma.');i.src=URL.createObjectURL(f);
 }
 function sigData(){
   if(!sig.dirty&&sig.src)return sig.src; // firma precargada: se guarda exactamente la del perfil
-  const c=sig.c,o=document.createElement('canvas');o.width=400;o.height=Math.round(400*c.height/c.width);
-  o.getContext('2d').drawImage(c,0,0,o.width,o.height);return o.toDataURL('image/png');
+  // se guarda en alta resolución; si pesa demasiado para la base de datos, baja un poco el tamaño
+  const c=sig.c;let out='';
+  for(const w of [1100,900,700,500]){const o=document.createElement('canvas');o.width=Math.min(w,c.width);o.height=Math.round(o.width*c.height/c.width);const g=o.getContext('2d');g.imageSmoothingQuality='high';g.drawImage(c,0,0,o.width,o.height);out=o.toDataURL('image/png');if(out.length<250000)break}
+  return out;
 }
 
 function fileOut(blob,name,title){
