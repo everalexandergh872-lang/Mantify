@@ -421,7 +421,7 @@ function bkFromPend(s,e,p,id){
   return{id,fleetId:e.id,system:sy,component:comp.length>70?comp.slice(0,67)+'…':(comp||'Pendiente del reporte '+s.num),criticality:PR_K.includes(p.p)?p.p:'P2',
     description:d+'\n\n(Origen: reporte de mantenimiento '+s.num+(s.otNum?' · '+s.otNum:'')+' del '+fmtD(day)+' · '+s.resp+')',sintoma:'',causa:'',actividad:'',obsRec:'',
     parts:p.r?[{np:'',d:p.r,cant:'',med:''}]:[],observationDate:day,scheduledDate:'',cost:0,status:'REGISTRADO',detectedBy:s.resp,source:'Reporte de mantenimiento '+s.num,
-    workType:p.r?BK_TYPE[3]:BK_TYPE[0],hoursAt:s.hs,ubic:'',proyecto:s.frente||'',lugarInsp:s.lugar||'',respons:'COANSA',rrhh:{},eqSop:[],conFotos:false,
+    workType:p.r?BK_TYPE[3]:BK_TYPE[0],hoursAt:s.hs,ubic:'',proyecto:s.frente||'',lugarInsp:s.lugar||'',respons:'EMPRESA',rrhh:{},eqSop:[],conFotos:false,
     elab:{name:s.resp,date:day,sig:(s.ejec||{}).sig||''},log:[{t:'Backlog creado desde el reporte '+s.num,ts:Date.now(),by:me?me.name:''}],photosBefore:[],photosAfter:[],closeDate:'',closeTech:'',closeNotes:'',origin:'reporte',stopId:s.id};
 }
 function openStopView(id){
@@ -497,7 +497,7 @@ function makePdfBk(id){
   K.title('FORMATO DE BACKLOG',bkNo(b));
   K.row([lab('N° Backlog',.14),val(bkNo(b),.19,'center'),lab('Estado',.11),val((BK_ST[b.status]||{}).l||b.status,.22,'center'),lab('N° OT',.11),val(b.ot&&b.ot.num?b.ot.num:'',.23,'center')]);
   K.row([lab('Fecha detección',.14),val(fmtD(b.observationDate),.19,'center'),lab('Ubicación',.11),val(b.ubic||'',.22,'center'),lab('Proyecto',.11),val(b.proyecto||'',.23,'center')]);
-  K.row([lab('Responsabilidad',.14),chk((b.respons||'COANSA')==='COANSA',.04),val('COANSA',.15),chk(b.respons==='PROVEEDOR',.04),val('PROVEEDOR',.15),{v:'',w:.48,nb:true}]);
+  K.row([lab('Responsabilidad',.14),chk(b.respons!=='PROVEEDOR',.04),val('EMPRESA',.15),chk(b.respons==='PROVEEDOR',.04),val('PROVEEDOR',.15),{v:'',w:.48,nb:true}]);
   K.gap();K.sec('DATOS GENERALES');
   K.row([lab('EQUIPO',.2,'center'),lab('FLOTA',.2,'center'),lab('MODELO',.2,'center'),lab('HORÓMETRO',.2,'center'),lab('LUGAR DE INSPECCIÓN',.2,'center')]);
   K.row([val(e.code,.2,'center'),val(e.category||'',.2,'center'),val(((e.brand||'')+' '+(e.model||'')).trim(),.2,'center'),val(b.hoursAt!==''&&b.hoursAt!=null?fmtH(b.hoursAt):'',.2,'center'),val(b.lugarInsp||'',.2,'center')]);
