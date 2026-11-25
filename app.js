@@ -206,7 +206,7 @@ function openFleet(id){if(!isAdmin())return;
     <div class="grid grid-cols-2 gap-3">${field('code','Código *',e.code,'required placeholder="EX-01"')}${field('brand','Marca *',e.brand,'required')}
     ${field('model','Modelo *',e.model,'required')}${field('serialNumber','Nº de serie *',e.serialNumber,'required')}
     ${sel('category','Categoría',FLEET_CATS.includes(e.category)||!e.category?FLEET_CATS:FLEET_CATS.concat([e.category]),e.category)}
-    ${field('plate','Placa',e.plate||'','placeholder="Opcional"')}${field('hours','Horómetro / Odómetro',e.hours??0,'min="0"','number')}${field('location','Ubicación / Frente',e.location)}
+    ${field('plate','Placa',e.plate||'','placeholder="Opcional"')}${field('year','Año',e.year||'','min="1950" max="2100" placeholder="Opcional"','number')}${field('provider','Proveedor',e.provider||'','placeholder="Opcional"')}${field('project','Proyecto',e.project||'','placeholder="Opcional"')}${field('hours','Horómetro / Odómetro',e.hours??0,'min="0"','number')}${field('location','Ubicación / Frente',e.location)}
     ${sel('status','Estado operativo',[['OPERATIVO','Operativo'],['INOPERATIVO','Inoperativo'],['EN_MANTENIMIENTO','En mantenimiento']],e.status)}</div>
     <div><p class="text-xs text-slate-400 font-semibold mb-1">Apartados donde aparece este equipo</p><div class="grid grid-cols-2 gap-1">${MODS.map(([k,l])=>`<label class="flex items-center gap-2 text-xs text-slate-300"><input type="checkbox" name="mod_${k}" ${inMod(e.id?e:{},k)?'checked':''}> ${l}</label>`).join('')}</div></div>${btns()}</form>`);
 }
@@ -244,20 +244,35 @@ function doFleetDelAll(){if(!isAdmin())return;
 let fImp=[];
 const FST={OPERATIVO:'OPERATIVO',INOPERATIVO:'INOPERATIVO',ENMANTENIMIENTO:'EN_MANTENIMIENTO',MANTENIMIENTO:'EN_MANTENIMIENTO',ENREPARACION:'EN_MANTENIMIENTO',DISPONIBLE:'OPERATIVO',ACTIVO:'OPERATIVO',INACTIVO:'INOPERATIVO',DETENIDO:'INOPERATIVO',PARADO:'INOPERATIVO'};
 function openFleetImport(){if(!isAdmin())return;
-  const tpl='﻿codigo;marca;modelo;serie;categoria;horometro;ubicacion;estado\nEX-01;Caterpillar;336D2;CAT0336DXYZ123;Excavadora;12500;Tajo Norte;Operativo\nVQ-05;Volvo;FMX 460;YV2XTW0A9KB123456;Volquete;84320;Cantera;En mantenimiento\n';
-  const url=URL.createObjectURL(new Blob([tpl],{type:'text/csv;charset=utf-8'}));fImp=[];
+  fImp=[];
   show(`<h3 class="font-bold mb-1">📥 Importar equipos a la flota</h3>
   <p class="text-xs text-slate-400 mb-3">Sube un Excel (<b>.xlsx</b>) o un <b>CSV</b> con una fila por equipo. La primera fila debe tener los encabezados.</p>
-  <div class="bg-slate-900 p-3 rounded-lg text-xs text-slate-300 space-y-1"><p><b class="text-amber-400">codigo</b> * — ej. EX-01 (se guarda en mayúsculas)</p><p><b class="text-amber-400">marca</b> *, <b class="text-amber-400">modelo</b> *</p>
-  <p><b>serie</b>, <b>categoria</b>, <b>horometro</b>, <b>ubicacion</b>, <b>estado</b> — opcionales</p>
-  <p class="text-slate-400">Categorías: ${FLEET_CATS.map(esc).join(', ')}. Estado: Operativo, Inoperativo o En mantenimiento.</p></div>
+  <div class="bg-slate-900 p-3 rounded-lg text-xs text-slate-300 space-y-1"><p>Columnas de la plantilla: <b>ITEM</b>, <b>FLOTA</b>, <b class="text-amber-400">CÓDIGO INTERNO</b> *, <b>PLACA</b>, <b>SERIE DEL EQUIPO</b>, <b class="text-amber-400">MODELO</b> *, <b class="text-amber-400">MARCA</b> *, <b>AÑO</b>, <b>PROVEEDOR</b>, <b>PROYECTO</b></p>
+  <p class="text-slate-400">* obligatorias. ITEM es solo numeración y se ignora. Opcionales extra: HORÓMETRO, UBICACIÓN, ESTADO (Operativo, Inoperativo o En mantenimiento).</p>
+  <p class="text-slate-400">Flotas: ${FLEET_CATS.map(esc).join(', ')}.</p></div>
   <label class="flex items-center gap-2 text-xs text-slate-300 mt-3"><input type="checkbox" id="fimp-upd" onchange="fImpFile&&readFleetImport()"> Actualizar los equipos que ya existen (mismo código). Si no, se omiten.</label>
-  <div class="grid gap-2 mt-3"><a href="${url}" download="plantilla_equipos.csv" class="btn bg-slate-700 text-center" style="text-decoration:none;color:inherit">⬇️ Descargar plantilla (CSV)</a>
+  <div class="grid gap-2 mt-3"><button type="button" onclick="fleetTpl(this)" class="btn bg-slate-700">⬇️ Descargar plantilla (Excel)</button>
   <input type="file" accept=".csv,.txt,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onchange="fImpFile=this.files[0]||null;readFleetImport()"></div>
   <div id="fimp-out" class="mt-3"></div>
   <div class="flex justify-end gap-2 pt-3 border-t border-slate-700 mt-3"><button type="button" onclick="hide();fImp=[];fImpFile=null" class="btn bg-slate-700">Cerrar</button><button id="fimp-go" type="button" onclick="doFleetImport()" class="btn bg-amber-500 text-slate-950" disabled style="opacity:.5">Importar</button></div>`,'34rem');
 }
 let fImpFile=null;
+const FTPL_H=['ITEM','FLOTA','CÓDIGO INTERNO','PLACA','SERIE DEL EQUIPO','MODELO','MARCA','AÑO','PROVEEDOR','PROYECTO'];
+async function fleetTpl(btn){
+  const t=btn&&btn.textContent;if(btn){btn.disabled=true;btn.textContent='Generando…'}
+  try{await loadXL();const wb=new ExcelJS.Workbook(),ws=wb.addWorksheet('Equipos');
+    ws.columns=FTPL_H.map((h,i)=>({header:h,width:[7,16,16,12,26,16,16,8,16,18][i]}));
+    ws.addRow([1,'Camioneta','CA-IF-01','P4Y-920','8AJKA3CD5R3119825','Hilux','Toyota',2024,'IF','Transporte']);
+    const bd={style:'thin',color:{argb:'FF000000'}},B={top:bd,left:bd,bottom:bd,right:bd};
+    ws.getRow(1).eachCell(c=>{c.font={bold:true,color:{argb:'FFFFFFFF'}};c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF000000'}};c.alignment={horizontal:'center',vertical:'middle',wrapText:true};c.border=B});
+    ws.getRow(1).height=30;
+    for(let r=2;r<=200;r++)for(let c=1;c<=FTPL_H.length;c++){const x=ws.getCell(r,c);x.border=B;x.alignment={horizontal:'center'};if(r===2)x.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF92D050'}}}
+    ws.autoFilter={from:'A1',to:{row:1,column:FTPL_H.length}};ws.views=[{state:'frozen',ySplit:1}];
+    ws.getColumn(3).numFmt='@';ws.getColumn(4).numFmt='@';ws.getColumn(5).numFmt='@';
+    const buf=await wb.xlsx.writeBuffer(),a=document.createElement('a');a.href=URL.createObjectURL(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));a.download='plantilla_equipos.xlsx';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+  }catch(e){note('No se pudo generar la plantilla: '+(e.message||e))}
+  finally{if(btn){btn.disabled=false;btn.textContent=t}}
+}
 async function fleetImportRows(f){
   if(/\.xlsx$/i.test(f.name)){
     if(f.size>10e6)throw new Error('El Excel pesa más de 10 MB.');
@@ -275,11 +290,11 @@ async function readFleetImport(){
   out.innerHTML='<p class="text-xs text-slate-400">Leyendo archivo…</p>';
   let rows;try{rows=await fleetImportRows(f)}catch(e){out.innerHTML=`<p class="text-xs text-red-400">${esc(e.message||String(e))}</p>`;return}
   if(rows.length<2){out.innerHTML='<p class="text-xs text-red-400">El archivo no tiene datos: necesita una fila de encabezados y al menos un equipo.</p>';return}
-  const hd=rows[0].map(nk),col=n=>hd.findIndex(h=>n.includes(h));
-  const ix={code:col(['codigo','code','codigoequipo','equipo','codequipo','cod','placa','unidad']),brand:col(['marca','brand','fabricante']),model:col(['modelo','model']),
-    serial:col(['serie','nserie','nroserie','numerodeserie','numeroserie','sn','serial','serialnumber','vin','chasis']),cat:col(['categoria','category','tipo','tipoequipo','tipodeequipo','flota','clase']),
-    hours:col(['horometro','horometroodometro','odometro','horas','hours','kilometraje','km']),loc:col(['ubicacion','ubicacionfrente','frente','location','lugar','proyecto']),st:col(['estado','status','estadooperativo','condicion'])};
-  if(ix.code<0||ix.brand<0||ix.model<0){out.innerHTML='<p class="text-xs text-red-400">Faltan columnas obligatorias. Usa los encabezados: codigo, marca, modelo (descarga la plantilla).</p>';return}
+  const hd=rows[0].map(nk),col=n=>{for(const k of n){const i=hd.indexOf(k);if(i>=0)return i}return -1};
+  const ix={code:col(['codigointerno','codigo','code','codigoequipo','equipo','codequipo','cod','unidad']),plate:col(['placa','plate','nplaca','nroplaca']),year:col(['ano','anio','year','anofabricacion','anodefabricacion']),prov:col(['proveedor','provider','supplier','empresa','contratista']),proj:col(['proyecto','project','obra']),brand:col(['marca','brand','fabricante']),model:col(['modelo','model']),
+    serial:col(['seriedelequipo','serieequipo','serie','nserie','nroserie','numerodeserie','numeroserie','sn','serial','serialnumber','vin','chasis']),cat:col(['categoria','category','tipo','tipoequipo','tipodeequipo','flota','clase']),
+    hours:col(['horometro','horometroodometro','odometro','horas','hours','kilometraje','km']),loc:col(['ubicacion','ubicacionfrente','frente','location','lugar']),st:col(['estado','status','estadooperativo','condicion'])};
+  if(ix.code<0||ix.brand<0||ix.model<0){out.innerHTML='<p class="text-xs text-red-400">Faltan columnas obligatorias. Usa los encabezados: CÓDIGO INTERNO, MARCA, MODELO (descarga la plantilla).</p>';return}
   const upd=!!($('fimp-upd')&&$('fimp-upd').checked),byCode={};fleet.forEach(e=>byCode[String(e.code).trim().toUpperCase()]=e);
   const catOf=v=>{const k=nk(v);if(!k)return '';return FLEET_CATS.find(c=>nk(c)===k)||FLEET_CATS.find(c=>nk(c).startsWith(k)||k.startsWith(nk(c)))||String(v).trim()};
   const ok=[],bad=[],seen={},warn=[];let nNew=0,nUpd=0,skip=0;
@@ -296,8 +311,10 @@ async function readFleetImport(){
     const stRaw=g(ix.st);let status=stRaw?FST[nk(stRaw).toUpperCase()]:null;
     if(stRaw&&!status)warn.push(`Fila ${line} (${code}): estado "${stRaw}" no reconocido, se usa ${old?'el actual':'Operativo'}`);
     const cat=catOf(g(ix.cat));if(cat&&!FLEET_CATS.includes(cat))warn.push(`Fila ${line} (${code}): categoría "${cat}" no está en la lista estándar (se guarda igual)`);
+    let year=g(ix.year).replace(/\.0+$/,'');if(year&&!/^(19|20)\d{2}$/.test(year)){warn.push(`Fila ${line} (${code}): año "${year}" no válido, se omite`);year=''}
     const base=old||{id:uid('F'),hours:0,status:'OPERATIVO',category:FLEET_CATS[0],serialNumber:'S/D',location:''};
-    ok.push({...base,code,brand,model,serialNumber:g(ix.serial)||base.serialNumber||'S/D',category:cat||base.category,hours:hours!==null?hours:(Number(base.hours)||0),location:g(ix.loc)||base.location||'',status:status||base.status||'OPERATIVO'});
+    const proj=g(ix.proj)||base.project||'';
+    ok.push({...base,code,brand,model,serialNumber:g(ix.serial)||base.serialNumber||'S/D',category:cat||base.category,plate:g(ix.plate).toUpperCase()||base.plate||'',year:year||base.year||'',provider:g(ix.prov)||base.provider||'',project:proj,hours:hours!==null?hours:(Number(base.hours)||0),location:g(ix.loc)||base.location||proj,status:status||base.status||'OPERATIVO'});
     old?nUpd++:nNew++;
   });
   fImp=ok;
@@ -1404,7 +1421,7 @@ function exportCsv(kind){
     trs.forEach(t=>(t.reads||[]).slice().sort(trSort).forEach(r=>{const q=eqOf(r.fid||t.fleetId);rows.push([t.code,q.code,r.pos||t.pos,r.d,r.h,r.ev==='M'?'Montaje':r.ev==='D'?'Desmontaje':'Medición',(r.v||[r.i,r.m,r.e]).filter(x=>x!=null).join(' / '),r.c,r.diff,r.psi,r.by,r.note])}))}
   else if(kind==='gr'){name='engrase';rows=[['Código','Equipo','Fecha','Horómetro','Técnico','Grasa','Cantidad','Unidad','Puntos engrasados','Puntos totales','Puntos sin engrasar','Observaciones']];
     [...grs].sort((a,b)=>(b.date||'').localeCompare(a.date||'')).forEach(r=>{const e=eqOf(r.fleetId);rows.push([e.code,(e.brand||'')+' '+(e.model||''),r.date,r.hours,r.tech,r.grease,r.qty,r.unit,r.done,r.total,(r.points||[]).filter(x=>!x.ok).map(x=>x.d).join(', '),r.notes])})}
-  else{name='flota';rows=[['Código','Marca','Modelo','Serie','Categoría','Horómetro','Ubicación','Estado']];fleet.forEach(e=>rows.push([e.code,e.brand,e.model,e.serialNumber,e.category,e.hours,e.location,e.status]))}
+  else{name='flota';rows=[[...FTPL_H,'HORÓMETRO','UBICACIÓN','ESTADO']];fleet.forEach((e,i)=>rows.push([i+1,e.category,e.code,e.plate||'',e.serialNumber,e.model,e.brand,e.year||'',e.provider||'',e.project||'',e.hours,e.location,e.status]))}
   fileOut(new Blob([toCsv(rows)],{type:'text/csv;charset=utf-8'}),name+'_'+today()+'.csv','📊 Archivo listo (abre con Excel)');
 }
 function exportJson(){
