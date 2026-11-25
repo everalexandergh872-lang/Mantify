@@ -132,7 +132,7 @@ const bkAfter=b=>{const r=stById(b&&b.repId);return r&&(r.photos||[]).length?r.p
 function otCard(b){
   const o=b.ot&&b.ot.num?b.ot:null,open=bkOpen(b),info=(l,x)=>`<div><p class="ilab">${l}</p><p>${x}</p></div>`;
   return `<div class="dcard"><div class="flex justify-between items-start gap-2 flex-wrap"><div><p class="ilab">Orden de trabajo (F-MT-24)</p>${o?`<p class="text-lg font-bold mono">${esc(o.num)} <span class="text-sm font-normal text-slate-400">emitida el ${fmtD(o.date)}</span></p>`:`<p class="text-sm text-slate-400">${open?'Aún no tiene OT. El planner o el supervisor deciden si se apertura.':'Se cerró sin OT.'}</p>`}</div>
-   <div class="flex gap-1 flex-wrap">${open&&isSup()?`<button onclick="openOt('${b.id}')" class="btn ${o?'bg-slate-700':'bg-amber-500 text-slate-950'} !py-1">${o?'✏️ Editar OT':'＋ Aperturar OT'}</button>`:''}${o?`<button onclick="makePdfOt('${b.id}')" class="btn bg-slate-700 !py-1">📄 PDF</button>`:''}${o&&open&&otCanClose(b)?`<button onclick="openClose('${b.id}')" class="btn bg-emerald-500/20 text-emerald-400 !py-1">📝 Cerrar con reporte</button>`:''}</div></div>
+   <div class="flex gap-1 flex-wrap">${open&&isSup()&&(o||bkOtOk(b))?`<button onclick="openOt('${b.id}')" class="btn ${o?'bg-slate-700':'bg-amber-500 text-slate-950'} !py-1">${o?'✏️ Editar OT':'＋ Aperturar OT'}</button>`:''}${o?`<button onclick="makePdfOt('${b.id}')" class="btn bg-slate-700 !py-1">📄 PDF</button>`:''}${o&&open&&otCanClose(b)?`<button onclick="openClose('${b.id}')" class="btn bg-emerald-500/20 text-emerald-400 !py-1">📝 Cerrar con reporte</button>`:''}</div></div>
    ${o?`<div class="igrid mt-3">${info('Asignada a',`<b class="${myOt(b)?'text-amber-400':''}">${esc(otTech(o)||'—')}</b>${myOt(b)?' (tú)':''}`)}${info('Elaborado por',esc(o.by||'—'))}${info('Turno',esc(o.turno||'—'))}${info('Lugar',esc(o.lugar||o.place||'—'))}
      ${info('Parada',esc(fxDT(o.fp)||'—'))}${info('Tipo de parada',esc(o.tipoPar||'—'))}${info('Motivo',esc((o.mot||[]).map(FX_MOT_L).join(', ')||'—'))}${info('Estado OT',bkOpen(b)?'<span class="text-amber-400">Abierta</span>':'<span class="text-emerald-400">Cerrada</span>')}</div>
      ${(o.tareas||[]).length?`<p class="ilab mt-3">Tareas a ejecutar</p>${o.tareas.map((t,i)=>`<p class="text-sm">${i+1}. ${esc(t.d)}${t.r?' <span class="text-slate-400">· '+esc(t.r)+'</span>':''}${t.h?' <span class="text-slate-400">· '+esc(t.h)+' h</span>':''}</p>`).join('')}`:o.acts?`<p class="ilab mt-3">Actividades</p><p class="text-sm whitespace-pre-line">${esc(o.acts)}</p>`:''}`:''}</div>`;
@@ -178,8 +178,18 @@ function bkObsGo(id){
 }
 
 /* ---------- Orden de trabajo (F-MT-24): aperturar / editar y asignar ---------- */
+// Backlogs con todas las firmas (técnico + V°B° planner + V°B° supervisor) que aún no tienen OT
+const bkOtOk=b=>!['PLANNER','SUPERVISOR','OBSERVADO'].includes(bkApr(b));
+const bkOtPend=()=>backlogs.filter(b=>bkOpen(b)&&bkApr(b)==='APROBADO'&&!(b.ot&&b.ot.num)).sort((a,c)=>String(a.criticality).localeCompare(String(c.criticality))||(a.observationDate||'').localeCompare(c.observationDate||''));
+function bkOtQueue(){
+  if(!isSup())return '';const L=bkOtPend(),W=backlogs.filter(b=>bkOpen(b)&&['PLANNER','SUPERVISOR'].includes(bkApr(b))).length;
+  if(!L.length&&!W)return '';
+  return `<div class="dcard" style="border-color:#10b98188"><div class="flex justify-between items-center gap-2 flex-wrap"><p class="font-semibold">✅ Backlogs aprobados por aperturar OT (${L.length})</p>${W?`<span class="text-xs text-slate-400">${W} en proceso de firmas</span>`:''}</div>
+   ${L.length?`<div class="space-y-1 mt-2">${L.slice(0,20).map(b=>{const e=eqOf(b.fleetId);return `<div class="flex justify-between items-center gap-2 text-sm py-1 border-b border-slate-700"><button type="button" class="min-w-0 text-left lnk" onclick="bkDetail('${b.id}')"><b class="mono">${esc(bkNo(b))}</b> · <b class="text-amber-400">${esc(e.code)}</b> · ${esc(b.component)} <span class="text-xs text-slate-400">${esc(PR_L[b.criticality]||'')} · aprobado ${fmtD((b.vbSup||{}).date)}</span></button><button type="button" onclick="openOt('${b.id}')" class="btn bg-amber-500 text-slate-950 !py-1" style="white-space:nowrap">＋ Aperturar OT</button></div>`}).join('')}${L.length>20?`<p class="text-xs text-slate-400">… y ${L.length-20} más</p>`:''}</div>`:'<p class="text-xs text-slate-400 mt-1">Ninguno por ahora: los backlogs aparecen aquí cuando tienen las tres firmas.</p>'}</div>`;
+}
 function openOt(id){
   const b=backlogs.find(x=>x.id===id);if(!b)return;if(!isSup()){note('Solo el planner o un supervisor pueden aperturar o editar la OT.');return}
+  if(!(b.ot&&b.ot.num)&&['PLANNER','SUPERVISOR','OBSERVADO'].includes(bkApr(b))){note('Este backlog aún no está aprobado ('+BK_APR[bkApr(b)].l.replace(/^\S+\s/,'')+'). La OT se apertura cuando tenga la firma del técnico y los V°B° del planner y del supervisor.');return}
   const o=b.ot||{},e=eqOf(b.fleetId),T=techList(),pers=o.pers||{};
   const lastP=[...backlogs.map(x=>x.ot&&x.ot.proy),...sps.map(s=>s.frente)].filter(Boolean);
   const tarDef=o.tareas||(b.actividad?b.actividad.split(/\n+/).map(s=>s.replace(/^[\s\-•\d.)]+/,'').trim()).filter(Boolean).map(d=>({d})):[{d:`Intervenir ${b.component.toLowerCase()} (${b.system.toLowerCase()})`}]);
