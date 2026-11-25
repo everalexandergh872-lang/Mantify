@@ -1133,7 +1133,8 @@ function stBacklogFrom(s,e,id){
   const obs=stFinding(s.obs),first=obs.split(/[.\n;]/)[0].trim(),comp=first?(first.length>70?first.slice(0,67)+'…':first):'Observación de intervención',day=s.fp.slice(0,10);
   return{id,fleetId:e.id,system:ST_BSYS[s.sistema]||'Estructura/Cuchara',component:comp,criticality:/(fuga|agriet|urgente|cr[ií]tic|riesgo|inoperativ)/i.test(obs)?'P1':'P2',description:obs+'\n\n(Origen: intervención '+s.motivo+' del '+fmtD(day)+' · '+s.resp+')',observationDate:day,scheduledDate:addDays(day,7),cost:0,status:'REGISTRADO',detectedBy:s.resp,source:'Reporte de parada '+s.motivo,workType:/^MC/.test(s.motivo)?'Correctivo':'Inspección',log:[{t:'Backlog creado desde la intervención '+s.motivo+' del '+fmtD(day),ts:Date.now(),by:me?me.name:''}],photosBefore:s.photos||[],photosAfter:[],closeDate:'',closeTech:'',closeNotes:'',origin:'intervencion',stopId:s.id};
 }
-function stGreaseFrom(s,id){return{id,fleetId:s.fleetId,date:s.fp.slice(0,10),hours:Number(s.hp)||0,tech:s.resp,techUid:s.respUid||'',grease:'',qty:'',unit:'',points:[],done:0,total:0,notes:'Registrado desde el reporte de mantenimiento.',ts:Date.now(),origin:'intervencion',stopId:s.id}}
+function stGreaseFrom(s,id){const g=s.eng||{},kg=g.kg===''||g.kg==null?'':Number(g.kg);return{id,fleetId:s.fleetId,date:s.fp.slice(0,10),hours:Number(s.hp)||0,tech:s.resp,techUid:s.respUid||'',grease:g.grasa||'',qty:kg,unit:kg===''?'':'kg',tipo:g.tipo||'',points:[],done:g.puntos===''||g.puntos==null?'':Number(g.puntos),total:0,
+  notes:[s.desc,s.obs].filter(Boolean).join(' · ')||'Registrado desde el reporte de mantenimiento.',ts:Date.now(),origin:'intervencion',stopId:s.id,stopNum:s.num||''}}
 function delStop(id){if(!isAdmin())return;ask('¿Eliminar esta intervención?',()=>del('stops',id))}
 /* ---------- ExcelJS (carga bajo demanda) ---------- */
 function loadXL(){

@@ -280,7 +280,7 @@
   /* Registro del control diario de engrase.
      puntosSel: [{id, gramos}] puntos efectivamente engrasados (por defecto: EG = todos los activos, EP = los marcados).
      nPuntos / kg: cantidad de puntos y kg de grasa usados en el equipo (si se informan, prevalecen sobre la suma de puntos). */
-  C.registrarDiario = async ({ eq, fecha, horometro, tipo, tecnico, observaciones, foto, gramosManual, kg, nPuntos, puntosSel, tipoGrasa }) => {
+  C.registrarDiario = async ({ eq, fecha, horometro, tipo, tecnico, observaciones, foto, gramosManual, kg, nPuntos, puntosSel, tipoGrasa, id: idFijo, extra }) => {
     if (!fecha || fecha > U.today()) throw new Error('Fecha incorrecta: no puede estar vacía ni ser futura.');
     if (!tipo) throw new Error('Indique el tipo de engrase.');
     if (!C.engraseAplica(eq)) throw new Error(`El equipo ${eq.codigo} está fuera del plan de engrase. Inclúyalo de nuevo para registrar.`);
@@ -290,7 +290,7 @@
     if (nPuntos !== null && nPuntos !== undefined && nPuntos < 0) throw new Error('Cantidad de puntos negativa no permitida.');
     if (horometro !== null && horometro !== undefined && horometro !== '') { if (horometro < 0) throw new Error('Horómetro negativo no permitido.'); await C.registrarLecturaFecha(eq, horometro, fecha, 'control diario de engrase'); }
     else horometro = null;
-    const id = EQ.DB.uid();
+    const id = idFijo || EQ.DB.uid();
     let pts;
     if (Array.isArray(puntosSel)) pts = puntosSel.map(x => { const p = S.puntos.find(q => q.id === x.id); return p ? Object.assign({}, p, { _g: x.gramos !== null && x.gramos !== undefined ? Number(x.gramos) : Number(p.gramos) || 0 }) : null; }).filter(Boolean);
     else pts = C.puntosDeTipo(eq, tipo).map(p => Object.assign({}, p, { _g: Number(p.gramos) || 0 }));
@@ -301,6 +301,7 @@
     const gr = gramosManual !== null && gramosManual !== undefined && gramosManual !== '' && !isNaN(gramosManual) ? Number(gramosManual) : recs.reduce((s, r) => s + r.gramos, 0);
     const np = nPuntos !== null && nPuntos !== undefined && nPuntos !== '' ? Math.round(nPuntos) : pts.length;
     const d = { id, fecha, equipoId: eq.id, horometro, tipo, tecnico: tecnico || '', observaciones: observaciones || '', foto: foto || null, gramos: +gr.toFixed(1), puntos: np, puntosIds: pts.map(p => p.id), tipoGrasa: grasa, precioKg: C.precioGrasa(grasa), precioPunto: C.precioPunto(grasa), tc: C.tc() };
+    if (extra) Object.assign(d, extra);
     const c = C.costoDiario(d); d.costoKg = +c.costoKg.toFixed(2); d.costoPuntos = +c.costoPuntos.toFixed(2); d.costoKgUSD = +c.costoKgUSD.toFixed(2); d.costoPuntosUSD = +c.costoPuntosUSD.toFixed(2);
     await EQ.DB.put('engrasesDiarios', d);
     if (recs.length) await EQ.DB.bulkPut('engrases', recs, { noAudit: true });

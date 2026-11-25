@@ -359,11 +359,12 @@ function openRegDia(id,mode,fid,old,e0,lastS){
   const ttl={close:'✅ Cerrar parada · Registro de intervenciones diaria',edit:'✏️ Editar registro de intervención diaria'}[mode]||'📝 Registro de intervenciones diaria';
   const nrp=s.num||'Se asigna al guardar ('+fmtNum('rp',numMax('rp')+1)+')';
   show(`<div class="flex justify-between items-start"><div><h3 class="font-bold text-lg">${ttl}</h3><p class="text-xs text-slate-400">N° ${esc(nrp)}</p></div><button type="button" onclick="hide()" class="text-slate-400 text-xl">✕</button></div>
-  <form onsubmit="saveRegDia(event,'${id||''}','${mode}')" class="space-y-3 mt-3" ${id?'data-edit="1"':''}>
+  <form onsubmit="saveRegDia(event,'${id||''}','${mode}')" onchange="rdEngOn(event)" class="space-y-3 mt-3" ${id?'data-edit="1"':''}>
    ${q(1,'FLOTA *',`<select class="inp font-normal" name="rdFlota" required onchange="rdFlota(this)" ${id?'':''}><option value="">— elegir —</option>${fl.map(x=>`<option value="${esc(x)}" ${x===f0?'selected':''}>${esc(x)}</option>`).join('')}</select>`)}
    ${q(2,'CÓDIGO *',`<select class="inp font-normal" name="fleetId" required onchange="stEq(this);rdCode(this)"><option value="">— elegir —</option>${eqs.map(e=>`<option value="${e.id}" data-fl="${esc(stFleetTxt(e))}" ${e.id===fid?'selected':''} ${f0&&stFleetTxt(e)!==f0?'hidden':''}>${esc(e.code)}</option>`).join('')}</select><p class="text-[11px] text-slate-400">Códigos del apartado Equipos</p>`)}
    ${q(3,'TIPO DE PARADA *',fxOpts('tipo',['PLANIFICADA','NO PLANIFICADA'],s.tipo,'radio'))}
    ${q(4,'MOTIVO DE PARADA *',fxOpts('motivo',mot,s.motivo,'radio'))}
+   <div id="rd-eng" class="fsec" style="border-color:#10b981${s.motivo==='ENGRASE'?'':';display:none'}"></div>
    ${q(5,'SISTEMA / COMPONENTE *',stSel('sistema','',ST_SIS,sis,1))}
    ${q(6,'DESCRIPCIÓN DE LA TAREA *',`<textarea maxlength="3000" name="desc" rows="3" required class="inp font-normal">${esc(desc)}</textarea>`)}
    ${q(7,'RESPONSABLE *',`<input class="inp font-normal" name="resp" list="dl-res" required value="${esc(s.resp||stOfficial(me&&me.name))}"${ro}>`)}
@@ -377,7 +378,45 @@ function openRegDia(id,mode,fid,old,e0,lastS){
    ${phxBox('rpf','18 · EVIDENCIA FOTOGRÁFICA (opcional, hasta 6)',s.fotos||(s.photos||[]).map(x=>({src:x,et:'DESPUÉS',d:''})),s.conFotos!=null?s.conFotos:!!(s.photos||[]).length)}
    ${stList('dl-res',[...ST_RES,...sps.map(x=>x.resp),...techList().map(u=>u.name)])}
    <p id="st-err" class="text-xs text-red-400 hidden"></p>${btns('hide()','Guardar registro','bg-emerald-500')}</form>`,'44rem');
-  phxRender('rpf');rdCalc();
+  phxRender('rpf');rdCalc();rdEngState=s.eng?{...s.eng}:null;rdEng();
+}
+/* ---------- Engrase dentro del registro de intervenciones: mismos datos que el Control diario de engrase ---------- */
+let rdEngState=null;
+const eqnApi=()=>{try{const w=typeof eqnWin==='function'?eqnWin():null;return w?w.EQ:null}catch(_){return null}};
+function rdEngInfo(fleetId,date,tipo){
+  const Q=eqnApi();if(!Q||!fleetId||!date)return null;
+  const C=Q.C,eq=Q.S.equipos.find(x=>x.fleetId===fleetId);if(!eq)return{noEq:true};
+  const g=C.programaMes(C.mesDe(date)).find(f=>f.eq.id===eq.id),prog=(g&&g.dias[date])||'';
+  const tipos=C.tiposEng().map(x=>x.codigo),t=tipo&&tipos.includes(tipo)?tipo:(prog||'EG'),pts=C.puntosDeTipo(eq,t);
+  const u=C.ultimoEngrase(eq);
+  return{eq,prog,tipo:t,tipos,nombre:c=>C.tipoEng(c).nombre,puntos:pts.length||'',kg:pts.length?+(pts.reduce((a,p)=>a+(Number(p.gramos)||0),0)/1000).toFixed(3)||'':'',
+    grasas:C.cfg().tiposGrasa.map(x=>x.nombre),grasa:C.grasaEq(eq),dup:C.diarioEn(eq.id,date),fuera:!C.engraseAplica(eq),ult:u?{f:u.fecha,t:u.tipo}:null,uni:C.unidad(eq)};
+}
+function rdEngOn(ev){const n=ev.target&&ev.target.name;if(['motivo','fleetId','fp','rdFlota'].includes(n))rdEng();
+  if(n==='eTipo'){const F=ev.target.form,i=rdEngInfo(F.fleetId.value,(F.fp.value||'').slice(0,10),F.eTipo.value);if(i&&!i.noEq){if(!F.ePts.dataset.man)F.ePts.value=i.puntos;if(!F.eKg.dataset.man)F.eKg.value=i.kg}rdEngDesc(F)}}
+function rdEngDesc(F){const d=F.desc;if(!d||(d.value&&!d.dataset.auto))return;const t=F.eTipo?F.eTipo.value:'EG';d.value=t==='EP'?'Engrase parcial (EP) del equipo':'Engrase general (EG) del equipo';d.dataset.auto='1'}
+function rdEng(){
+  const box=$('rd-eng'),F=box&&box.closest('form');if(!F)return;
+  const on=(F.querySelector('[name=motivo]:checked')||{}).value==='ENGRASE';
+  if(F.ePts)rdEngState={tipo:F.eTipo.value,puntos:F.ePts.value,kg:F.eKg.value,grasa:F.eGrasa.value,manP:!!F.ePts.dataset.man,manK:!!F.eKg.dataset.man};
+  box.style.display=on?'':'none';if(!on){box.innerHTML='';return}
+  const fid=F.fleetId.value,date=(F.fp.value||'').slice(0,10),st=rdEngState||{},i=rdEngInfo(fid,date,st.tipo);
+  const tipo=(i&&!i.noEq?i.tipo:st.tipo)||'EG',tipos=i&&!i.noEq?i.tipos:['EG','EP'];
+  const pts=st.manP?st.puntos:(i&&!i.noEq?i.puntos:st.puntos||''),kg=st.manK?st.kg:(i&&!i.noEq?i.kg:st.kg||'');
+  const grasas=i&&!i.noEq?i.grasas:[],grasa=st.grasa||(i&&!i.noEq?i.grasa:'');
+  const msg=!fid?'<p class="text-xs text-slate-400">Elige el código del equipo para traer su plan de engrase.</p>'
+    :!i?'<p class="text-xs text-amber-400">⏳ El módulo de engrase aún está cargando: puedes llenar los datos igual.</p>'
+    :i.noEq?'<p class="text-xs text-amber-400">⚠️ Este equipo aún no está en el módulo de engrase; el registro llegará cuando se sincronice.</p>'
+    :`<p class="text-xs text-slate-400">${i.prog?`Programado el ${fmtD(date)}: <b class="text-emerald-400">${esc(i.prog)}</b>`:'Sin engrase programado ese día'}${i.ult?` · Último: ${fmtD(i.ult.f)} (${esc(i.ult.t)})`:''}</p>`
+      +(i.fuera?'<p class="text-xs text-amber-400">⚠️ El equipo está fuera del plan de engrase: el registro no llegará al control diario.</p>':'')
+      +(i.dup&&!F.dataset.edit?`<p class="text-xs text-red-400">⚠️ Ya hay un engrase de este equipo el ${fmtD(date)} en el Control diario${i.dup.tecnico?' (por '+esc(i.dup.tecnico)+')':''}. Este registro no creará otro.</p>`:'');
+  box.innerHTML=`<p class="fsec-h"><span>🛢️</span>DATOS DEL ENGRASE <span class="text-[11px] font-normal text-slate-400" style="text-transform:none">· pasan solos al Control diario de engrase</span></p><div class="space-y-2">${msg}
+    <div class="g2"><label class="block text-xs text-slate-400 font-semibold">Tipo ejecutado *<select class="inp mt-1 font-normal" name="eTipo">${tipos.map(t=>`<option value="${esc(t)}" ${t===tipo?'selected':''}>${esc(i&&!i.noEq?t+' – '+i.nombre(t):t)}</option>`).join('')}</select></label>
+      <label class="block text-xs text-slate-400 font-semibold">Grasa usada${grasas.length?`<select class="inp mt-1 font-normal" name="eGrasa">${grasas.map(g=>`<option ${g===grasa?'selected':''}>${esc(g)}</option>`).join('')}</select>`:`<input class="inp mt-1 font-normal" name="eGrasa" maxlength="60" value="${esc(grasa)}">`}</label></div>
+    <div class="g2"><label class="block text-xs text-slate-400 font-semibold">Puntos engrasados<input class="inp mt-1 font-normal" name="ePts" type="number" min="0" step="1" inputmode="numeric" value="${esc(pts)}" ${st.manP?'data-man="1"':''} oninput="this.dataset.man=1"></label>
+      <label class="block text-xs text-slate-400 font-semibold">Grasa (kg)<input class="inp mt-1 font-normal" name="eKg" type="number" min="0" step="0.001" inputmode="decimal" value="${esc(kg)}" ${st.manK?'data-man="1"':''} oninput="this.dataset.man=1"></label></div>
+    <p class="text-[11px] text-slate-400">Engrasó = <b>Responsable</b> (7) · Horómetro = <b>Horómetro de parada</b> (9) · Fecha = <b>Fecha de parada</b> (11). Los puntos y kg vienen del plan del equipo; corrígelos si fue distinto.</p></div>`;
+  rdEngDesc(F);
 }
 function rdFlota(sel){const F=sel.form,c=F.fleetId;[...c.options].forEach(o=>{if(o.value)o.hidden=!!sel.value&&o.dataset.fl!==sel.value});if(c.selectedOptions[0]&&c.selectedOptions[0].hidden)c.value=''}
 function rdCode(sel){const o=sel.selectedOptions[0];if(o&&o.dataset.fl)sel.form.rdFlota.value=o.dataset.fl}
@@ -398,19 +437,37 @@ async function saveRegDia(ev,id,mode){
   if(sps.some(x=>x.id!==id&&x.fleetId===e.id&&x.fp===fp&&x.motivo===f.motivo)){bad('Ya existe una intervención de este equipo con la misma hora de parada y motivo (posible duplicado).');return}
   const warn=[];if(t>24)warn.push('la intervención dura '+t+' h');
   if(sps.some(x=>x.id!==id&&x.fleetId===e.id&&x.fp&&stMs(x.fp)<stMs(fs)&&(x.fs?stMs(x.fs):Infinity)>stMs(fp)))warn.push('se cruza con otra intervención del mismo equipo');
+  let eng=null;
+  if(f.motivo==='ENGRASE'){
+    const pts=f.ePts===''||f.ePts==null?'':Number(f.ePts),kg=f.eKg===''||f.eKg==null?'':Number(f.eKg);
+    if(pts!==''&&(isNaN(pts)||pts<0)){bad('Los puntos engrasados no pueden ser negativos.');return}
+    if(kg!==''&&(isNaN(kg)||kg<0)){bad('La grasa (kg) no puede ser negativa.');return}
+    if(pts===''&&kg===''){bad('En el engrase ingresa los puntos engrasados o la grasa usada (kg).');return}
+    eng={tipo:f.eTipo||'EG',puntos:pts===''?'':Math.round(pts),kg,grasa:(f.eGrasa||'').trim()};
+  }
   if(warn.length&&!stFlag){stFlag=true;bad('Revisa: '+warn.join('; ')+'. Si es correcto, presiona Guardar otra vez.');return}
   const fotOn=phxOn('rpf'),fotos=fotOn?phxGet('rpf'):[],obs=(f.obs||'').trim(),resp=(f.resp||'').trim(),sistema=f.sistema||'OTROS';
   const rec={...old,id:id||'ST-'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),ts:old.ts||Date.now(),fleetId:e.id,flota:stFleetTxt(e),cod:e.code,
     tipo:f.tipo,motivo:f.motivo,sistema,sistemas:[sistema],desc,tareas:[{d:desc,tec:resp,hh:tEf}],resp,respUid:old.respUid||me.uid,frente:up(f.frente),lugar:up(f.lugar),
     hp,hs,fp,fs,t,tEf,tDem:Math.max(0,Math.round((t-tEf)*100)/100),rdem:f.rdem,rpar:f.rpar,obs,pend:obs===(old.obs||'')?(old.pend||[]):[],
     status:'CERRADA',src:old.src||'app',fmt:'RD',estFin:old.estFin||'OPERATIVO',ejec:{...(old.ejec||{}),name:resp,date:fs.slice(0,10)},conFotos:fotOn,fotos,photos:fotos.map(p=>p.src)};
+  if(eng)rec.eng=eng;
   if(docBig(rec)){bad('El registro tiene demasiadas fotos o muy pesadas. Quita alguna e intenta otra vez.');return}
   const sb=F.querySelector('button:not([type=button])');if(sb)sb.disabled=true;let extra='';
   if(!numOf('rp',rec.num))rec.num=(await takeNums('rp'))[0];
-  if(rec.motivo==='ENGRASE'&&!old.grLogId){const gid='GR-'+Date.now().toString().slice(-8);put('grease',stGreaseFrom(rec,gid));rec.grLogId=gid;extra=' Se registró también en Engrase.'}
+  if(rec.motivo==='ENGRASE'&&!old.grLogId){const gid='GR-'+Date.now().toString().slice(-8);put('grease',stGreaseFrom(rec,gid));rec.grLogId=gid;extra=' Se registró también en el Control diario de engrase.'}
+  else if(rec.motivo==='ENGRASE'&&old.grLogId)extra=await rdEngUpdate(rec,old);
   put('stops',rec);if(hs>(Number(e.hours)||0))put('fleet',{...e,hours:hs});
   repDate=fp.slice(0,10);hide();note('Registro '+rec.num+' guardado ('+t+' h).'+extra);
   if(cur==='rep'||cur==='back'||cur==='dash')render();
+}
+// al editar un registro de engrase, se corrige también su fila del Control diario (creada desde este registro)
+async function rdEngUpdate(rec,old){
+  const Q=eqnApi();if(!Q)return' (El Control diario de engrase se actualizará al abrir el módulo de engrase.)';
+  const d=Q.S.engrasesDiarios.find(x=>x.id==='G_'+old.grLogId);if(!d)return'';
+  const g=rec.eng||{};
+  try{await Q.C.actualizarDiario(d,{fecha:rec.fp.slice(0,10),tipo:g.tipo||d.tipo,horometro:Number(rec.hp)||d.horometro,tecnico:rec.resp,tipoGrasa:g.grasa||undefined,puntos:g.puntos===''||g.puntos==null?undefined:g.puntos,kg:g.kg===''||g.kg==null?undefined:g.kg,observaciones:[rec.desc,rec.obs].filter(Boolean).join(' · ')},'Editado desde el registro de intervención '+(rec.num||''));try{Q.Bridge.refresh()}catch(_){}return' También se corrigió en el Control diario de engrase.'}
+  catch(e){return' ⚠️ No se pudo corregir el Control diario: '+e.message}
 }
 function rpCalc(){
   const F=document.querySelector('#modal form');if(!F||!F.fs||!$('rp-tt'))return;

@@ -145,12 +145,34 @@
       const eq = S.equipos.find(e => e.fleetId === g.fleetId); if (!eq) continue;
       const ex = C.diarioEn(eq.id, g.date);
       if (!ex) {
-        const qty = Number(g.qty), gramos = !isNaN(qty) && qty > 0 ? (g.unit === 'g' ? qty : g.unit === 'kg' ? qty * 1000 : 0) : 0;
+        const vacio = v => v === '' || v === null || v === undefined;
+        // tipo: el del registro; si no viene, el programado ese día (como el Control diario)
+        const fila = C.programaMes(C.mesDe(g.date)).find(f => f.eq.id === eq.id);
+        const tipos = C.tiposEng().map(t => t.codigo);
+        const tipo = tipos.includes(g.tipo) ? g.tipo : ((fila && fila.dias[g.date]) || 'EG');
+        const pts = C.puntosDeTipo(eq, tipo);
+        const desdeRD = g.origin === 'intervencion' && g.tipo !== undefined; // registros nuevos del registro de intervenciones
         const grasa = g.grease && C.grasa(g.grease) ? g.grease : (g.grease || C.grasaEq(eq));
-        const d = { id: 'G_' + g.id, fecha: g.date, equipoId: eq.id, horometro: Number(g.hours) > 0 ? Number(g.hours) : null, tipo: 'EG', tecnico: g.tech || '', observaciones: [g.notes, g.origin === 'intervencion' ? 'Desde el reporte de mantenimiento' : 'Importado del módulo anterior', g.qty && !gramos ? `${g.qty} ${g.unit}` : ''].filter(Boolean).join(' · '),
-          foto: null, gramos, puntos: Number(g.done) || 0, puntosIds: [], tipoGrasa: grasa, precioKg: C.precioGrasa(grasa), precioPunto: C.precioPunto(grasa), tc: C.tc(), origenMantify: g.id };
-        const c = C.costoDiario(d); d.costoKg = +c.costoKg.toFixed(2); d.costoPuntos = +c.costoPuntos.toFixed(2); d.costoKgUSD = +c.costoKgUSD.toFixed(2); d.costoPuntosUSD = +c.costoPuntosUSD.toFixed(2);
-        await EQ.DB.put('engrasesDiarios', d, { motivo: 'Desde Mantify' });
+        const origen = g.origin === 'intervencion' ? `Desde el registro de intervenciones${g.stopNum ? ' ' + g.stopNum : ''}` : 'Importado del módulo anterior';
+        const obs = [g.notes && g.notes !== 'Registrado desde el reporte de mantenimiento.' ? g.notes : '', origen, g.qty && g.unit && g.unit !== 'kg' && g.unit !== 'g' ? `${g.qty} ${g.unit}` : ''].filter(Boolean).join(' · ');
+        const hor = Number(g.hours) > 0 ? Number(g.hours) : null;
+        let hecho = false;
+        if (desdeRD && C.engraseAplica(eq)) { // igual que el Control diario: actualiza puntos, horómetro y costos
+          try {
+            await C.registrarDiario({ eq, fecha: g.date, horometro: hor, tipo, tecnico: g.tech || '', observaciones: obs, tipoGrasa: grasa, kg: g.unit === 'kg' && !vacio(g.qty) ? Number(g.qty) : null, nPuntos: vacio(g.done) ? null : Number(g.done), id: 'G_' + g.id, extra: { origenMantify: g.id, stopId: g.stopId || '' } });
+            hecho = true;
+          } catch (e) { console.warn('Engrase desde intervención', e); }
+        }
+        if (!hecho) {
+          const qty = Number(g.qty);
+          let gramos = !vacio(g.qty) && !isNaN(qty) && qty >= 0 ? (g.unit === 'g' ? qty : g.unit === 'kg' ? qty * 1000 : 0) : null;
+          if (gramos === null) gramos = desdeRD ? pts.reduce((s2, p) => s2 + (Number(p.gramos) || 0), 0) : 0;
+          const puntos = !vacio(g.done) ? Number(g.done) || 0 : (desdeRD ? pts.length : 0);
+          const d = { id: 'G_' + g.id, fecha: g.date, equipoId: eq.id, horometro: hor, tipo, tecnico: g.tech || '', observaciones: obs,
+            foto: null, gramos: +Number(gramos).toFixed(1), puntos, puntosIds: [], tipoGrasa: grasa, precioKg: C.precioGrasa(grasa), precioPunto: C.precioPunto(grasa), tc: C.tc(), origenMantify: g.id, stopId: g.stopId || '' };
+          const c = C.costoDiario(d); d.costoKg = +c.costoKg.toFixed(2); d.costoPuntos = +c.costoPuntos.toFixed(2); d.costoKgUSD = +c.costoKgUSD.toFixed(2); d.costoPuntosUSD = +c.costoPuntosUSD.toFixed(2);
+          await EQ.DB.put('engrasesDiarios', d, { motivo: 'Desde Mantify' });
+        }
         if (g.tech) await C.asegurarTecnico(g.tech, 'Engrase');
       }
       await marcar('g:' + g.id);
