@@ -320,3 +320,11 @@ html.en-mantify .card,html.en-mantify .kpi{border-radius:12px}
   .cd-grid input,.cd-grid select{width:100%;font-size:16px;padding:7px 8px}
   .cd-one{display:block;width:calc(100% - 20px);margin:0 10px 10px;padding:10px;font-size:15px}
 }
+/* ---- Neumáticos: formulario de medición por posición ---- */
+#dgBody .tire{cursor:pointer}
+@media (max-width:720px){
+  .med-grid{grid-template-columns:1fr 1fr;gap:8px}
+  .med-grid .full{grid-column:1/-1}
+  .med-grid input,.med-grid select{font-size:16px;width:100%}
+  .med-grid .hint{font-size:10px}
+}

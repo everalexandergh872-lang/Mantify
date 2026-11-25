@@ -3,17 +3,18 @@
   const U = EQ.U, S = EQ.S, C = EQ.C;
   EQ.Views = EQ.Views || {};
   const V = {};
-  const TABS = [['diagrama', 'Diagrama de posiciones'], ['inventario', 'Inventario de neumáticos'], ['remanentes', 'Carga libre de remanentes'], ['inspeccion', 'Inspección por equipo'], ['analisis', 'Desgaste y vida útil'], ['presiones', 'Control de presión'], ['costos', 'Costos']];
+  const TABS = [['diagrama', 'Medición de remanentes'], ['inventario', 'Inventario de neumáticos'], ['inspeccion', 'Inspección por equipo'], ['analisis', 'Desgaste y vida útil'], ['presiones', 'Control de presión'], ['costos', 'Costos']];
 
   V.render = root => {
     const App = EQ.App;
-    const tab = App.tab('neumaticos', 'diagrama');
+    let tab = App.tab('neumaticos', 'diagrama');
+    if (!TABS.some(([k]) => k === tab)) tab = App.state.tab.neumaticos = 'diagrama'; // la "carga libre de remanentes" ya no existe
     root.innerHTML = App.tabsHtml('neumaticos', TABS, tab) + '<div id="neuBody"></div>';
     App.wireTabs(root, 'neumaticos');
     const body = root.querySelector('#neuBody');
-    if (!C.equiposNeum().length && C.equiposActivos().length && !['inventario', 'remanentes', 'costos'].includes(tab)) { body.innerHTML = `<div class="card">${U.emptyState('⊘', 'Ningún equipo está en la medición de neumáticos', 'Todos los equipos fueron quitados de la medición de neumáticos. Vuelva a incluirlos desde el Maestro de Equipos.', '<a class="btn btn-orange" href="#/equipos">Ir al Maestro de Equipos</a>')}</div>`; return; }
-    if (!C.equiposActivos().length && tab !== 'inventario' && tab !== 'remanentes') { body.innerHTML = `<div class="card">${U.emptyState('◎', 'No hay equipos cargados', 'Los equipos se toman de <b>Mantify → Equipos</b>. Registre allí la flota y aparecerá aquí sola.', '<a class="btn btn-orange" href="#" data-mfleet>Ir a Equipos de Mantify</a>')}</div>`; return; }
-    ({ diagrama: renderDiagrama, inventario: renderInventario, inspeccion: renderInspeccion, remanentes: renderRemanentes, analisis: renderAnalisis, presiones: renderPresiones, costos: renderCostos })[tab](body);
+    if (!C.equiposNeum().length && C.equiposActivos().length && !['inventario', 'costos'].includes(tab)) { body.innerHTML = `<div class="card">${U.emptyState('⊘', 'Ningún equipo está en la medición de neumáticos', 'Todos los equipos fueron quitados de la medición de neumáticos. Vuelva a incluirlos desde el Maestro de Equipos.', '<a class="btn btn-orange" href="#/equipos">Ir al Maestro de Equipos</a>')}</div>`; return; }
+    if (!C.equiposActivos().length && tab !== 'inventario') { body.innerHTML = `<div class="card">${U.emptyState('◎', 'No hay equipos cargados', 'Los equipos se toman de <b>Mantify → Equipos</b>. Registre allí la flota y aparecerá aquí sola.', '<a class="btn btn-orange" href="#" data-mfleet>Ir a Equipos de Mantify</a>')}</div>`; return; }
+    ({ diagrama: renderDiagrama, inventario: renderInventario, inspeccion: renderInspeccion, analisis: renderAnalisis, presiones: renderPresiones, costos: renderCostos })[tab](body);
   };
 
   const stockDisponible = () => S.neumaticos.filter(n => !n.posicion && EQ.ESTADOS_INSTALABLES.includes(n.estado));
@@ -24,7 +25,7 @@
     const sel = EQ.App.state.selPos === p.pos ? 'sel' : '';
     if (!n) return `<div class="tire empty ${sel}" data-pos="${p.pos}" title="${U.esc(p.label)} – vacía"><span class="pos">P${p.num}</span><span>vacía</span></div>`;
     const a = C.analisisNeum(n);
-    return `<div class="tire ${a.estadoDesg} ${sel}" data-pos="${p.pos}" title="${U.esc(p.label)} · ${U.esc(n.codigo)}"><span class="pos">P${p.num}</span><span style="font-size:9px">${U.esc(String(n.codigo).length > 8 ? '…' + String(n.codigo).slice(-7) : n.codigo)}</span><span class="pct">${a.ultima ? U.num(a.desgPct, 0) + '%' : '—'}</span>${a.presion.cls === 'rojo' || a.presion.cls === 'amarillo' ? '<span title="Presión fuera de rango">⚠</span>' : ''}</div>`;
+    return `<div class="tire ${a.estadoDesg} ${sel}" data-pos="${p.pos}" title="${U.esc(p.label)} · ${U.esc(n.codigo)}"><span class="pos">P${p.num}</span><span style="font-size:9px">${U.esc(String(n.codigo).length > 8 ? '…' + String(n.codigo).slice(-7) : n.codigo)}</span><span class="pct">${a.ultima && C.profProm(a.ultima) !== null ? U.num(a.profActual, 1) + ' mm' : '—'}</span>${a.presion.cls === 'rojo' || a.presion.cls === 'amarillo' ? '<span title="Presión fuera de rango">⚠</span>' : ''}</div>`;
   }
   function renderDiagrama(root) {
     const App = EQ.App;
@@ -49,7 +50,7 @@
     if (!pos.length) { b.innerHTML = `<div class="card">${U.emptyState('🚜', 'Equipo sin neumáticos', 'La distribución configurada no tiene ejes (equipo sobre orugas). Puede cambiarla en "Configurar distribución".')}</div>`; return; }
     const ejes = eq.layoutNeum.ejes || [];
     const inst = C.neumEq(eq.id);
-    b.innerHTML = `<div class="truck-wrap">
+    b.innerHTML = `<div class="info-box mb">👆 Toca una posición para registrar sus remanentes, la marca, el modelo y la medida del neumático. Cada medición queda en el <b>registro de mediciones</b> de abajo.</div><div class="truck-wrap">
       <div class="truck"><div class="cab">FRENTE · ${U.esc(eq.codigo)}</div><div class="chassis"></div>
         ${ejes.map((e, i) => { const ps = pos.filter(p => p.eje === i); const half = ps.length / 2; return `<div class="axle"><div class="bar"></div><div class="side">${ps.slice(0, half).map(p => tireBox(eq, p)).join('')}</div><div class="mid">${U.esc(e.nombre)}</div><div class="side">${ps.slice(half).map(p => tireBox(eq, p)).join('')}</div></div>`; }).join('')}
         ${pos.some(p => p.repuesto) ? `<div class="spares"><span class="lbl">Repuestos</span>${pos.filter(p => p.repuesto).map(p => tireBox(eq, p)).join('')}</div>` : ''}
@@ -61,7 +62,9 @@
           <div class="kpi gray"><div class="lbl">Vacías</div><div class="val">${pos.length - inst.length}</div></div>
           <div class="kpi bad"><div class="lbl">Críticos</div><div class="val">${inst.filter(n => C.analisisNeum(n).critico).length}</div></div>
         </div></div></div></div>`;
-    b.querySelectorAll('.tire').forEach(t => t.onclick = () => { App.state.selPos = t.dataset.pos; b.querySelectorAll('.tire').forEach(x => x.classList.toggle('sel', x === t)); panel(eq, t.dataset.pos); });
+    b.insertAdjacentHTML('beforeend', '<div class="card mt" id="regMed"></div>');
+    b.querySelectorAll('.tire').forEach(t => t.onclick = () => { App.state.selPos = t.dataset.pos; b.querySelectorAll('.tire').forEach(x => x.classList.toggle('sel', x === t)); panel(eq, t.dataset.pos); V.medirPos(eq, t.dataset.pos); });
+    registroMediciones(b.querySelector('#regMed'), eq);
     if (!App.state.selPos || !pos.find(p => p.pos === App.state.selPos)) App.state.selPos = pos[0].pos;
     b.querySelector(`.tire[data-pos="${App.state.selPos}"]`).classList.add('sel');
     panel(eq, App.state.selPos);
@@ -72,8 +75,9 @@
     const n = C.neumEnPos(eq.id, posCode);
     if (!n) {
       el.innerHTML = `<h3>Posición P${p.num} · ${U.esc(p.pos)}</h3><div class="muted mb">${U.esc(p.label)} — <b>posición vacía</b></div>
-        <div class="flex"><button class="btn btn-orange" id="pInst">Instalar neumático</button><button class="btn btn-outline" id="pNew">Registrar nuevo e instalar</button></div>
+        <div class="flex"><button class="btn btn-ok" id="pMed">✎ Medir y registrar neumático</button><button class="btn btn-orange" id="pInst">Instalar neumático</button><button class="btn btn-outline" id="pNew">Registrar nuevo e instalar</button></div>
         <div class="small muted mt">Neumáticos disponibles en almacén: ${stockDisponible().length}</div>`;
+      el.querySelector('#pMed').onclick = () => V.medirPos(eq, posCode);
       el.querySelector('#pInst').onclick = () => V.instalar(eq, posCode);
       el.querySelector('#pNew').onclick = () => V.formNeum(null, saved => V.instalar(eq, posCode, saved));
       return;
@@ -86,13 +90,13 @@
         .map(([k, v]) => `<div><div class="k">${k}</div><div class="v">${U.esc(v || '—')}</div></div>`).join('')}</div>
       ${a.patrones.length ? `<div class="warn-box mt">Desgaste / condición: <b>${U.esc(a.patrones.join(', '))}</b></div>` : ''}
       ${!a.suficiente ? `<div class="small muted mt">Proyección: ${U.esc(a.motivoInsuf)}</div>` : ''}
-      <div class="flex mt"><button class="btn btn-sm" data-a="ficha">Ficha e historial</button><button class="btn btn-sm btn-outline" data-a="mover">⇄ Rotar / cambiar posición</button><button class="btn btn-sm btn-outline" data-a="retirar">⤓ Retirar</button><button class="btn btn-sm btn-outline" data-a="estado">Cambiar estado</button><button class="btn btn-sm btn-outline" data-a="rep">Reparación</button><button class="btn btn-sm btn-orange" data-a="rem">✎ Cargar remanente</button></div>`;
+      <div class="flex mt"><button class="btn btn-sm" data-a="ficha">Ficha e historial</button><button class="btn btn-sm btn-outline" data-a="mover">⇄ Rotar / cambiar posición</button><button class="btn btn-sm btn-outline" data-a="retirar">⤓ Retirar</button><button class="btn btn-sm btn-outline" data-a="estado">Cambiar estado</button><button class="btn btn-sm btn-outline" data-a="rep">Reparación</button><button class="btn btn-sm btn-orange" data-a="rem">✎ Medir remanente</button></div>`;
     el.querySelector('[data-a=ficha]').onclick = () => V.fichaNeum(n);
     el.querySelector('[data-a=mover]').onclick = () => V.mover(n);
     el.querySelector('[data-a=retirar]').onclick = () => V.retirar(n);
     el.querySelector('[data-a=estado]').onclick = () => V.cambiarEstado(n);
     el.querySelector('[data-a=rep]').onclick = () => V.reparar(n, 'Reparación');
-    el.querySelector('[data-a=rem]').onclick = () => { const st = remState(); st.rows = st.rows.filter(r => r.neumatico || r.profs.some(x => x !== null)).concat([filaDeNeum(n)]); EQ.App.state.tab.neumaticos = 'remanentes'; EQ.App.refresh(); };
+    el.querySelector('[data-a=rem]').onclick = () => V.medirPos(eq, posCode);
   }
 
   // ---------------- A. Configuración de distribución por equipo ----------------
@@ -412,14 +416,13 @@
   function renderInspeccion(root) {
     const App = EQ.App, cfg = C.cfg();
     const meds = C.medNombres();
-    root.innerHTML = `<div class="selector-bar"><b>Equipo:</b> ${App.eqSelector(root, { modulo: 'neum' })}<span class="spacer"></span><button class="btn btn-sm btn-orange" id="goRem">✎ Carga libre de remanentes</button></div><div id="inBody"></div>`;
+    root.innerHTML = `<div class="selector-bar"><b>Equipo:</b> ${App.eqSelector(root, { modulo: 'neum' })}</div><div id="inBody"></div>`;
     App.wireEqSelector(root);
-    root.querySelector('#goRem').onclick = () => { App.state.tab.neumaticos = 'remanentes'; App.refresh(); };
     const eq = C.eq(App.state.eqId), un = C.unidad(eq);
     const b = root.querySelector('#inBody');
     const posMap = Object.fromEntries(C.posiciones(eq.layoutNeum).map(p => [p.pos, p]));
     const tires = C.neumEq(eq.id).sort((x, y) => ((posMap[x.posicion] || {}).num || 99) - ((posMap[y.posicion] || {}).num || 99));
-    if (!tires.length) { b.innerHTML = `<div class="card">${U.emptyState('◎', 'El equipo no tiene neumáticos instalados', 'Instálelos desde el diagrama de posiciones, o use la <b>carga libre de remanentes</b> para registrar mediciones de cualquier neumático.')}</div>`; return; }
+    if (!tires.length) { b.innerHTML = `<div class="card">${U.emptyState('◎', 'El equipo no tiene neumáticos instalados', 'Regístrelos tocando cada posición en <b>Medición de remanentes</b>.')}</div>`; return; }
     b.innerHTML = `<div class="card"><h3>Sesión de inspección · ${U.esc(C.eqLabel(eq))}</h3>
       <form class="form-grid" id="fS">
         ${U.field('fecha', 'Fecha', { type: 'date', value: U.today(), req: true, attrs: `max="${U.today()}"` })}
@@ -427,7 +430,7 @@
         ${U.field('inspector', 'Inspector', { type: 'datalist', options: C.tecnicos('Neumáticos') })}
         ${U.field('observaciones', 'Observaciones generales', {})}
       </form>
-      <div class="info-box mt">Carga libre: complete solo lo que midió. Puede ingresar 1 a ${meds.length} remanentes por neumático (${meds.map(U.esc).join(', ')}), solo la presión o solo la condición. Las filas vacías no se registran. Los puntos de medición se configuran en Configuración → Listas.</div>
+      <div class="info-box mt">Complete solo lo que midió. Puede ingresar 1 a ${meds.length} remanentes por neumático (${meds.map(U.esc).join(', ')}), solo la presión o solo la condición. Las filas vacías no se registran. Los puntos de medición se configuran en Configuración → Listas.</div>
       <div class="tbl-wrap mt" style="max-height:none"><table class="tbl rem-grid" id="tIns"><thead><tr><th class="nosort">Pos.</th><th class="nosort">Neumático</th><th class="nosort num">PSI rec.</th><th class="nosort num">PSI medida</th>${meds.map(m => `<th class="nosort num">${U.esc(m)} mm</th>`).join('')}<th class="nosort">Condición física</th><th class="nosort">Obs.</th><th class="nosort">Fotos</th><th class="nosort">Resultado</th></tr></thead><tbody>
       ${tires.map(n => { const a = C.analisisNeum(n); return `<tr data-id="${n.id}"><td><b>P${(posMap[n.posicion] || {}).num || ''}</b><div class="small muted">${U.esc(n.posicion)}</div></td>
         <td><b>${U.esc(n.codigo)}</b><div class="small muted">ini ${U.num(n.profInicial, 1)} · últ ${U.num(a.profActual, 1)} mm</div></td>
@@ -506,245 +509,99 @@
     return 0;
   }
 
-  // ---------------- CARGA LIBRE DE REMANENTES ----------------
-  const REM_F = [
-    { k: 'fecha', syn: ['fecha', 'date', 'fechamedicion', 'fechainspeccion', 'fechademedicion'] },
-    { k: 'neumatico', syn: ['codigoneumatico', 'codneumatico', 'neumatico', 'llanta', 'codllanta', 'codigollanta', 'codigo', 'cod', 'codigointerno'] },
-    { k: 'serie', syn: ['serie', 'nserie', 'numerodeserie', 'seriedelneumatico', 'serieneumatico', 'dot'] },
-    { k: 'equipo', syn: ['equipo', 'codigoequipo', 'codequipo', 'unidad', 'codint', 'placa'] },
-    { k: 'posicion', syn: ['posicion', 'pos', 'ubicacion', 'posicionneumatico'] },
-    { k: 'lectura', syn: ['horometro', 'horómetro', 'km', 'kilometraje', 'hrkm', 'lectura', 'odometro', 'hr'] },
-    { k: 'presionMed', syn: ['presion', 'psi', 'presionpsi', 'presionmedida', 'presionmedidapsi'] },
-    { k: 'presionRec', syn: ['presionrec', 'presionrecomendada', 'presionrecpsi', 'presionrecomendadapsi'] },
-    { k: 'condicion', syn: ['condicion', 'condicionfisica', 'estadofisico', 'hallazgo'] },
-    { k: 'obs', syn: ['observacion', 'observaciones', 'obs', 'comentario', 'comentarios'] },
-    { k: 'inspector', syn: ['inspector', 'tecnico', 'responsable'] }
-  ];
-  const nrm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '');
-  // Búsqueda flexible: código o serie, sin distinguir mayúsculas, espacios, guiones ni ceros a la izquierda
-  const nk = v => String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/(^|[A-Z])0+(?=\d)/g, '$1');
-  const findTire = (cod, serie) => {
-    const c = String(cod || '').trim().toUpperCase(), sr = String(serie || '').trim().toUpperCase();
-    const exact = (c && S.neumaticos.find(n => String(n.codigo).toUpperCase() === c)) || (sr && S.neumaticos.find(n => String(n.serie).toUpperCase() === sr)) || (c && S.neumaticos.find(n => String(n.serie).toUpperCase() === c));
-    if (exact) return exact;
-    const kc = nk(cod), ks = nk(serie);
-    return (kc && S.neumaticos.find(n => nk(n.codigo) === kc || nk(n.serie) === kc)) || (ks && S.neumaticos.find(n => nk(n.serie) === ks || nk(n.codigo) === ks)) || null;
-  };
-  // Neumático de una fila: por código/serie; si no hay código, el instalado en equipo + posición
-  const tireDeFila = r => { const n = findTire(r.neumatico); if (n) return n; if (!r.neumatico && r.equipo && r.posicion) { const e = C.eqByCode(r.equipo); if (e) return C.neumEnPos(e.id, r.posicion) || S.neumaticos.find(x => x.equipoId === e.id && nk(x.posicion) === nk(r.posicion)) || null; } return null; };
-  const codigoDeFila = r => r.neumatico ? String(r.neumatico).trim() : (r.equipo && r.posicion ? `${String(r.equipo).trim()}-${String(r.posicion).trim()}` : '');
+  // tipo de neumático sugerido según la familia del equipo (límites, cocada nueva y presión)
   const tipoSugerido = eq => { const ts = C.cfg().tiposNeumatico; const f = (eq && eq.familia) || ''; const by = re => ts.find(t => re.test(t.nombre)); return (/volquete|cisterna|tracto/i.test(f) && by(/cami[oó]n/i)) || (/camioneta/i.test(f) && by(/camioneta/i)) || (/minib/i.test(f) && by(/minib/i)) || (/cargador|motoniv|retro|rodillo/i.test(f) && by(/OTR/i)) || ts[0] || {}; };
-  const remState = () => EQ.App.state.rem || (EQ.App.state.rem = { rows: [], eqId: '', hEq: '', hNeu: '', desde: U.addDays(U.today(), -90), hasta: U.today() });
-  const nuevaFila = (o = {}) => Object.assign({ fecha: U.today(), neumatico: '', equipo: '', posicion: '', lectura: '', profs: [], presionMed: '', presionRec: '', condicion: '', obs: '', inspector: '' }, o);
-  const filaDeNeum = (n, fecha) => { const eq = C.eq(n.equipoId); return nuevaFila({ fecha: fecha || U.today(), neumatico: n.codigo, equipo: eq ? eq.codigo : '', posicion: n.posicion || '', presionRec: n.presionRec || '' }); };
 
-  function renderRemanentes(root) {
-    const st = remState(), cfg = C.cfg(), meds = C.medNombres();
-    if (!st.rows.length) st.rows.push(nuevaFila());
-    const eqs = C.equiposNeum();
-    root.innerHTML = `
-      <div class="card mb"><h3>Carga libre de remanentes <span class="muted small" style="font-weight:normal">— cualquier neumático, cualquier fecha, con o sin horómetro, de 1 a ${meds.length} mediciones</span></h3>
-        <div class="info-box mb">El código del neumático es <b>libre</b>: puede escribir el código interno, la serie o cualquier identificación (se reconoce aunque cambien mayúsculas, espacios o guiones). Si no existe se registra automáticamente; si lo deja vacío se usa el neumático instalado en el equipo y la posición indicados.</div>
-        <div class="flex mb">
-          <select id="rmEq">${U.opts(eqs.map(e => ({ v: e.id, t: C.eqLabel(e) })), st.eqId, '— Equipo —')}</select>
-          <button class="btn btn-sm btn-outline" id="rmAddEq">+ Neumáticos instalados del equipo</button>
-          <button class="btn btn-sm btn-outline" id="rmAdd">+ Fila</button>
-          <button class="btn btn-sm btn-outline" id="rmAdd10">+ 10 filas</button>
-          <span class="spacer"></span>
-          <button class="btn btn-sm" id="rmTpl">⭳ Plantilla Excel</button>
-          <button class="btn btn-sm btn-orange" id="rmImp">⭱ Importar Excel / CSV</button>
-          <button class="btn btn-sm btn-outline" id="rmClr">Limpiar</button>
-        </div>
-        <datalist id="dlNeu">${S.neumaticos.map(n => `<option value="${U.esc(n.codigo)}">${U.esc(n.serie || '')} · ${U.esc(n.marca || '')} ${n.posicion ? '· ' + U.esc((C.eq(n.equipoId) || {}).codigo || '') + ' ' + U.esc(n.posicion) : '· almacén'}</option>`).join('')}</datalist>
-        <datalist id="dlEqR">${eqs.map(e => `<option value="${U.esc(e.codigo)}">${U.esc(e.descripcion || '')}</option>`).join('')}</datalist>
-        <datalist id="dlCond">${cfg.condiciones.map(c => `<option value="${U.esc(c)}">`).join('')}</datalist>
-        <div class="tbl-wrap" style="max-height:520px"><table class="tbl rem-grid" id="rmT"><thead><tr><th class="nosort">#</th><th class="nosort">Fecha</th><th class="nosort">Neumático (código o serie)</th><th class="nosort">Equipo</th><th class="nosort">Posición</th><th class="nosort num">Horóm./Km</th>${meds.map(m => `<th class="nosort num">${U.esc(m)}</th>`).join('')}<th class="nosort num">Prom.</th><th class="nosort num">PSI med.</th><th class="nosort num">PSI rec.</th><th class="nosort">Condición</th><th class="nosort">Observación</th><th class="nosort"></th></tr></thead><tbody>
-        ${st.rows.map((r, i) => { const n = findTire(r.neumatico); const prom = C.profProm({ profs: r.profs }); return `<tr data-i="${i}">
-          <td class="muted">${i + 1}</td>
-          <td><input type="date" data-f="fecha" value="${U.esc(r.fecha)}" max="${U.today()}" style="width:130px"></td>
-          <td><input data-f="neumatico" list="dlNeu" value="${U.esc(r.neumatico)}" style="width:130px" placeholder="libre" title="${r.neumatico && !n ? 'Código nuevo: se registrará automáticamente al guardar' : 'Cualquier código o serie. Vacío = el neumático instalado en equipo + posición'}">${r.neumatico && !n ? '<div class="small" style="color:#9a7100">nuevo</div>' : ''}</td>
-          <td><input data-f="equipo" list="dlEqR" value="${U.esc(r.equipo)}" style="width:110px"></td>
-          <td><input data-f="posicion" value="${U.esc(r.posicion)}" style="width:100px"></td>
-          <td class="num"><input type="number" data-f="lectura" value="${U.esc(r.lectura)}" min="0" step="any" style="width:85px"></td>
-          ${meds.map((m, k) => `<td class="num"><input type="number" data-p="${k}" value="${U.esc(r.profs[k] === null || r.profs[k] === undefined ? '' : r.profs[k])}" min="0" step="any" style="width:58px"></td>`).join('')}
-          <td class="num prom">${prom === null ? '' : `<b>${U.num(prom, 1)}</b>${n ? `<div class="small muted">${U.num((n.profInicial - prom) / n.profInicial * 100, 0)}%</div>` : ''}`}</td>
-          <td class="num"><input type="number" data-f="presionMed" value="${U.esc(r.presionMed)}" min="0" step="any" style="width:60px"></td>
-          <td class="num"><input type="number" data-f="presionRec" value="${U.esc(r.presionRec)}" min="0" step="any" style="width:60px"></td>
-          <td><input data-f="condicion" list="dlCond" value="${U.esc(r.condicion)}" style="width:140px"></td>
-          <td><input data-f="obs" value="${U.esc(r.obs)}" style="width:160px"></td>
-          <td><button class="btn btn-ghost btn-sm" data-del="${i}" title="Quitar fila">✕</button></td></tr>`; }).join('')}
-        </tbody></table></div>
-        <div class="flex mt"><input id="rmInsp" list="dlTecR" placeholder="Inspector (para todas las filas)" value="${U.esc(st.inspector || '')}" style="width:220px"><datalist id="dlTecR">${C.tecnicos('Neumáticos').map(t => `<option value="${U.esc(t)}">`).join('')}</datalist>
-          <span class="muted small">${st.rows.length} fila(s). Las filas sin neumático o sin datos se ignoran.</span><span class="spacer"></span><button class="btn btn-ok" id="rmSave">✓ Guardar remanentes</button></div>
-      </div>
-      <div class="card"><h3>Historial de remanentes y presiones</h3>
-        <div class="flex mb"><select id="rhEq">${U.opts(eqs.map(e => ({ v: e.id, t: e.codigo })), st.hEq, 'Todos los equipos')}</select><input id="rhNeu" list="dlNeu" placeholder="Neumático" value="${U.esc(st.hNeu)}" style="width:140px"><input type="date" id="rhD" value="${st.desde}"> a <input type="date" id="rhH" value="${st.hasta}"></div>
-        <div id="rhT"></div></div>`;
-    const T = root.querySelector('#rmT');
-    const sync = () => { T.querySelectorAll('tbody tr').forEach(tr => { const r = st.rows[+tr.dataset.i]; tr.querySelectorAll('[data-f]').forEach(inp => r[inp.dataset.f] = inp.value.trim()); r.profs = [...tr.querySelectorAll('[data-p]')].map(inp => U.toNum(inp.value)); }); st.inspector = root.querySelector('#rmInsp').value.trim(); };
-    T.addEventListener('change', e => {
-      const tr = e.target.closest('tr'); if (!tr) return;
-      sync();
-      const r = st.rows[+tr.dataset.i];
-      if (e.target.dataset.f === 'neumatico') { const n = findTire(r.neumatico); if (n) { r.neumatico = n.codigo; if (!r.equipo && n.equipoId) r.equipo = (C.eq(n.equipoId) || {}).codigo || ''; if (!r.posicion) r.posicion = n.posicion || ''; if (!r.presionRec) r.presionRec = n.presionRec || ''; } EQ.App.refresh(); return; }
-      if (e.target.dataset.p !== undefined) { const prom = C.profProm({ profs: r.profs }); const n = findTire(r.neumatico); tr.querySelector('.prom').innerHTML = prom === null ? '' : `<b>${U.num(prom, 1)}</b>${n ? `<div class="small muted">${U.num((n.profInicial - prom) / n.profInicial * 100, 0)}%</div>` : ''}`; }
-    });
-    T.addEventListener('click', e => { const d = e.target.closest('[data-del]'); if (!d) return; sync(); st.rows.splice(+d.dataset.del, 1); EQ.App.refresh(); });
-    root.querySelector('#rmEq').onchange = e => { sync(); st.eqId = e.target.value; };
-    root.querySelector('#rmAddEq').onclick = () => {
-      sync(); const eq = C.eq(root.querySelector('#rmEq').value); if (!eq) { U.toast('Seleccione un equipo', 'bad'); return; }
-      const pm = Object.fromEntries(C.posiciones(eq.layoutNeum).map(p => [p.pos, p.num]));
-      const ns = C.neumEq(eq.id).sort((a, b) => (pm[a.posicion] || 99) - (pm[b.posicion] || 99));
-      if (!ns.length) { U.toast('El equipo no tiene neumáticos instalados', 'bad'); return; }
-      st.rows = st.rows.filter(r => r.neumatico || r.profs.some(x => x !== null)).concat(ns.map(n => filaDeNeum(n))); EQ.App.refresh();
-    };
-    root.querySelector('#rmAdd').onclick = () => { sync(); st.rows.push(nuevaFila({ fecha: (st.rows[st.rows.length - 1] || {}).fecha || U.today() })); EQ.App.refresh(); };
-    root.querySelector('#rmAdd10').onclick = () => { sync(); for (let i = 0; i < 10; i++) st.rows.push(nuevaFila({ fecha: (st.rows[st.rows.length - 1] || {}).fecha || U.today() })); EQ.App.refresh(); };
-    root.querySelector('#rmClr').onclick = async () => { if (await U.confirm('¿Limpiar todas las filas no guardadas?')) { st.rows = []; EQ.App.refresh(); } };
-    root.querySelector('#rmTpl').onclick = () => { sync(); plantillaRemanentes(C.eq(root.querySelector('#rmEq').value)); };
-    root.querySelector('#rmImp').onclick = async () => { sync(); await importarRemanentes(); };
-    root.querySelector('#rmSave').onclick = async () => { sync(); const b = root.querySelector('#rmSave'); b.disabled = true; try { await guardarRemanentes(); } catch (e) { U.toast(e.message, 'bad'); } finally { b.disabled = false; } };
-    // historial
-    ['#rhEq:hEq', '#rhNeu:hNeu', '#rhD:desde', '#rhH:hasta'].forEach(x => { const [sel, k] = x.split(':'); root.querySelector(sel).onchange = e => { sync(); st[k] = e.target.value.trim(); EQ.App.refresh(); }; });
-    const nf = st.hNeu ? findTire(st.hNeu) : null;
-    const hist = S.inspecciones.filter(i => (!st.hEq || i.equipoId === st.hEq) && (!st.hNeu || (nf && i.neumaticoId === nf.id)) && (!st.desde || i.fecha >= st.desde) && (!st.hasta || i.fecha <= st.hasta)).sort((a, b) => (b.fecha + (b.creado || '')) > (a.fecha + (a.creado || '')) ? 1 : -1);
-    U.table(root.querySelector('#rhT'), { exportName: 'historial_remanentes', rows: hist, empty: 'Sin mediciones en el periodo', cols: [
+  // ---------------- MEDICIÓN DE REMANENTES (tocando cada posición del diagrama) ----------------
+  const yoNombre = () => (EQ.Bridge.me() || {}).name || '';
+  const codigoLibre = base => { let c = base, k = 1; while (S.neumaticos.some(x => String(x.codigo).toUpperCase() === c.toUpperCase())) c = `${base}-${++k}`; return c; };
+  V.medirPos = (eq, posCode) => {
+    const cfg = C.cfg(), meds = C.medNombres(), un = C.unidad(eq), tec = !EQ.Bridge.isSup();
+    const pos = C.posiciones(eq.layoutNeum), p = pos.find(x => x.pos === posCode); if (!p) return;
+    const n = C.neumEnPos(eq.id, posCode), a = n ? C.analisisNeum(n) : null;
+    const sig = pos[pos.indexOf(p) + 1] || null;
+    const ult = a && a.ultima ? C.profsOf(a.ultima) : [];
+    const insp = tec ? U.field('inspector', 'Medido por', { value: yoNombre(), attrs: 'readonly' }) : U.field('inspector', 'Medido por', { type: 'datalist', options: C.tecnicos('Neumáticos'), value: yoNombre(), req: true });
+    U.modal({ title: `P${p.num} · ${p.pos} — ${eq.codigo}`, size: 'lg', body: `
+      <div class="muted small mb">${U.esc(p.label)}${n ? ` · Neumático <b>${U.esc(n.codigo)}</b>${a.ultima ? ` · última medición ${U.fdate(a.ultima.fecha)}: ${ult.map(x => U.num(x, 1)).join(' / ')} mm` : ' · sin mediciones'}` : ' · <b>sin neumático registrado</b>: se registrará con estos datos'}</div>
+      <div class="section-title">Neumático instalado</div>
+      <form class="form-grid med-grid" id="fMn">
+        ${n ? '' : U.field('codigo', 'Código / serie', { hint: `Vacío = ${U.esc(eq.codigo)}-${U.esc(p.pos)}` })}
+        ${U.field('marca', 'Marca', { type: 'datalist', options: cfg.marcasNeum, value: n ? n.marca : '' })}
+        ${U.field('modelo', 'Modelo', { value: n ? n.modelo : '' })}
+        ${U.field('medida', 'Medida', { type: 'datalist', options: cfg.medidas, value: n ? n.medida : '', hint: 'Ej. 265/70R16' })}
+        ${n ? '' : U.field('profInicial', 'Cocada nueva (mm)', { type: 'number', attrs: 'min="0" inputmode="decimal"', hint: 'Opcional' })}
+      </form>
+      <div class="section-title">Medición</div>
+      <form class="form-grid med-grid" id="fMm">
+        ${meds.map((m, k) => U.field('p' + k, `Remanente ${m} (mm)`, { type: 'number', attrs: `min="0" inputmode="decimal" placeholder="${ult[k] !== undefined ? 'últ. ' + U.num(ult[k], 1) : ''}"` })).join('')}
+        ${U.field('presionMed', 'Presión (PSI)', { type: 'number', attrs: `min="0" inputmode="decimal"${n && n.presionRec ? ` placeholder="rec. ${U.num(n.presionRec, 0)}"` : ''}`, hint: 'Opcional' })}
+        ${U.field('fecha', 'Fecha', { type: 'date', value: U.today(), req: true, attrs: `max="${U.today()}"` })}
+        ${U.field('lectura', `${C.lecturaLbl(eq)} (${un})`, { type: 'number', attrs: 'min="0" inputmode="decimal"', hint: `Opcional · último ${U.num(eq.horometro, 1)}` })}
+        ${insp}
+        ${U.field('observaciones', 'Observación', { cls: 'full' })}
+      </form>`,
+      onOpen: m => { const f = m.querySelector('[name=p0]'); if (f) setTimeout(() => f.focus(), 60); },
+      buttons: [{ label: 'Cancelar', cls: 'btn-outline' }, { label: '✓ Guardar', cls: 'btn-ok', onClick: m => guardarMedPos(m, eq, p, n) },
+        sig ? { label: `Guardar y P${sig.num} ›`, cls: 'btn-orange', onClick: async m => { const r = await guardarMedPos(m, eq, p, n); if (r !== false) setTimeout(() => V.medirPos(eq, sig.pos), 80); return r; } } : null].filter(Boolean) });
+  };
+  async function guardarMedPos(m, eq, p, n) {
+    const fn = m.querySelector('#fMn'), fm = m.querySelector('#fMm');
+    const dn = U.formData(fn), dm = U.formData(fm), meds = C.medNombres();
+    const profs = meds.map((_, k) => dm['p' + k]);
+    if (!profs.some(x => x !== null)) { U.markInvalid(fm, ['p0']); throw new Error('Registro incompleto: ingrese al menos un remanente.'); }
+    if (profs.some(x => x !== null && (x < 0 || x > 150))) throw new Error('Valor de remanente inválido.');
+    if (!dm.fecha || dm.fecha > U.today()) { U.markInvalid(fm, ['fecha']); throw new Error('Fecha incorrecta: no puede estar vacía ni ser futura.'); }
+    if (dm.lectura !== null && dm.lectura < 0) throw new Error('Lectura negativa no permitida.');
+    const inspector = !EQ.Bridge.isSup() ? yoNombre() : dm.inspector;
+    if (!inspector) { U.markInvalid(fm, ['inspector']); throw new Error('Indique quién hizo la medición.'); }
+    const mx = Math.max(...profs.filter(x => x !== null));
+    if (n && mx > Number(n.profInicial) && !(await U.confirm(`El remanente (${U.num(mx, 1)} mm) es mayor que la cocada inicial registrada de ${n.codigo} (${U.num(n.profInicial, 1)} mm). ¿Guardar de todas formas?`))) return false;
+    if (!n) { // posición sin neumático: se registra e instala con lo que se midió
+      const t = tipoSugerido(eq), cod = codigoLibre(dn.codigo || `${eq.codigo}-${p.pos}`);
+      let serie = dn.codigo || cod, k = 1; const marca = dn.marca || 'Sin marca';
+      while (S.neumaticos.some(x => String(x.serie).toUpperCase() === String(serie).toUpperCase() && String(x.marca).toUpperCase() === marca.toUpperCase())) serie = `${dn.codigo || cod}-${++k}`;
+      const ini = dn.profInicial > 0 ? Math.max(dn.profInicial, mx) : Math.max(Number(t.profNueva) || 0, mx);
+      const lect = dm.lectura !== null ? dm.lectura : (Number(eq.horometro) || 0);
+      n = await EQ.DB.put('neumaticos', { codigo: cod, serie, marca, modelo: dn.modelo || '', medida: dn.medida || 'Sin medida', tipo: t.nombre || '', profInicial: ini, presionRec: t.presionRec || null, estado: 'En servicio', fechaAdq: '', ciclo: 0, reencauches: 0, usoAcumulado: 0, usoInicioCiclo: 0,
+        equipoId: eq.id, posicion: p.pos, lecturaInstalacion: lect, fechaInst: dm.fecha, unidadUso: C.unidad(eq), observaciones: `Registrado desde la medición de remanentes (${eq.codigo} ${p.pos}).` });
+      await C.registrarMovimiento(n, 'Alta', { motivo: 'Registro desde la medición de remanentes', responsable: inspector });
+      await C.registrarMovimiento(n, 'Instalación', { fecha: dm.fecha, equipoId: eq.id, lectura: lect, posAnterior: '', posNueva: p.pos, motivo: 'Neumático encontrado en la medición de remanentes', responsable: inspector });
+    } else { // actualiza marca, modelo y medida si cambiaron
+      const ch = ['marca', 'modelo', 'medida'].filter(k => dn[k] && dn[k] !== (n[k] || ''));
+      if (ch.length) { ch.forEach(k => { n[k] = dn[k]; }); await EQ.DB.put('neumaticos', n, { motivo: `Datos actualizados en la medición de remanentes (${ch.join(', ')})` }); }
+    }
+    const res = await C.guardarMedicion({ n, fecha: dm.fecha, lectura: dm.lectura, profs, presionMed: dm.presionMed, presionRec: n.presionRec, condiciones: [], observaciones: dm.observaciones, inspector, posicion: p.pos, equipoId: eq.id });
+    const obs = await marcarObservacion(n, dm.fecha, inspector);
+    EQ.App.state.selPos = p.pos;
+    U.toast(`P${p.num} (${n.codigo}): ${profs.filter(x => x !== null).map(x => U.num(x, 1)).join(' / ')} mm guardado${obs ? ' · pasó a "En observación"' : ''}${res.nota ? ' · ' + res.nota : ''}`, 'ok');
+    EQ.App.refresh();
+  }
+  // Registro de mediciones de remanentes del equipo (o de toda la flota)
+  function registroMediciones(el, eq) {
+    const App = EQ.App, todos = !!App.state.regTodos, sup = EQ.Bridge.isSup(), yo = yoNombre();
+    const rows = S.inspecciones.filter(i => (todos || i.equipoId === eq.id) && C.profsOf(i).length).sort((a, b) => (b.fecha + (b.creado || '')) > (a.fecha + (a.creado || '')) ? 1 : -1);
+    const nf = id => S.neumaticos.find(x => x.id === id) || {};
+    const posNum = i => { const e = C.eq(i.equipoId); const q = e && e.layoutNeum ? C.posiciones(e.layoutNeum).find(x => x.pos === i.posicion) : null; return q ? `P${q.num} · ${i.posicion}` : (i.posicion || ''); };
+    el.innerHTML = `<h3>Registro de mediciones de remanentes <span class="muted small" style="font-weight:normal">${todos ? 'todos los equipos' : U.esc(eq.codigo)} · ${rows.length}</span><span class="right"><label class="flex small" style="font-weight:normal"><input type="checkbox" id="regTodos" ${todos ? 'checked' : ''}> Todos los equipos</label></span></h3><div id="regT"></div>`;
+    el.querySelector('#regTodos').onchange = e => { App.state.regTodos = e.target.checked; App.refresh(); };
+    U.table(el.querySelector('#regT'), { exportName: `remanentes_${todos ? 'flota' : eq.codigo}`, rows, empty: 'Aún no hay mediciones. Toca una posición del diagrama para registrar la primera.', cols: [
       { k: 'fecha', t: 'Fecha', fmt: v => U.fdate(v), text: r => r.fecha },
-      { k: 'n', t: 'Neumático', sort: r => (S.neumaticos.find(n => n.id === r.neumaticoId) || {}).codigo, fmt: (v, r) => { const n = S.neumaticos.find(x => x.id === r.neumaticoId); return n ? `<a href="#" data-fn="${n.id}">${U.esc(n.codigo)}</a>` : '—'; }, text: r => (S.neumaticos.find(n => n.id === r.neumaticoId) || {}).codigo },
-      { k: 'equipoId', t: 'Equipo', fmt: v => U.esc((C.eq(v) || {}).codigo || ''), text: r => (C.eq(r.equipoId) || {}).codigo },
-      { k: 'posicion', t: 'Posición' },
+      { k: 'eqc', t: 'Equipo', sort: r => (C.eq(r.equipoId) || {}).codigo, fmt: (v, r) => U.esc((C.eq(r.equipoId) || {}).codigo || ''), text: r => (C.eq(r.equipoId) || {}).codigo },
+      { k: 'posicion', t: 'Posición', fmt: (v, r) => U.esc(posNum(r)), text: r => posNum(r) },
+      { k: 'neu', t: 'Neumático', sort: r => nf(r.neumaticoId).codigo, fmt: (v, r) => U.esc(nf(r.neumaticoId).codigo || '—'), text: r => nf(r.neumaticoId).codigo },
+      { k: 'mm', t: 'Marca / modelo', sort: r => nf(r.neumaticoId).marca, fmt: (v, r) => U.esc([nf(r.neumaticoId).marca, nf(r.neumaticoId).modelo].filter(Boolean).join(' ')), text: r => [nf(r.neumaticoId).marca, nf(r.neumaticoId).modelo].filter(Boolean).join(' ') },
+      { k: 'med', t: 'Medida', sort: r => nf(r.neumaticoId).medida, fmt: (v, r) => U.esc(nf(r.neumaticoId).medida || ''), text: r => nf(r.neumaticoId).medida },
+      { k: 'rem', t: `Remanentes mm (${C.medNombres().join(' / ')})`, sort: r => C.profProm(r), fmt: (v, r) => U.esc(C.profsOf(r).map(x => U.num(x, 1)).join(' / ')), text: r => C.profsOf(r).join(' / ') },
+      { k: 'pr', t: 'Prom. mm', num: true, sort: r => C.profProm(r), fmt: (v, r) => `<b>${U.num(C.profProm(r), 1)}</b>`, text: r => +C.profProm(r).toFixed(2) },
+      { k: 'presionMed', t: 'PSI', num: true, fmt: v => v === null || v === undefined ? '' : U.num(v, 0) },
       { k: 'lectura', t: 'Horóm./Km', num: true, fmt: v => U.num(v, 1) },
-      { k: 'pp', t: 'Remanentes (mm)', sort: r => C.profProm(r), fmt: (v, r) => U.esc(C.profsOf(r).map(x => U.num(x, 1)).join(' / ')), text: r => C.profsOf(r).join(' / ') },
-      { k: 'pr', t: 'Prom. mm', num: true, sort: r => C.profProm(r), fmt: (v, r) => C.profProm(r) === null ? '' : `<b>${U.num(C.profProm(r), 1)}</b>`, text: r => C.profProm(r) === null ? '' : +C.profProm(r).toFixed(2) },
-      { k: 'dg', t: 'Desg. %', num: true, sort: r => { const n = S.neumaticos.find(x => x.id === r.neumaticoId); const p = C.profProm(r); return n && p !== null ? (n.profInicial - p) / n.profInicial : null; }, fmt: (v, r) => { const n = S.neumaticos.find(x => x.id === r.neumaticoId); const p = C.profProm(r); return n && p !== null && (r.ciclo || 0) === (n.ciclo || 0) ? U.num((n.profInicial - p) / n.profInicial * 100, 1) : ''; }, text: r => '' },
-      { k: 'presionMed', t: 'PSI', num: true, fmt: (v, r) => v === null || v === undefined ? '' : `${U.num(v, 0)}/${U.num(r.presionRec, 0)}` },
-      { k: 'cond', t: 'Condición', sort: r => C.patrones(r).join(), fmt: (v, r) => U.esc(C.patrones(r).join(', ')), text: r => C.patrones(r).join(', ') },
-      { k: 'inspector', t: 'Inspector' }, { k: 'observaciones', t: 'Obs.' },
-      { k: 'acc', t: '', nosort: true, noexport: true, fmt: (v, r) => `<div class="flex" style="flex-wrap:nowrap"><button class="btn btn-ghost btn-sm" data-ei="${r.id}" title="Editar">✎</button><button class="btn btn-ghost btn-sm" data-di="${r.id}" title="Eliminar">🗑</button></div>` }] });
-    root.querySelector('#rhT').addEventListener('click', async e => {
-      const fn = e.target.closest('[data-fn]'); if (fn) { e.preventDefault(); V.fichaNeum(S.neumaticos.find(n => n.id === fn.dataset.fn)); return; }
+      { k: 'inspector', t: 'Medido por' }, { k: 'observaciones', t: 'Obs.' },
+      { k: 'acc', t: '', nosort: true, noexport: true, fmt: (v, r) => `<div class="flex" style="flex-wrap:nowrap">${sup || (yo && r.inspector === yo) ? `<button class="btn btn-ghost btn-sm" data-ei="${r.id}" title="Editar">✎</button>` : ''}${sup ? `<button class="btn btn-ghost btn-sm" data-di="${r.id}" title="Eliminar">🗑</button>` : ''}</div>` }] });
+    el.querySelector('#regT').addEventListener('click', e => {
       const ei = e.target.closest('[data-ei]'); if (ei) { V.editarMedicion(S.inspecciones.find(i => i.id === ei.dataset.ei)); return; }
       const di = e.target.closest('[data-di]'); if (di) V.eliminarMedicion(S.inspecciones.find(i => i.id === di.dataset.di));
     });
-  }
-
-  async function guardarRemanentes() {
-    const st = remState();
-    const filas = st.rows.map((r, i) => Object.assign({ _i: i + 1 }, r)).filter(r => r.neumatico || r.profs.some(x => x !== null) || r.presionMed);
-    if (!filas.length) throw new Error('No hay filas con datos.');
-    const errs = [], warns = [], faltan = [];
-    filas.forEach(r => {
-      const n = tireDeFila(r);
-      if (!n && !codigoDeFila(r)) errs.push(`Fila ${r._i}: escriba algún código/serie del neumático, o el equipo y la posición`);
-      else if (!n) faltan.push(r);
-      const eqR = r.equipo ? C.eqByCode(r.equipo) : null;
-      if (eqR && !C.neumAplica(eqR)) warns.push(`Fila ${r._i}: el equipo ${r.equipo} está fuera de la medición de neumáticos (la medición se guardará igual)`);
-      if (!r.fecha || r.fecha > U.today()) errs.push(`Fila ${r._i}: fecha vacía o futura`);
-      const pm = U.toNum(r.presionMed);
-      if (!r.profs.some(x => x !== null) && pm === null && !r.condicion && !r.obs) errs.push(`Fila ${r._i}: sin mediciones`);
-      if (r.profs.some(x => x !== null && x < 0)) errs.push(`Fila ${r._i}: remanente negativo`);
-      if (pm !== null && (pm < 0 || pm > 300)) errs.push(`Fila ${r._i}: presión inválida`);
-      if (U.toNum(r.lectura) !== null && U.toNum(r.lectura) < 0) errs.push(`Fila ${r._i}: lectura negativa`);
-      if (r.equipo && !C.eqByCode(r.equipo)) warns.push(`Fila ${r._i}: el equipo ${r.equipo} no existe en el maestro (se guardará sin equipo)`);
-      if (n && r.profs.some(x => x !== null && x > Number(n.profInicial))) warns.push(`Fila ${r._i} (${n.codigo}): remanente mayor que la cocada inicial ${n.profInicial} mm`);
-      if (n && n.equipoId && r.equipo && C.eqByCode(r.equipo) && C.eqByCode(r.equipo).id !== n.equipoId) warns.push(`Fila ${r._i} (${n.codigo}): está instalado en ${(C.eq(n.equipoId) || {}).codigo}, no en ${r.equipo} (la medición se guardará con el equipo indicado)`);
-    });
-    if (errs.length) throw new Error('Corrija: ' + errs.slice(0, 5).join(' · ') + (errs.length > 5 ? ` (+${errs.length - 5})` : ''));
-    if (faltan.length) { altaRapida(faltan); return; } // registro automático de códigos nuevos (no restrictivo)
-    if (warns.length && !(await U.confirm(`Revise antes de guardar:<ul>${warns.slice(0, 12).map(w => `<li>${U.esc(w)}</li>`).join('')}</ul>¿Guardar de todas formas?`))) return;
-    const sid = EQ.DB.uid(); let ok = 0, notas = 0, obsv = 0;
-    for (const r of filas.sort((a, b) => a.fecha < b.fecha ? -1 : 1)) {
-      const n = tireDeFila(r) || findTire(codigoDeFila(r));
-      const eq = r.equipo ? C.eqByCode(r.equipo) : null;
-      const res = await C.guardarMedicion({ n, fecha: r.fecha, lectura: U.toNum(r.lectura), profs: r.profs.slice(0, C.medNombres().length), presionMed: U.toNum(r.presionMed), presionRec: U.toNum(r.presionRec), condiciones: r.condicion ? [r.condicion] : [], observaciones: r.obs, inspector: r.inspector || st.inspector, posicion: r.posicion, equipoId: eq ? eq.id : null, sesionId: sid });
-      ok++; if (res.nota) notas++;
-      obsv += await marcarObservacion(n, r.fecha, st.inspector);
-    }
-    await EQ.DB.audit('inspecciones', sid, 'Carga libre de remanentes', `${ok} medición(es)`);
-    st.rows = [];
-    U.toast(`${ok} medición(es) guardadas${notas ? ` · ${notas} con horómetro no aplicado al equipo (ver observación)` : ''}${obsv ? ` · ${obsv} neumático(s) pasaron a "En observación"` : ''}`, 'ok');
-    EQ.App.refresh();
-  }
-
-  // Alta automática de neumáticos con códigos nuevos (la carga libre no exige que el código exista)
-  function altaRapida(filas) {
-    const cfg = C.cfg();
-    const grupos = {};
-    filas.forEach(r => { const c = codigoDeFila(r); const k = nk(c); (grupos[k] = grupos[k] || { codigo: c, filas: [] }).filas.push(r); });
-    const lista = Object.values(grupos);
-    const datos = lista.map(g => {
-      const r0 = g.filas[0], eq = r0.equipo ? C.eqByCode(r0.equipo) : null, t = tipoSugerido(eq);
-      const mx = Math.max(...g.filas.flatMap(r => r.profs.filter(x => x !== null)));
-      return { codigo: g.codigo, serie: g.codigo, marca: 'Sin marca', medida: 'Sin medida', tipo: t.nombre || '', profInicial: isFinite(mx) && mx > (t.profNueva || 0) ? mx : (t.profNueva || (isFinite(mx) ? mx : 20)), presionRec: U.toNum(r0.presionRec) || t.presionRec || null, estado: eq ? 'En servicio' : 'Retirado', _eq: eq ? eq.codigo : '' };
-    });
-    const registrar = async (rows) => {
-      for (const n of rows) {
-        const { _eq, ...o } = n;
-        let serie = o.serie, k = 1;
-        while (S.neumaticos.some(x => String(x.serie).toUpperCase() === String(serie).toUpperCase() && String(x.marca).toUpperCase() === String(o.marca).toUpperCase())) serie = `${o.serie}-${++k}`;
-        const sv = await EQ.DB.put('neumaticos', Object.assign(o, { serie, fechaAdq: '', ciclo: 0, reencauches: 0, usoAcumulado: 0, usoInicioCiclo: 0, observaciones: `Alta automática desde carga libre de remanentes${_eq ? ' (equipo ' + _eq + ')' : ''}. Complete la ficha.` }));
-        await C.registrarMovimiento(sv, 'Alta', { motivo: 'Alta automática (carga de remanentes)' });
-      }
-      setTimeout(() => guardarRemanentes().catch(e => U.toast(e.message, 'bad')), 50);
-    };
-    U.modal({ title: `Códigos nuevos (${datos.length}): se registrarán automáticamente`, size: 'xl', body: `<p>Estos neumáticos no estaban en el inventario. Se registran con los datos sugeridos (puede corregirlos aquí o después en el inventario). La cocada inicial sugerida es la del tipo de neumático o el mayor remanente medido.</p>
-      <div class="tbl-wrap"><table class="tbl" id="arT"><thead><tr><th class="nosort">Código</th><th class="nosort">Serie</th><th class="nosort">Marca</th><th class="nosort">Medida</th><th class="nosort">Tipo</th><th class="nosort">Cocada inicial (mm)</th><th class="nosort">Presión rec.</th><th class="nosort">Estado</th></tr></thead><tbody>
-      ${datos.map((d, i) => `<tr data-i="${i}"><td><input class="co" value="${U.esc(d.codigo)}" style="width:120px"></td><td><input class="se" value="${U.esc(d.serie)}"></td><td><input class="ma" list="dlMa" value="${U.esc(d.marca)}"></td><td><input class="me" list="dlMe" value="${U.esc(d.medida)}"></td><td><select class="ti">${U.opts(cfg.tiposNeumatico.map(t => t.nombre), d.tipo)}</select></td><td><input type="number" class="pi" min="0" step="any" value="${U.esc(d.profInicial)}" style="width:80px"></td><td><input type="number" class="pr" min="0" value="${U.esc(d.presionRec ?? '')}" style="width:70px"></td><td><select class="es">${U.opts(['En servicio', 'Retirado', 'Nuevo', 'Reencauchado'], d.estado)}</select></td></tr>`).join('')}
-      </tbody></table></div><datalist id="dlMa">${cfg.marcasNeum.map(x => `<option value="${U.esc(x)}">`).join('')}</datalist><datalist id="dlMe">${cfg.medidas.map(x => `<option value="${U.esc(x)}">`).join('')}</datalist>
-      <div class="info-box mt">Quedan en el inventario sin posición. Si están montados, instálelos desde el diagrama para que acumulen uso; mientras tanto la vida útil se proyecta por fechas.</div>`,
-      buttons: [{ label: 'Cancelar', cls: 'btn-outline' }, { label: 'Registrar con datos sugeridos', cls: 'btn-orange', onClick: async m => {
-        const rows = [...m.querySelectorAll('#arT tbody tr')].map(tr => { const d = datos[+tr.dataset.i]; const g = c => tr.querySelector(c).value.trim(); const cod = g('.co') || d.codigo;
-          if (cod !== d.codigo) grupos[nk(d.codigo)].filas.forEach(r => { const sr = remState().rows.find(x => x === r || (x.neumatico === r.neumatico && x.fecha === r.fecha && x.posicion === r.posicion)); if (sr) sr.neumatico = cod; });
-          return { codigo: cod, serie: g('.se') || cod, marca: g('.ma') || 'Sin marca', medida: g('.me') || 'Sin medida', tipo: g('.ti'), profInicial: U.toNum(g('.pi')) || d.profInicial, presionRec: U.toNum(g('.pr')), estado: g('.es'), _eq: d._eq }; });
-        // filas sin código: asignar el código generado para que se encuentre al guardar
-        remState().rows.forEach(r => { if (!r.neumatico && r.equipo && r.posicion && !tireDeFila(r)) r.neumatico = codigoDeFila(r); });
-        const dup = rows.find(r => S.neumaticos.some(x => String(x.codigo).toUpperCase() === r.codigo.toUpperCase()));
-        if (dup) throw new Error(`El código ${dup.codigo} ya existe en el inventario.`);
-        await registrar(rows);
-      } }] });
-  }
-
-  function plantillaRemanentes(eq) {
-    const meds = C.medNombres();
-    const ns = eq ? C.neumEq(eq.id) : S.neumaticos.filter(n => n.posicion);
-    const head = ['FECHA', 'CODIGO NEUMATICO', 'SERIE', 'EQUIPO', 'POSICION', 'HOROMETRO/KM'].concat(meds.map((m, i) => `R${i + 1} ${m.toUpperCase()}`)).concat(['PRESION PSI', 'PRESION REC PSI', 'CONDICION', 'OBSERVACION', 'INSPECTOR']);
-    const rows = ns.map(n => [U.parseDate(U.today()), n.codigo, n.serie || '', (C.eq(n.equipoId) || {}).codigo || '', n.posicion || '', ''].concat(meds.map(() => '')).concat(['', n.presionRec || '', '', '', '']));
-    const ws = XLSX.utils.aoa_to_sheet([head].concat(rows.length ? rows : [[U.parseDate(U.today())]]), { cellDates: true });
-    ws['!cols'] = head.map(h => ({ wch: Math.max(10, h.length + 2) }));
-    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'REMANENTES');
-    const ins = XLSX.utils.aoa_to_sheet([['INSTRUCCIONES'], ['Complete una fila por neumático y fecha. Solo el código (o la serie) y la fecha son obligatorios.'], ['Puede dejar vacías las mediciones que no tomó. Horómetro/Km es opcional.'], ['Condiciones válidas: ' + C.cfg().condiciones.join(', ')]]);
-    XLSX.utils.book_append_sheet(wb, ins, 'INSTRUCCIONES');
-    XLSX.writeFile(wb, `plantilla_remanentes_${eq ? eq.codigo : 'flota'}_${U.today()}.xlsx`, { cellDates: true });
-  }
-
-  async function importarRemanentes() {
-    const f = await U.pickFile('.xlsx,.xls,.xlsm,.csv,.txt'); if (!f) return;
-    try {
-      let rows, keys;
-      const camposSyn = REM_F.map(x => ({ syn: x.syn }));
-      if (/\.(csv|txt)$/i.test(f.name)) { rows = EQ.Backlog.parseCSV((await U.readFileText(f)).replace(/^﻿/, '')); keys = rows.length ? Object.keys(rows[0]) : []; }
-      else {
-        const wb = XLSX.read(await U.readFileBuffer(f), { type: 'array', cellDates: true });
-        const best = wb.SheetNames.map(n => EQ.Backlog.sheetRows(wb.Sheets[n], camposSyn)).sort((a, b) => b.score - a.score)[0];
-        rows = best.rows; keys = best.keys;
-      }
-      const map = {}; const used = new Set();
-      REM_F.forEach(c => { for (const sy of c.syn) { const k = keys.find(k => !used.has(k) && nrm(k) === sy); if (k) { map[c.k] = k; used.add(k); break; } } });
-      const medCols = keys.filter(k => !used.has(k) && /^(r\d|m\d|med|surco|int|cen|ext|interior|central|exterior|hombro|remanente|cocada|prof|mm)/.test(nrm(k)) && !/inicial|nueva|original/.test(nrm(k)));
-      if (!map.neumatico && !map.serie && !(map.equipo && map.posicion)) throw new Error('No se encontró la columna del código o serie del neumático (o las columnas de equipo y posición).');
-      if (!medCols.length && !map.presionMed) throw new Error('No se encontraron columnas de remanente (R1, Interior, Central, Exterior, Surco, Remanente…) ni de presión.');
-      const meds = C.medNombres().length;
-      const nuevas = rows.map(o => {
-        const n = findTire(o[map.neumatico], o[map.serie]);
-        const fecha = EQ.Backlog.toDate(o[map.fecha]) || U.today();
-        return nuevaFila({ fecha, neumatico: n ? n.codigo : String(o[map.neumatico] || o[map.serie] || '').trim(), equipo: String(o[map.equipo] || (n && n.equipoId ? (C.eq(n.equipoId) || {}).codigo : '') || '').trim(), posicion: String(o[map.posicion] || (n ? n.posicion || '' : '')).trim(), lectura: o[map.lectura] === undefined ? '' : String(o[map.lectura]), profs: medCols.slice(0, Math.max(meds, medCols.length)).map(k => U.toNum(o[k])), presionMed: o[map.presionMed] === undefined ? '' : String(o[map.presionMed]), presionRec: o[map.presionRec] !== undefined && o[map.presionRec] !== '' ? String(o[map.presionRec]) : (n ? String(n.presionRec || '') : ''), condicion: String(o[map.condicion] || '').trim(), obs: String(o[map.obs] || '').trim(), inspector: String(o[map.inspector] || '').trim() });
-      }).filter(r => (r.neumatico || (r.equipo && r.posicion)) && (r.profs.some(x => x !== null) || U.toNum(r.presionMed) !== null));
-      if (medCols.length > meds) U.toast(`El archivo tiene ${medCols.length} columnas de medición y la configuración ${meds}: se usarán las primeras ${meds}. Puede agregar puntos de medición en Configuración.`, '');
-      const st = remState();
-      st.rows = st.rows.filter(r => r.neumatico || r.profs.some(x => x !== null)).concat(nuevas);
-      U.toast(`${nuevas.length} fila(s) cargadas desde ${f.name}. Revise y pulse "Guardar remanentes". Columnas de medición: ${medCols.join(', ') || '—'}`, 'ok');
-      EQ.App.refresh();
-    } catch (e) { U.toast('No se pudo importar: ' + e.message, 'bad'); }
   }
 
   V.editarMedicion = i => {
