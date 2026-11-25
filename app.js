@@ -1691,6 +1691,23 @@ function resendPw(id){const u=usersList.find(x=>x.uid===id);if(!u)return;
 if(db&&auth)initAuth();else{me={uid:'local',name:'Modo local',role:'admin'};startApp()}
 
 /* ---------- Service worker ---------- */
-if('serviceWorker' in navigator&&location.protocol.startsWith('http'))addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+if('serviceWorker' in navigator&&location.protocol.startsWith('http'))addEventListener('load',()=>{
+  const sw=navigator.serviceWorker,had=!!sw.controller;let shown=false;
+  sw.register('sw.js',{updateViaCache:'none'}).then(reg=>{
+    // al volver a la app (teléfono) o cada 30 min, revisa si hay versión nueva
+    const chk=()=>reg.update().catch(()=>{});
+    document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')chk()});
+    setInterval(chk,30*60*1000);
+  }).catch(()=>{});
+  // se instaló una versión nueva: avisar y recargar con un toque (no se recarga solo para no perder lo que se esté escribiendo)
+  sw.addEventListener('controllerchange',()=>{
+    if(!had||shown)return;shown=true;
+    const b=document.createElement('div');
+    b.style.cssText='position:fixed;left:50%;bottom:calc(5rem + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:99999;background:#0F2A44;color:#f8fafc;border:1px solid #2DD4BF;border-radius:.75rem;padding:.6rem .8rem;display:flex;gap:.7rem;align-items:center;font-size:14px;box-shadow:0 6px 20px rgba(0,0,0,.35);max-width:92vw';
+    b.innerHTML='<span>🔄 Hay una nueva versión de Mantify</span><button style="background:#2DD4BF;color:#0F2A44;font-weight:700;border:0;border-radius:.5rem;padding:.35rem .7rem">Actualizar</button>';
+    b.querySelector('button').onclick=()=>location.reload();
+    document.body.appendChild(b);
+  });
+});
 /* ---------- Alto del encabezado (variable --hh) ---------- */
 (()=>{const h=document.querySelector('header'),f=()=>document.documentElement.style.setProperty('--hh',h.offsetHeight+'px');addEventListener('resize',f);addEventListener('load',f);new ResizeObserver(f).observe(h)})();
