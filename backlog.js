@@ -71,6 +71,11 @@ function renderSide(){
   otNotify();
 }
 function sideGo(k){const [a,b]=k.split(':');if(a==='back'){bkGo(b)}else{if(a==='gr')eqnRoute='engrase';tab(a)}}
+/* menú "Más" en el teléfono: el mismo menú lateral, como cajón deslizable */
+function sideOpen(){document.body.classList.add('side-open');const t=$('t-more');if(t)t.setAttribute('aria-expanded','true')}
+function sideClose(){document.body.classList.remove('side-open');const t=$('t-more');if(t)t.setAttribute('aria-expanded','false')}
+document.addEventListener('click',e=>{if(document.body.classList.contains('side-open')&&e.target.closest&&e.target.closest('#side button'))sideClose()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&document.body.classList.contains('side-open'))sideClose()});
 function bkGo(sub,st){bkSub=sub||'list';if(st!=null){bkF.st=st;bkF.venc=false}if(cur!=='back')tab('back');else render()}
 function gSearch(v){
   v=(v||'').trim();if(!v)return;const q=v.toLowerCase(),e=fleet.find(x=>String(x.code).toLowerCase()===q);

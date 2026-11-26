@@ -127,6 +127,7 @@ function tab(t){
     $('v-'+k).classList.toggle('hidden',k!==t);
     $('t-'+k).className='btn navb '+(k===t?'bg-amber-500 text-slate-950':'text-slate-300 hover:bg-slate-700');
   }
+  if($('t-more'))$('t-more').classList.toggle('more-on',['plan','rep','fleet','sup','adm'].includes(t)); // en el teléfono esos apartados viven en "Más"
   try{$('t-'+t).scrollIntoView({block:'nearest',inline:'center'})}catch(_){}
   eqnTab(t);navEdge();try{window.scrollTo(0,0)}catch(_){}
   render();
