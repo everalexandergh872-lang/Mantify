@@ -99,7 +99,7 @@ function bkFiltered(){
 // Detecta la firma registrada del solicitante al escribir su nombre
 function bkSigName(name){
   if(!$('sigc'))return;const h=()=>$('sig-hint'),hit=sigOfName(name);
-  if(hit){sigInit(hit.sig);const x=h();if(x){x.textContent='✔ Firma registrada de '+hit.name+' (detectada por el nombre). Para firmar de nuevo, toca el recuadro o usa Borrar.';x.className='text-[11px] text-emerald-400'}}
+  if(hit){sigInit(hit.sig);const x=h();if(x){x.textContent='✔ Firma registrada de '+hit.name+' (detectada por el nombre, bloqueada). Para firmar de nuevo, usa Borrar.';x.className='text-[11px] text-emerald-400'}}
   else{if(sig.dirty&&sig.drawn)return;sigInit('');const x=h();if(x){x.textContent=String(name||'').trim()?'No hay firma registrada para ese nombre: el solicitante debe firmar en el recuadro.':'Escribe el nombre del solicitante para cargar su firma.';x.className='text-[11px] text-amber-400'}}
 }
 function bkAprBanner(){
@@ -173,7 +173,6 @@ function openBack(id){
   <form onsubmit="saveBack(event,'${id||''}')" class="space-y-4 mt-3">
    ${fsec(1,'Datos del backlog',`<label class="block text-xs text-slate-400 font-semibold">Equipo *<select class="inp mt-1 font-normal" name="fleetId" required>${eqs.map(f=>`<option value="${f.id}" ${f.id===b.fleetId?'selected':''}>${esc(f.code)} · ${esc(f.category||'')} · ${esc(f.brand)} ${esc(f.model)}</option>`).join('')}</select></label>
      <div class="g2">${field('observationDate','Fecha de detección *',b.observationDate||today(),`required max="${today()}" onchange="bkLimPrev()"`,'date')}<label class="block text-xs text-slate-400 font-semibold">Elaborado por (solicitante) *<input class="inp mt-1 font-normal" name="detectedBy" required maxlength="80" list="dl-solic" autocomplete="off" value="${esc(b.detectedBy||(id?'':me.name))}" oninput="clearTimeout(window._bks);window._bks=setTimeout(()=>bkSigName(this.value),350)"></label>${stList('dl-solic',techList().map(u=>u.name))}</div>
-     ${sigBox('Firma del solicitante (técnico)')}
      <div class="g2"><label class="block text-xs text-slate-400 font-semibold">Ubicación${lst('ubic',prev('ubic'),b.ubic??(id?'':e0.location||''),'Ej. Tajo, taller, chancadora')}</label><label class="block text-xs text-slate-400 font-semibold">Proyecto${lst('proyecto',prev('proyecto'),b.proyecto,'Ej. Canteras y rellenos Tía María')}</label></div>
      <div class="g2">${field('hoursAt','Horómetro / km',b.hoursAt??(id?'':e0.hours??''),'min="0" step="any" inputmode="decimal"','number')}<label class="block text-xs text-slate-400 font-semibold">Lugar de inspección${lst('lugarInsp',[...ST_LUG,...prev('lugarInsp')],b.lugarInsp,'Campo, taller…')}</label></div>
      <div class="g2"><div><p class="text-xs text-slate-400 font-semibold mb-1">Responsabilidad</p>${fxOpts('respons',['EMPRESA','PROVEEDOR'],b.respons==='PROVEEDOR'?'PROVEEDOR':'EMPRESA','radio')}</div><label class="block text-xs text-slate-400 font-semibold">Fuente${lst('source',BK_SRC,b.source,'Elige o escribe')}</label></div>`)}
@@ -195,6 +194,7 @@ function openBack(id){
      <div class="g2">${field('scheduledDate','Fecha programada',b.scheduledDate,'','date')}${field('cost','Costo estimado ($)',b.cost||'','min="0" step="0.01" inputmode="decimal"','number')}</div>
      <div><div class="flex justify-between items-center gap-2 flex-wrap"><p class="text-xs text-slate-400 font-semibold">Requerimientos de repuestos y servicios</p><div class="flex gap-1"><button type="button" onclick="bkReqAdd('R')" class="btn bg-slate-700 !py-1">＋ Repuesto (RQ)</button><button type="button" onclick="bkReqAdd('S')" class="btn bg-slate-700 !py-1">＋ Servicio (OS)</button></div></div><div id="bk-reqs" class="space-y-2 mt-2"></div></div>`)}
    ${phxBox('bkf','Referencias, fotos y anexos (opcional, hasta 6)',b.photosBefore,b.conFotos!=null?b.conFotos:!!(b.photosBefore||[]).length,true)}
+   ${fsec(7,'Firma del solicitante',`${sigBox('Firma del solicitante (técnico)')}<p class="text-[11px] text-slate-500">La firma se carga sola según el nombre escrito en «Elaborado por (solicitante)».</p>`)}
    <p id="bk-err" class="text-xs text-red-400 hidden"></p>${btns('hide()',id?'Guardar cambios':'Registrar backlog')}</form>`,'48rem');
   rwInit('bkparts',b.parts||[],[{k:'np',ph:'N° parte',f:1},{k:'d',ph:'Descripción',f:3},{k:'cant',ph:'Cant.',f:.6,t:'number'},{k:'med',ph:'Medida',f:.8}],3);
   phxRender('bkf');bkReqRender();bkLimPrev();

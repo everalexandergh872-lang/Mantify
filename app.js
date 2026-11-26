@@ -356,7 +356,10 @@ async function addPhotos(inp,key){
 function openDetail(id){bkDetail(id)}
 
 /* ---------- Firma digital (precargada desde el perfil del personal) ---------- */
-let sig={c:null,x:null,drawn:false,down:false,dirty:false,src:''};
+let sig={c:null,x:null,drawn:false,down:false,dirty:false,src:'',locked:false};
+// firma ya cargada (del perfil o por foto): queda bloqueada; solo se cambia con Borrar, nunca trazando encima
+function sigLock(on){sig.locked=!!on;if(sig.c){sig.c.style.cursor=on?'not-allowed':'crosshair';sig.c.title=on?'Firma registrada: usa Borrar para firmar de nuevo':''}}
+function sigLockedMsg(){const h=$('sig-hint');if(h){h.textContent='🔒 La firma registrada no se puede sobrescribir. Si necesitas cambiarla, usa Borrar y firma de nuevo.';h.className='text-[11px] text-amber-400'}}
 const mySig=()=>(me&&me.signature)||'';
 const sigBox=(l,opt)=>`<div class="border border-slate-700 bg-slate-900/50 p-3 rounded-lg space-y-2"><div class="flex justify-between items-center gap-2 flex-wrap"><p class="text-xs text-emerald-400 font-semibold">✍️ ${l}${opt?'':' *'}</p><div class="flex gap-1"><label class="btn bg-slate-700 !py-1" style="display:inline-flex;align-items:center;cursor:pointer">📷 Subir foto<input type="file" accept="image/*" onchange="sigUpload(this)" style="display:none"></label><button type="button" onclick="sigClear()" class="btn bg-slate-700 !py-1">Borrar</button></div></div><canvas id="sigc" style="width:100%;height:140px;background:#fff;border-radius:.5rem;touch-action:none;display:block"></canvas><p id="sig-hint" class="text-[11px] text-slate-500">Firma con el dedo o el mouse dentro del recuadro blanco, o sube una foto de la firma en papel blanco.</p></div>`;
 function sigFit(x,c,img){const k=Math.min(c.width/img.width,c.height/img.height),w=img.width*k,h=img.height*k;x.drawImage(img,(c.width-w)/2,(c.height-h)/2,w,h)}
@@ -366,24 +369,24 @@ function sigInit(existing){
   c.width=(c.clientWidth||320)*R;c.height=(c.clientHeight||140)*R;
   const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.imageSmoothingQuality='high';
   x.strokeStyle='#0f172a';x.lineWidth=2.5*R;x.lineCap='round';x.lineJoin='round';
-  sig={c,x,drawn:false,down:false,dirty:false,src:existing||''};
+  sig={c,x,drawn:false,down:false,dirty:false,src:existing||'',locked:false};sigLock(!!existing);
   if(existing){sig.drawn=true;const i=new Image();i.onload=()=>{if(sig.c===c&&!sig.dirty)sigFit(x,c,i)};i.src=existing;
-    const h=$('sig-hint');if(h){h.textContent='✔ Firma precargada del perfil. Para firmar de nuevo, toca el recuadro o usa Borrar.';h.className='text-[11px] text-emerald-400'}}
+    const h=$('sig-hint');if(h){h.textContent='🔒 Firma precargada del perfil (bloqueada). Para firmar de nuevo, usa Borrar.';h.className='text-[11px] text-emerald-400'}}
   const pos=e=>{const r=c.getBoundingClientRect();return [(e.clientX-r.left)*c.width/r.width,(e.clientY-r.top)*c.height/r.height]};
-  c.onpointerdown=e=>{e.preventDefault();try{c.setPointerCapture(e.pointerId)}catch(_){}
-    if(sig.src&&!sig.dirty){x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height)} // al volver a firmar se reemplaza la precargada
+  c.onpointerdown=e=>{e.preventDefault();if(sig.locked){sigLockedMsg();return}try{c.setPointerCapture(e.pointerId)}catch(_){}
     sig.down=true;sig.drawn=true;sig.dirty=true;sig.src='';const [a,b]=pos(e);x.beginPath();x.moveTo(a,b);x.lineTo(a+.1,b+.1);x.stroke();x.beginPath();x.moveTo(a,b)};
   c.onpointermove=e=>{if(!sig.down)return;e.preventDefault();const [a,b]=pos(e);x.lineTo(a,b);x.stroke();x.beginPath();x.moveTo(a,b)};
   c.onpointerup=c.onpointercancel=c.onpointerleave=()=>{sig.down=false};
 }
-function sigClear(){const{c,x}=sig;if(!c)return;x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);sig.drawn=false;sig.dirty=true;sig.src=''}
+function sigClear(){const{c,x}=sig;if(!c)return;x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);sig.drawn=false;sig.dirty=true;sig.src='';sigLock(false);
+  const h=$('sig-hint');if(h){h.textContent='Firma con el dedo o el mouse dentro del recuadro blanco, o sube una foto de la firma en papel blanco.';h.className='text-[11px] text-slate-500'}}
 function sigUpload(inp){
-  const f=inp.files[0];inp.value='';const{c,x}=sig;if(!f||!c)return;
+  const f=inp.files[0];inp.value='';const{c,x}=sig;if(!f||!c)return;if(sig.drawn){sigLockedMsg();return}
   const i=new Image();i.onload=()=>{URL.revokeObjectURL(i.src);x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);sigFit(x,c,i);
     // limpia el fondo de la foto: lo claro pasa a blanco y el trazo a tinta oscura
     // transición suave (no blanco/negro puro) para que los bordes del trazo no salgan dentados
     try{const d=x.getImageData(0,0,c.width,c.height),p=d.data;for(let k=0;k<p.length;k+=4){const l=.299*p[k]+.587*p[k+1]+.114*p[k+2],a=l>=185?0:l<=110?1:(185-l)/75;p[k]=255-a*(255-15);p[k+1]=255-a*(255-23);p[k+2]=255-a*(255-42);p[k+3]=255}x.putImageData(d,0,0)}catch(_){}
-    sig.drawn=true;sig.dirty=true;sig.src='';const h=$('sig-hint');if(h){h.textContent='Foto cargada. Si no se ve bien, bórrala y firma a mano.';h.className='text-[11px] text-slate-400'}};
+    sig.drawn=true;sig.dirty=true;sig.src='';sigLock(true);const h=$('sig-hint');if(h){h.textContent='🔒 Foto de firma cargada (bloqueada). Si no se ve bien, usa Borrar y firma a mano.';h.className='text-[11px] text-slate-400'}};
   i.onerror=()=>note('No se pudo leer la imagen de la firma.');i.src=URL.createObjectURL(f);
 }
 function sigData(){
